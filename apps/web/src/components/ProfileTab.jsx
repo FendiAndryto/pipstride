@@ -17,7 +17,8 @@ import {
   RotateCw,
   Trash2,
   Download,
-  Wallet
+  Wallet,
+  Mail
 } from 'lucide-react';
 import { api, downloadPreset } from '../services/api';
 
@@ -45,7 +46,8 @@ export default function ProfileTab({
   onOpenMt5Modal,
   onTestTelegram,
   isTestingTelegram,
-  telegramStatusMsg
+  telegramStatusMsg,
+  onRefreshUser
 }) {
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
@@ -173,6 +175,42 @@ export default function ProfileTab({
       setPassFeedback({ type: 'error', text: err.message || 'Gagal mengubah password.' });
     } finally {
       setIsChangingPass(false);
+    }
+  };
+
+  // Account email state
+  const [emailInfo, setEmailInfo] = useState({
+    email: user?.email || '',
+    verified: Boolean(user?.email_verified)
+  });
+  const [emailInput, setEmailInput] = useState('');
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState(null);
+
+  const handleSaveEmail = async (e) => {
+    e.preventDefault();
+    setEmailFeedback(null);
+
+    const value = emailInput.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
+      setEmailFeedback({ type: 'error', text: 'Masukkan alamat email yang valid.' });
+      return;
+    }
+
+    setIsSavingEmail(true);
+    try {
+      const res = await api.setEmail(value);
+      setEmailInfo({ email: res.email, verified: Boolean(res.email_verified) });
+      setEmailInput('');
+      setEmailFeedback({
+        type: 'success',
+        text: res.message || 'Tautan verifikasi telah dikirim. Periksa inbox Anda.'
+      });
+      if (onRefreshUser) await onRefreshUser();
+    } catch (err) {
+      setEmailFeedback({ type: 'error', text: err.message || 'Gagal menyimpan email.' });
+    } finally {
+      setIsSavingEmail(false);
     }
   };
 
@@ -462,6 +500,96 @@ export default function ProfileTab({
           <span>Baseline deposit: {formatCurrency(bridgeStatus?.initial_deposit, currency)}</span>
           <span>Margin level: {marginLevel ? `${marginLevel.toFixed(1)}%` : '—'}</span>
         </div>
+      </div>
+
+      {/* Account Email & Recovery */}
+      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
+        Email & Pemulihan Akun
+      </div>
+
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="cardhead">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Mail size={17} style={{ color: 'var(--g)' }} />
+            <h3>Email Akun</h3>
+          </div>
+          <span className={`tag ${emailInfo.verified ? 'green' : 'amber'}`} style={{ fontSize: '9px' }}>
+            {emailInfo.verified ? 'TERVERIFIKASI' : 'BELUM TERVERIFIKASI'}
+          </span>
+        </div>
+
+        <p className="sub" style={{ fontSize: '11.5px', marginBottom: '14px', lineHeight: 1.45 }}>
+          Email dipakai untuk reset password jika Anda lupa kata sandi. Jurnal tetap berfungsi tanpa email,
+          tetapi tidak ada jalur pemulihan mandiri. Mengganti alamat akan membatalkan verifikasi lama.
+        </p>
+
+        <div className="row" style={{ marginBottom: '14px' }}>
+          <div className="grow">
+            <div className="rowtitle">{emailInfo.email || 'Belum ada email terdaftar'}</div>
+            <div className="rowsub">
+              {emailInfo.verified
+                ? 'Alamat sudah dikonfirmasi dan siap dipakai untuk pemulihan.'
+                : 'Kirim tautan verifikasi untuk mengaktifkan pemulihan akun.'}
+            </div>
+          </div>
+        </div>
+
+        {emailFeedback && (
+          <div
+            style={{
+              padding: '9px 12px',
+              borderRadius: '9px',
+              fontSize: '11.5px',
+              marginBottom: '14px',
+              background: emailFeedback.type === 'success' ? 'rgba(69, 224, 173, 0.12)' : 'rgba(255, 113, 128, 0.12)',
+              border: `1px solid ${emailFeedback.type === 'success' ? 'rgba(69, 224, 173, 0.4)' : 'rgba(255, 113, 128, 0.4)'}`,
+              color: emailFeedback.type === 'success' ? 'var(--g)' : 'var(--red)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            {emailFeedback.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+            <span>{emailFeedback.text}</span>
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSaveEmail}
+          id="profile-email-form"
+          style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}
+        >
+          <input
+            type="email"
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            placeholder={emailInfo.email || 'nama@email.com'}
+            disabled={isSavingEmail}
+            style={{
+              flex: 1,
+              minWidth: '200px',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              border: '1px solid var(--line)',
+              background: '#091318',
+              color: 'var(--text)',
+              fontSize: '11.5px',
+              outline: 'none'
+            }}
+            autoComplete="email"
+            required
+          />
+          <button
+            type="submit"
+            className="btn alt"
+            disabled={isSavingEmail}
+            style={{ fontSize: '11.5px', padding: '8px 16px' }}
+            id="profile-email-submit-btn"
+          >
+            <Mail size={13} />
+            <span>{isSavingEmail ? 'Mengirim...' : 'Simpan & Kirim Verifikasi'}</span>
+          </button>
+        </form>
       </div>
 
       {/* Account Security & Password Management */}

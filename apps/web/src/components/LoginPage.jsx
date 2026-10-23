@@ -3,18 +3,20 @@ import {
   User,
   Lock,
   ArrowRight,
+  ArrowLeft,
   AlertCircle,
   CheckCircle2,
   Eye,
   EyeOff,
   UserPlus,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Mail
 } from 'lucide-react';
 import { api, setToken } from '../services/api';
 
-export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
-  const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
+export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice }) {
+  const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register' | 'forgot'
   
   // Login form state
   const [username, setUsername] = useState('');
@@ -24,14 +26,21 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
   
   // Register form state
   const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [regRole, setRegRole] = useState('trader');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
+  // Forgot password state
+  const [forgotEmail, setForgotEmail] = useState('');
+
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(sessionExpiredMsg || '');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [error, setError] = useState(
+    sessionExpiredMsg || (notice?.type === 'error' ? notice.text : '')
+  );
+  const [successMsg, setSuccessMsg] = useState(
+    notice && notice.type !== 'error' ? notice.text : ''
+  );
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -59,11 +68,17 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     const u = regUsername.trim();
+    const email = regEmail.trim();
     const p = regPassword.trim();
     const cp = regConfirmPassword.trim();
 
     if (!u || !p) {
       setError('Mohon lengkapi username dan password.');
+      return;
+    }
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setError('Mohon masukkan alamat email yang valid.');
       return;
     }
 
@@ -92,15 +107,41 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
     setSuccessMsg('');
 
     try {
-      const data = await api.register(u, p, regRole, rememberMe);
-      setSuccessMsg('Akun berhasil dibuat! Mengalihkan ke dashboard...');
+      const data = await api.register(u, p, email, rememberMe);
+      setSuccessMsg('Akun berhasil dibuat! Cek email Anda untuk verifikasi. Mengalihkan ke dashboard...');
       setTimeout(() => {
         if (onLoginSuccess) {
           onLoginSuccess(data);
         }
       }, 700);
     } catch (err) {
-      setError(err.message || 'Registrasi gagal. Username mungkin sudah digunakan.');
+      setError(err.message || 'Registrasi gagal. Username atau email mungkin sudah digunakan.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    const email = forgotEmail.trim();
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setError('Mohon masukkan alamat email yang valid.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccessMsg('');
+
+    try {
+      const data = await api.forgotPassword(email);
+      setSuccessMsg(
+        data?.message ||
+          'Jika email tersebut terdaftar, tautan reset password telah dikirim. Periksa inbox Anda.'
+      );
+    } catch (err) {
+      setError(err.message || 'Gagal meminta tautan reset password. Coba lagi nanti.');
     } finally {
       setLoading(false);
     }
@@ -170,7 +211,8 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
           </p>
         </div>
 
-        {/* Tab Switcher: Login vs Register */}
+        {/* Tab Switcher: Login vs Register (hidden in the recovery flow) */}
+        {activeTab !== 'forgot' && (
         <div
           style={{
             display: 'flex',
@@ -229,6 +271,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
             Daftar Akun Baru
           </button>
         </div>
+        )}
 
         {/* Alerts / Error Messages */}
         {error && (
@@ -315,6 +358,27 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
                 <label htmlFor="signin-password" className="label">
                   Password
                 </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('forgot');
+                    setForgotEmail('');
+                    setError('');
+                    setSuccessMsg('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 0,
+                    padding: 0,
+                    color: 'var(--g)',
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  id="forgot-password-link"
+                >
+                  Lupa password?
+                </button>
               </div>
               <div style={{ position: 'relative' }}>
                 <Lock
@@ -444,7 +508,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
               </div>
             </div>
           </form>
-        ) : (
+        ) : activeTab === 'register' ? (
           /* Form 2: Sign Up / Register */
           <form onSubmit={handleRegisterSubmit} id="signup-form">
             <div style={{ marginBottom: '12px' }}>
@@ -476,6 +540,41 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
                   autoComplete="username"
                   required
                 />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label htmlFor="reg-email" className="label" style={{ display: 'block' }}>
+                Email
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={15}
+                  style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--muted)' }}
+                />
+                <input
+                  id="reg-email"
+                  type="email"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="nama@email.com"
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px 10px 36px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--line)',
+                    background: '#091318',
+                    color: 'var(--text)',
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+              <div className="tiny" style={{ color: 'var(--muted)', marginTop: '5px' }}>
+                Dipakai untuk reset password dan verifikasi akun.
               </div>
             </div>
 
@@ -558,31 +657,6 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label htmlFor="reg-role-select" className="label" style={{ display: 'block' }}>
-                Tipe Akun
-              </label>
-              <select
-                id="reg-role-select"
-                value={regRole}
-                onChange={(e) => setRegRole(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--line)',
-                  background: '#091318',
-                  color: 'var(--text)',
-                  fontSize: '12px',
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="trader">Trader (Akses Penuh MT5 & Jurnal)</option>
-                <option value="admin">Administrator (Akses Sistem & Engine)</option>
-              </select>
-            </div>
-
             <button
               type="submit"
               className="btn"
@@ -598,6 +672,76 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg }) {
                   <span>Buat Akun & Masuk Sekarang</span>
                 </>
               )}
+            </button>
+          </form>
+        ) : (
+          /* Form 3: Forgot password */
+          <form onSubmit={handleForgotSubmit} id="forgot-password-form">
+            <div style={{ marginBottom: '14px' }}>
+              <label htmlFor="forgot-email" className="label" style={{ display: 'block' }}>
+                Email Akun
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={15}
+                  style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--muted)' }}
+                />
+                <input
+                  id="forgot-email"
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="nama@email.com"
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px 10px 36px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--line)',
+                    background: '#091318',
+                    color: 'var(--text)',
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+              <div className="tiny" style={{ color: 'var(--muted)', marginTop: '5px' }}>
+                Kami akan mengirim tautan satu kali pakai jika alamat tersebut terdaftar.
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn"
+              disabled={loading}
+              style={{ width: '100%', padding: '11px', fontSize: '12.5px' }}
+              id="forgot-submit-btn"
+            >
+              {loading ? (
+                <span>Mengirim...</span>
+              ) : (
+                <>
+                  <Mail size={15} />
+                  <span>Kirim Tautan Reset</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => {
+                setActiveTab('login');
+                setError('');
+                setSuccessMsg('');
+              }}
+              style={{ width: '100%', marginTop: '12px', padding: '9px', fontSize: '11.5px' }}
+              id="forgot-back-btn"
+            >
+              <ArrowLeft size={14} />
+              <span>Kembali ke halaman masuk</span>
             </button>
           </form>
         )}

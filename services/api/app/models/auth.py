@@ -11,7 +11,32 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str = Field(..., description="Desired username", min_length=3, max_length=32)
     password: str = Field(..., description="Account password (min 8 chars, alphanumeric)", min_length=8)
-    role: Optional[str] = Field("trader", description="User role (admin or trader)")
+    email: Optional[str] = Field(
+        None, description="Email for password recovery and receipts", max_length=255
+    )
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., description="Email address on the account", max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., description="Token from the reset link", min_length=16)
+    new_password: str = Field(..., description="New password (min 8 chars, alphanumeric)", min_length=8)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., description="Token from the verification link", min_length=16)
+
+
+class SetEmailRequest(BaseModel):
+    email: str = Field(..., description="Email to attach to the account", max_length=255)
+
+
+class EmailStatusResponse(BaseModel):
+    email: Optional[str] = None
+    email_verified: bool = False
+    message: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -31,6 +56,8 @@ class UserResponse(BaseModel):
     username: str
     is_authenticated: bool = True
     role: Optional[str] = "trader"
+    email: Optional[str] = None
+    email_verified: bool = False
 
 
 class ConnectionResponse(BaseModel):

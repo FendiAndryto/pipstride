@@ -122,11 +122,11 @@ export const api = {
     return data;
   },
 
-  async register(username, password, remember = true) {
+  async register(username, password, email = null, remember = true) {
     const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, ...(email ? { email } : {}) })
     });
 
     if (!res.ok) {
@@ -136,6 +136,63 @@ export const api = {
     const data = await res.json();
     setToken(data.access_token, remember);
     return data;
+  },
+
+  /** Always resolves with a generic message; the API never reveals registered addresses. */
+  async forgotPassword(email) {
+    const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    if (!res.ok) {
+      throw await parseError(res, 'Failed to request a password reset');
+    }
+
+    return res.json();
+  },
+
+  async resetPassword(token, newPassword) {
+    const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword })
+    });
+
+    if (!res.ok) {
+      throw await parseError(res, 'This reset link is invalid or has expired');
+    }
+
+    return res.json();
+  },
+
+  async verifyEmail(token) {
+    const res = await fetch(`${API_BASE}/api/v1/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+
+    if (!res.ok) {
+      throw await parseError(res, 'This verification link is invalid or has expired');
+    }
+
+    return res.json();
+  },
+
+  /** Attach or change the account email; the API emails a verification link. */
+  async setEmail(email) {
+    const res = await authFetch(`${API_BASE}/api/v1/auth/email`, {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+
+    if (!res.ok) {
+      throw await parseError(res, 'Failed to update email');
+    }
+
+    return res.json();
   },
 
   async changePassword(oldPassword, newPassword) {

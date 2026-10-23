@@ -27,13 +27,28 @@ class Settings(BaseSettings):
     BRIDGE_POLL_INTERVAL_MS: int = 500
     HEARTBEAT_TIMEOUT_SECONDS: int = 10
 
-    # MT5 onboarding package. PUBLIC_BASE_URL should be the public API/dashboard
+    # Onboarding package. PUBLIC_BASE_URL should be the public API/dashboard
     # origin (e.g. https://pipstride.app). Empty means "derive from the request",
     # which is correct for local development and single-origin deployments.
     PUBLIC_BASE_URL: str = ""
     MT5_MONITORED_SYMBOLS: str = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD"
     MT5_HEARTBEAT_INTERVAL_SECONDS: int = 1
     MT5_HISTORY_DAYS: int = 90
+
+    # Public dashboard origin used in emailed links. Falls back to
+    # PUBLIC_BASE_URL and then to the inbound request origin.
+    PUBLIC_APP_URL: str = ""
+
+    # Transactional email. Without SMTP_HOST, messages are logged instead of
+    # sent (development only; production logs the fact but never the link).
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Pipstride <no-reply@pipstride.local>"
+    SMTP_STARTTLS: bool = True
+    EMAIL_RESET_TTL_MINUTES: int = 30
+    EMAIL_VERIFY_TTL_HOURS: int = 24
 
     # Raw telemetry snapshots are pruned by scripts/prune_snapshots.py.
     SNAPSHOT_RETENTION_DAYS: int = 180

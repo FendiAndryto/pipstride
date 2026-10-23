@@ -46,6 +46,7 @@ pipstride/
 | Persistent storage | **PostgreSQL** (SQLAlchemy 2.x + Alembic) |
 | Hot live telemetry | **Redis** (shared across API workers), in-process fallback for local dev |
 | Auth | JWT bearer, revocable through `users.token_version` |
+| Account recovery | Email + single-use hashed tokens (reset / verification), SMTP or log-only in dev |
 | MT5 authentication | Per-connection token, stored as **SHA-256 hash** only |
 | Multi-account | One connection per MT5 account, selected with `X-Connection-Id` |
 | Abuse protection | Redis-backed rate limits (login, register, heartbeat), in-process fallback |
@@ -64,6 +65,7 @@ Because only the hash is stored, the token cannot be shown again later. Create a
 ### API surface
 
 - `POST /api/v1/auth/register`, `/login`, `/logout`, `/change-password`, `GET /me`
+- `POST /api/v1/auth/forgot-password`, `/reset-password`, `/verify-email`, `/auth/email` (account recovery)
 - `GET|POST /api/v1/connections`, `POST /connections/{id}/rotate` (both return the token **and** a `.set` preset), `DELETE /connections/{id}`
 - `POST /api/v1/bridge/heartbeat` (token auth via `X-Bridge-Token`)
 - `GET /api/v1/bridge/status|positions|market|history|equity-curve|initial-deposit|risk`
@@ -72,6 +74,18 @@ Because only the hash is stored, the token cannot be shown again later. Create a
 - `GET /api/v1/bridge/order` → `405`, `POST /api/v1/bridge/order` → `403` (read-only guarantee)
 
 Dashboard requests target the active account with the `X-Connection-Id` header; the backend falls back to the user's oldest active connection when it is omitted.
+
+### Accounts and recovery
+
+Registration takes an optional email; the dashboard asks for one because it is the only self-service recovery path. The address is lower-cased and unique, and stays unverified until the emailed link is opened.
+
+- **Password reset** — `POST /auth/forgot-password` always returns `202` with the same body, so it cannot be used to probe which addresses exist. It is rate limited per IP (5 per 15 min) and per address (3 per hour) to protect inboxes. Only the token digest is stored; the raw value lives solely in the link.
+- **Single use** — issuing a new token for the same purpose burns older unused ones. Consumption is a conditional update, so two concurrent requests cannot both succeed. Reset links expire after 30 minutes, verification links after 24 hours.
+- **Session revocation** — a completed reset bumps `users.token_version`, which invalidates every JWT issued before it. A used link returns `400` afterwards.
+- **Verification** — `POST /auth/email` attaches or changes the address and mails a new link; changing it clears any previous verification. `GET /me` exposes `email` and `email_verified`.
+- **Delivery** — with `SMTP_HOST` unset, messages are logged instead of sent (development). In production a missing SMTP setup is logged as a warning and the link is never written to logs.
+
+Self-registration always creates a `trader`; there is no role selector in the signup form and the API ignores any role field.
 
 ### Journal analytics
 
@@ -167,6 +181,7 @@ Every request is logged as one JSON line on stdout with `request_id`, `method`, 
 - API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled in production.
 - Run schema changes with `alembic revision --autogenerate` + `alembic upgrade head`; the app never calls `create_all` outside SQLite dev/test.
 - The API container runs as a non-root user.
-- Set `PUBLIC_BASE_URL` to the public origin so generated presets contain the URL the EA should actually reach, especially behind a proxy or CDN.
+- Set `PUBLIC_BASE_URL` to the public origin so generated presets contain the URL the EA should actually reach, especially behind a proxy or CDN. Set `PUBLIC_APP_URL` to the dashboard origin used in emailed links (defaults to `PUBLIC_BASE_URL`, then the request origin).
+- Configure `SMTP_HOST`/`SMTP_FROM` before launch: password reset and verification links are only logged when SMTP is unset, and production deliberately omits the link from logs. Rotate `SECRET_KEY` invalidates all JWTs, equivalent to a global sign-out.
 - Schedule `scripts/prune_snapshots.py` daily; raw telemetry is capped at `SNAPSHOT_RETENTION_DAYS` (default 180), while trades are kept indefinitely.
 - Login and heartbeat rate limiting share Redis when `REDIS_URL` is set, so limits hold across all API workers.

@@ -35,6 +35,9 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # Optional so existing installs keep working; required for password recovery.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="trader")
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -48,6 +51,31 @@ class User(Base):
     entitlement: Mapped["Entitlement | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+
+    __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
+
+
+class AuthToken(Base):
+    """Single-use email token for password reset or address verification.
+
+    Only the SHA-256 digest is stored; the raw token lives exclusively in the
+    emailed link. Issuing a new token for the same purpose burns older ones so
+    an old link cannot be replayed after a newer request.
+    """
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (Index("ix_auth_tokens_user_purpose", "user_id", "purpose"),)
 
 
 class Mt5Connection(Base):

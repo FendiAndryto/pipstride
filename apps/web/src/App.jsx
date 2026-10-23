@@ -1,16 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LoginPage from './components/LoginPage';
+import ResetPasswordPage from './components/ResetPasswordPage';
 import Dashboard from './components/Dashboard';
 import { api, getToken, clearToken } from './services/api';
 import './App.css';
+
+const readParam = (name) =>
+  typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(name);
+
+/** Remove a consumed one-time token from the address bar. */
+const stripQueryParam = (name) => {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(name)) return;
+  url.searchParams.delete(name);
+  const search = url.searchParams.toString();
+  window.history.replaceState({}, '', `${url.pathname}${search ? `?${search}` : ''}${url.hash}`);
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpiredMsg, setSessionExpiredMsg] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [resetToken, setResetToken] = useState(() => readParam('reset_token'));
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const boot = async () => {
+      // Email links land on the dashboard origin; verification does not need a session.
+      const verifyToken = readParam('verify_email');
+      if (verifyToken && !verifiedRef.current) {
+        verifiedRef.current = true;
+        try {
+          const data = await api.verifyEmail(verifyToken);
+          setNotice({
+            type: 'success',
+            text: data.email
+              ? `Email ${data.email} berhasil diverifikasi. Silakan masuk.`
+              : 'Email berhasil diverifikasi.'
+          });
+        } catch (err) {
+          setNotice({
+            type: 'error',
+            text: err.message || 'Tautan verifikasi tidak valid atau sudah kedaluwarsa.'
+          });
+        }
+        stripQueryParam('verify_email');
+      }
+
       const token = getToken();
       if (!token) {
         setLoading(false);
@@ -28,7 +66,7 @@ export default function App() {
       }
     };
 
-    checkAuth();
+    boot();
 
     const handleSessionExpired = () => {
       setUser(null);
@@ -41,6 +79,7 @@ export default function App() {
 
   const handleLoginSuccess = async (authData) => {
     setSessionExpiredMsg('');
+    setNotice(null);
     try {
       const userData = await api.getMe();
       setUser(userData);
@@ -57,6 +96,15 @@ export default function App() {
     await api.logout();
     setUser(null);
     setSessionExpiredMsg('');
+    setNotice(null);
+  };
+
+  const handleRefreshUser = async () => {
+    try {
+      setUser(await api.getMe());
+    } catch {
+      // A transient failure leaves the previous profile in place.
+    }
   };
 
   if (loading) {
@@ -77,14 +125,32 @@ export default function App() {
     );
   }
 
+  if (resetToken) {
+    return (
+      <ResetPasswordPage
+        token={resetToken}
+        onDone={(text) => {
+          setResetToken(null);
+          setNotice({ type: 'success', text });
+          stripQueryParam('reset_token');
+        }}
+        onCancel={() => {
+          setResetToken(null);
+          stripQueryParam('reset_token');
+        }}
+      />
+    );
+  }
+
   return (
     <>
       {user ? (
-        <Dashboard user={user} onLogout={handleLogout} />
+        <Dashboard user={user} onLogout={handleLogout} onRefreshUser={handleRefreshUser} />
       ) : (
         <LoginPage
           onLoginSuccess={handleLoginSuccess}
           sessionExpiredMsg={sessionExpiredMsg}
+          notice={notice}
         />
       )}
     </>

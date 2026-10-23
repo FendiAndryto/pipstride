@@ -13,7 +13,7 @@ import {
   setActiveConnectionId as persistActiveConnectionId
 } from '../services/api';
 
-export default function Dashboard({ user, onLogout }) {
+export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const [activeTab, setActiveTab] = useState('home');
   const [bridgeStatus, setBridgeStatus] = useState(null);
   const [riskStatus, setRiskStatus] = useState(null);
@@ -198,6 +198,7 @@ export default function Dashboard({ user, onLogout }) {
             onTestTelegram={handleTestTelegram}
             isTestingTelegram={isTestingTelegram}
             telegramStatusMsg={telegramStatusMsg}
+            onRefreshUser={onRefreshUser}
           />
         </div>
       </main>
