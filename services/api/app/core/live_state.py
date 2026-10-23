@@ -9,21 +9,41 @@ same view; otherwise a bounded in-process cache keeps local development simple.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, Optional
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "pipstride:live:"
 TTL_SECONDS = 120
 
 
 class _MemoryBackend:
+    """Bounded process-local cache used when Redis is not configured."""
+
+    MAX_ENTRIES = 512
+
     def __init__(self) -> None:
         self._store: dict[str, tuple[float, str]] = {}
 
     def set(self, key: str, value: str, ttl: int) -> None:
+        if len(self._store) >= self.MAX_ENTRIES:
+            self._prune(force=True)
         self._store[key] = (time.time() + ttl, value)
+
+    def _prune(self, force: bool = False) -> None:
+        now = time.time()
+        expired = [k for k, (expires_at, _) in self._store.items() if expires_at < now]
+        for key in expired:
+            self._store.pop(key, None)
+        if force and len(self._store) >= self.MAX_ENTRIES:
+            # Drop the entries closest to expiry first.
+            ordered = sorted(self._store.items(), key=lambda item: item[1][0])
+            for key, _ in ordered[: self.MAX_ENTRIES // 2]:
+                self._store.pop(key, None)
 
     def get(self, key: str) -> Optional[str]:
         entry = self._store.get(key)
@@ -40,19 +60,36 @@ class _MemoryBackend:
 
 
 class _RedisBackend:
+    """Redis-backed shared cache.
+
+    A Redis outage must not take telemetry ingest down: durable state is already
+    committed to PostgreSQL, so reads simply report "no live payload" and the
+    dashboard shows the connection as stale until Redis returns.
+    """
+
     def __init__(self, url: str) -> None:
         import redis
 
         self._client = redis.Redis.from_url(url, decode_responses=True)
 
     def set(self, key: str, value: str, ttl: int) -> None:
-        self._client.setex(key, ttl, value)
+        try:
+            self._client.setex(key, ttl, value)
+        except Exception as exc:  # pragma: no cover - infra failure path
+            logger.warning("Redis SETEX failed, live payload not cached: %s", exc)
 
     def get(self, key: str) -> Optional[str]:
-        return self._client.get(key)
+        try:
+            return self._client.get(key)
+        except Exception as exc:  # pragma: no cover - infra failure path
+            logger.warning("Redis GET failed, treating live payload as absent: %s", exc)
+            return None
 
     def delete(self, key: str) -> None:
-        self._client.delete(key)
+        try:
+            self._client.delete(key)
+        except Exception as exc:  # pragma: no cover - infra failure path
+            logger.warning("Redis DEL failed: %s", exc)
 
 
 def _build_backend():
