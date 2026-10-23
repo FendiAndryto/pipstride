@@ -21,6 +21,7 @@ pipstride/
 │       │   ├── models/        # Pydantic schemas
 │       │   └── services/      # connections, telemetry ingest, journal reads, users
 │       ├── migrations/        # Alembic migrations (production schema)
+│       ├── scripts/           # prune_snapshots.py, check_migrations.py
 │       ├── tests/             # Pytest suite
 │       ├── alembic.ini
 │       └── requirements.txt
@@ -31,6 +32,7 @@ pipstride/
 │   └── GLOSSARY.md            # Domain vocabulary and boundary standards
 ├── infra/
 │   └── docker-compose.yml     # Postgres + Redis + API + web
+├── .github/workflows/ci.yml   # Tests, migration drift, web build, image build
 ├── .env.example
 └── README.md
 ```
@@ -46,6 +48,8 @@ pipstride/
 | Auth | JWT bearer, revocable through `users.token_version` |
 | MT5 authentication | Per-connection token, stored as **SHA-256 hash** only |
 | Multi-account | One connection per MT5 account, selected with `X-Connection-Id` |
+| Abuse protection | Redis-backed rate limits (login, register, heartbeat), in-process fallback |
+| Logging | One JSON line per request with `X-Request-ID` correlation |
 | Execution | **None.** `/api/v1/bridge/order` always returns `403` |
 
 ### Token and binding model
@@ -55,10 +59,12 @@ pipstride/
 3. The first heartbeat binds the connection to that `account_number`. Any later heartbeat claiming a different account is rejected with `409`, so a leaked token cannot be pointed at another account.
 4. Rotating a token invalidates the old one immediately and clears the binding. Revoking a connection stops telemetry permanently.
 
+Because only the hash is stored, the token cannot be shown again later. Create and rotate therefore also return a ready-to-import MT5 preset (`.set`) that already contains the backend URL, the token, and the watchlist — see [MT5 monitor](#mt5-monitor).
+
 ### API surface
 
 - `POST /api/v1/auth/register`, `/login`, `/logout`, `/change-password`, `GET /me`
-- `GET|POST /api/v1/connections`, `POST /connections/{id}/rotate`, `DELETE /connections/{id}`
+- `GET|POST /api/v1/connections`, `POST /connections/{id}/rotate` (both return the token **and** a `.set` preset), `DELETE /connections/{id}`
 - `POST /api/v1/bridge/heartbeat` (token auth via `X-Bridge-Token`)
 - `GET /api/v1/bridge/status|positions|market|history|equity-curve|initial-deposit|risk`
 - `POST /api/v1/bridge/history/reset`, `/initial-deposit`
@@ -115,8 +121,10 @@ npm run dev
 
 1. Copy `mt5-ea/PipstrideMonitor.mq5` into `MQL5/Experts/`.
 2. In MT5: **Tools > Options > Expert Advisors** → enable **Allow WebRequest for listed URL** and add your API origin (e.g. `http://localhost:8089`).
-3. Open the dashboard → **MT5** → **Tambah Akun**, copy the token, and paste it into `InpBridgeToken`.
-4. Drag `PipstrideMonitor` onto any chart and enable **Allow Algo Trading** (the EA needs it only to run; it sends telemetry, never orders).
+3. Open the dashboard → **MT5** → **Tambah Akun**. Copy the token, or download the generated **preset (`.set`)** and place it in `MQL5/Presets/`.
+4. Drag `PipstrideMonitor` onto any chart. In the **Inputs** tab click **Load** and pick the preset (it fills `InpBackendUrl`, `InpBridgeToken`, and `InpMonitoredSymbols`), then enable **Allow Algo Trading** — the EA needs it only to run; it sends telemetry, never orders.
+
+The preset is produced at create/rotate time because the raw token is never stored. If you lose it, rotate the token to generate a new preset.
 
 ### Tests
 
@@ -127,6 +135,19 @@ pytest
 
 Tests run against a throwaway SQLite database and require no external services.
 
+### Operations
+
+```bash
+# Migration drift guard (needs PostgreSQL, run after alembic upgrade head)
+cd services/api && python scripts/check_migrations.py
+
+# Raw snapshot retention (default 180 days, see docs/adr/0005)
+python scripts/prune_snapshots.py --dry-run
+python scripts/prune_snapshots.py --days 180
+```
+
+Every request is logged as one JSON line on stdout with `request_id`, `method`, `path`, `status_code`, and `duration_ms`; the same id is returned in the `X-Request-ID` header. Set `LOG_LEVEL` to change verbosity.
+
 ---
 
 ## Production notes
@@ -135,3 +156,6 @@ Tests run against a throwaway SQLite database and require no external services.
 - API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled in production.
 - Run schema changes with `alembic revision --autogenerate` + `alembic upgrade head`; the app never calls `create_all` outside SQLite dev/test.
 - The API container runs as a non-root user.
+- Set `PUBLIC_BASE_URL` to the public origin so generated presets contain the URL the EA should actually reach, especially behind a proxy or CDN.
+- Schedule `scripts/prune_snapshots.py` daily; raw telemetry is capped at `SNAPSHOT_RETENTION_DAYS` (default 180), while trades are kept indefinitely.
+- Login and heartbeat rate limiting share Redis when `REDIS_URL` is set, so limits hold across all API workers.
