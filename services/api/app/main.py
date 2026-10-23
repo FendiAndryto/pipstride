@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.auth import router as auth_router
 from app.api.v1.bridge import router as bridge_router
 from app.api.v1.connections import router as connections_router
+from app.api.v1.journal import router as journal_router
 from app.api.v1.telegram import router as telegram_router
 from app.core.config import settings
 from app.core.logging import RequestContextMiddleware, configure_logging
@@ -92,6 +93,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(connections_router, prefix=settings.API_V1_STR)
+app.include_router(journal_router, prefix=settings.API_V1_STR)
 app.include_router(bridge_router, prefix=settings.API_V1_STR)
 app.include_router(telegram_router, prefix=settings.API_V1_STR)
 

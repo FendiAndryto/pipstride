@@ -67,10 +67,21 @@ Because only the hash is stored, the token cannot be shown again later. Create a
 - `GET|POST /api/v1/connections`, `POST /connections/{id}/rotate` (both return the token **and** a `.set` preset), `DELETE /connections/{id}`
 - `POST /api/v1/bridge/heartbeat` (token auth via `X-Bridge-Token`)
 - `GET /api/v1/bridge/status|positions|market|history|equity-curve|initial-deposit|risk`
+- `GET /api/v1/journal/stats?range=1M|3M|1Y|ALL&source=all|ea|manual` (aggregated analytics)
 - `POST /api/v1/bridge/history/reset`, `/initial-deposit`
 - `GET /api/v1/bridge/order` → `405`, `POST /api/v1/bridge/order` → `403` (read-only guarantee)
 
 Dashboard requests target the active account with the `X-Connection-Id` header; the backend falls back to the user's oldest active connection when it is omitted.
+
+### Journal analytics
+
+`GET /api/v1/journal/stats` returns everything derived from stored closed trades for the active connection:
+
+- **Totals** — net/gross profit, win rate, profit factor, expectancy per trade, average win/loss, payoff ratio, best/worst trade, longest win/loss streaks, average holding time, traded volume.
+- **Breakdowns** — per symbol, weekday, hour, direction (long vs short), and source (EA vs manual).
+- **Filters** — `range` (1M, 3M, 1Y, ALL), `source` (all, ea, manual), `symbol`, `direction`.
+
+Definitions worth knowing: win rate counts breakeven trades in the denominator; `profit_factor` and `payoff_ratio` are `null` when there is no losing trade (the UI renders `∞`); weekday/hour buckets use the broker server clock, which is what MT5 reports for deals. Nothing is estimated or interpolated — if it is not in `trades`, it is not in the stats.
 
 ---
 

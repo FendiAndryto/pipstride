@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, Calendar, ArrowUpRight, RefreshCw, Layers, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Calendar, ArrowUpRight, RefreshCw, Layers } from 'lucide-react';
 import { api } from '../services/api';
+import JournalAnalytics from './JournalAnalytics';
+
+const PERIODS = [
+  { value: '1M', label: '1 Bulan' },
+  { value: '3M', label: '3 Bulan' },
+  { value: '1Y', label: '1 Tahun' },
+  { value: 'ALL', label: 'Semua' }
+];
+
+const PERIOD_LABELS = { '1M': '30 hari terakhir', '3M': '90 hari terakhir', '1Y': '1 tahun terakhir', ALL: 'semua waktu' };
 
 const formatCurrency = (val) => {
   if (val === null || val === undefined || isNaN(val)) return '$0.00';
@@ -15,6 +25,9 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
   const [search, setSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [period, setPeriod] = useState('1M');
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const activeAccountNumber = bridgeStatus?.metrics?.account_number || null;
   const activeServer = bridgeStatus?.metrics?.server || null;
@@ -47,15 +60,51 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
     }
   };
 
+  const statsSource = filter === 'EA' ? 'ea' : filter === 'Manual' ? 'manual' : 'all';
+
+  const fetchStats = async () => {
+    try {
+      const data = await api.getJournalStats(period, statsSource);
+      // Same guard as history: never show stats from another MT5 account.
+      if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Failed to load journal statistics:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   // 100% Automatic Sync: Immediately wipe previous account history when switching MT5 account
   useEffect(() => {
     if (activeAccountNumber && prevAccountRef.current && prevAccountRef.current !== activeAccountNumber) {
       setHistoryData(null);
+      setStats(null);
       setLoading(true);
+      setStatsLoading(true);
       fetchHistory();
+      fetchStats();
     }
     prevAccountRef.current = activeAccountNumber;
   }, [activeAccountNumber]);
+
+  // Stats follow the selected period, source filter, and incoming trade count.
+  useEffect(() => {
+    if (activeTab === 'journal' || !activeTab) {
+      setStatsLoading(true);
+      fetchStats();
+    }
+  }, [activeTab, period, statsSource, closedTradesCount, activeAccountNumber]);
+
+  // Journal aggregates are heavier than the trade list, so refresh them slower.
+  useEffect(() => {
+    if (activeTab !== 'journal') return;
+    const timer = setInterval(() => {
+      fetchStats();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeTab, period, statsSource, activeAccountNumber]);
 
   // Immediate reactive fetch when Journal tab becomes active or closed trades change
   useEffect(() => {
@@ -75,15 +124,18 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
 
   const handleRefresh = () => {
     fetchHistory(true);
+    fetchStats();
   };
 
   const trades = historyData?.trades || [];
-  const netPnl = historyData?.net_pnl ?? 0;
-  const winRate = historyData?.win_rate ?? 0;
-  const profitFactor = historyData?.profit_factor ?? 0;
-  const totalTrades = historyData?.total_trades ?? 0;
-  const winningTrades = historyData?.winning_trades ?? 0;
-  const losingTrades = historyData?.losing_trades ?? 0;
+  const totals = stats?.totals;
+  const netPnl = totals?.net_profit ?? historyData?.net_pnl ?? 0;
+  const winRate = totals?.win_rate ?? historyData?.win_rate ?? 0;
+  const profitFactor = totals ? totals.profit_factor : historyData?.profit_factor;
+  const totalTrades = totals?.trades ?? historyData?.total_trades ?? 0;
+  const winningTrades = totals?.wins ?? historyData?.winning_trades ?? 0;
+  const losingTrades = totals?.losses ?? historyData?.losing_trades ?? 0;
+  const periodLabel = PERIOD_LABELS[period];
 
   const filteredTrades = trades.filter((t) => {
     const isEa = t.magic > 0;
@@ -245,6 +297,25 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
         </div>
       </div>
 
+      {/* Period selector drives every statistic below */}
+      <div style={{ display: 'flex', gap: '7px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+        <span className="tiny" style={{ color: 'var(--muted)', fontWeight: 600, marginRight: '2px' }}>
+          PERIODE
+        </span>
+        {PERIODS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`btn ${period === option.value ? '' : 'alt'}`}
+            style={{ fontSize: '11px', padding: '6px 13px' }}
+            onClick={() => setPeriod(option.value)}
+            id={`journal-period-${option.value.toLowerCase()}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       {/* Real KPIs Grid */}
       <div className="grid kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
         <div className="card" id="journal-kpi-net-pnl">
@@ -252,6 +323,9 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
             {formatCurrency(netPnl)}
           </div>
           <div className="label">Realized Closed P/L</div>
+          <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
+            {periodLabel}
+          </div>
         </div>
         <div className="card" id="journal-kpi-deposit-return">
           <div className={`metric ${(allTimePnl ?? netPnl) >= 0 ? 'positive' : 'negative'}`}>
@@ -267,16 +341,29 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
         <div className="card" id="journal-kpi-win-rate">
           <div className="metric">{winRate.toFixed(1)}%</div>
           <div className="label">Win Rate ({winningTrades}W / {losingTrades}L)</div>
+          <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
+            {periodLabel}
+          </div>
         </div>
         <div className="card" id="journal-kpi-profit-factor">
-          <div className="metric">{profitFactor.toFixed(2)}</div>
+          <div className="metric">
+            {profitFactor === null || profitFactor === undefined ? '∞' : Number(profitFactor).toFixed(2)}
+          </div>
           <div className="label">Profit Factor</div>
+          <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
+            {profitFactor === null ? 'tanpa trade loss' : periodLabel}
+          </div>
         </div>
         <div className="card" id="journal-kpi-total-trades">
           <div className="metric">{totalTrades}</div>
           <div className="label">Total Closed Deals</div>
+          <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
+            {periodLabel}
+          </div>
         </div>
       </div>
+
+      <JournalAnalytics stats={stats} loading={statsLoading} periodLabel={periodLabel} />
 
 
       {/* Filter Tabs */}

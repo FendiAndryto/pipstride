@@ -243,6 +243,21 @@ export const api = {
     return res.json();
   },
 
+  /**
+   * Aggregated journal analytics for the active connection.
+   * range: 1M | 3M | 1Y | ALL, source: all | ea | manual
+   */
+  async getJournalStats(range = '1M', source = 'all') {
+    const query = new URLSearchParams({ range, source });
+    const res = await authFetch(`${API_BASE}/api/v1/journal/stats?${query.toString()}`, {
+      method: 'GET'
+    });
+    if (!res.ok) {
+      throw new Error('Failed to fetch journal statistics');
+    }
+    return res.json();
+  },
+
   async resetTradeHistory() {
     const res = await authFetch(`${API_BASE}/api/v1/bridge/history/reset`, { method: 'POST' });
     if (!res.ok) {
