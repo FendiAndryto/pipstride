@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
 
     SECRET_KEY: str = "default_insecure_secret_key_change_in_production"
     ALLOWED_HOSTS: str = "*"
@@ -25,6 +26,22 @@ class Settings(BaseSettings):
     MT5_MAGIC_NUMBER: int = 778899
     BRIDGE_POLL_INTERVAL_MS: int = 500
     HEARTBEAT_TIMEOUT_SECONDS: int = 10
+
+    # MT5 onboarding package. PUBLIC_BASE_URL should be the public API/dashboard
+    # origin (e.g. https://pipstride.app). Empty means "derive from the request",
+    # which is correct for local development and single-origin deployments.
+    PUBLIC_BASE_URL: str = ""
+    MT5_MONITORED_SYMBOLS: str = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD"
+    MT5_HEARTBEAT_INTERVAL_SECONDS: int = 1
+    MT5_HISTORY_DAYS: int = 90
+
+    # Raw telemetry snapshots are pruned by scripts/prune_snapshots.py.
+    SNAPSHOT_RETENTION_DAYS: int = 180
+
+    # Abuse protection
+    RATE_LIMIT_ENABLED: bool = True
+    HEARTBEAT_RATE_LIMIT: int = 120
+    HEARTBEAT_RATE_WINDOW_SECONDS: int = 10
     
     # Risk Watchdog & Account Safeguard Defaults
     DEFAULT_RISK_PER_TRADE_PERCENT: float = 1.0

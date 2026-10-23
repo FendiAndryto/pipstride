@@ -16,9 +16,10 @@ import {
   RefreshCw,
   RotateCw,
   Trash2,
+  Download,
   Wallet
 } from 'lucide-react';
-import { api } from '../services/api';
+import { api, downloadPreset } from '../services/api';
 
 const formatCurrency = (val, currency = 'USD') => {
   if (val === null || val === undefined) return '$0.00';
@@ -64,6 +65,7 @@ export default function ProfileTab({
   const [isBusy, setIsBusy] = useState(false);
   const [connectionMsg, setConnectionMsg] = useState(null);
   const [revealedToken, setRevealedToken] = useState('');
+  const [presetFile, setPresetFile] = useState(null);
   const [copiedToken, setCopiedToken] = useState(false);
 
   const runAction = async (action, successText) => {
@@ -89,6 +91,7 @@ export default function ProfileTab({
     );
     if (created?.token) {
       setRevealedToken(created.token);
+      setPresetFile(created.preset || null);
       if (onSelectConnection) onSelectConnection(created.id);
     }
   };
@@ -102,6 +105,7 @@ export default function ProfileTab({
     runAction(async () => {
       const rotated = await api.rotateConnectionToken(connection.id);
       setRevealedToken(rotated.token);
+      setPresetFile(rotated.preset || null);
       return rotated;
     }, 'Token baru dibuat. Salin sekarang — token hanya ditampilkan sekali.');
   };
@@ -356,6 +360,17 @@ export default function ProfileTab({
             >
               {copiedToken ? <Check size={14} style={{ color: '#45e0ad' }} /> : <Copy size={14} />}
               <span>{copiedToken ? 'Tersalin' : 'Copy'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn alt"
+              onClick={() => downloadPreset(presetFile)}
+              disabled={!presetFile}
+              title="Preset .set sudah terisi URL backend dan token koneksi ini"
+              style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Download size={14} />
+              <span>Preset</span>
             </button>
           </div>
         )}

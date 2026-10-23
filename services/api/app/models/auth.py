@@ -47,7 +47,16 @@ class ConnectionResponse(BaseModel):
     created_at: str
 
 
+class PresetFileResponse(BaseModel):
+    """Ready-to-import MT5 preset. Contains the raw token, so it is returned once."""
+
+    filename: str
+    content: str
+    backend_url: str
+
+
 class ConnectionCreatedResponse(ConnectionResponse):
     """Returned exactly once, at creation or rotation time."""
 
     token: str
+    preset: Optional[PresetFileResponse] = None

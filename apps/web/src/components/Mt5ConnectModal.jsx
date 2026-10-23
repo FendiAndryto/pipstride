@@ -14,7 +14,7 @@ import {
   RotateCw,
   Trash2
 } from 'lucide-react';
-import { api } from '../services/api';
+import { api, downloadPreset } from '../services/api';
 
 const TOKEN_NOTE =
   'Token ditampilkan satu kali saja. Salin sekarang dan tempelkan ke input InpBridgeToken di MT5. ' +
@@ -35,6 +35,7 @@ export default function Mt5ConnectModal({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [revealedToken, setRevealedToken] = useState('');
+  const [presetFile, setPresetFile] = useState(null);
   const [copiedToken, setCopiedToken] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
@@ -43,6 +44,7 @@ export default function Mt5ConnectModal({
   useEffect(() => {
     if (!isOpen) {
       setRevealedToken('');
+      setPresetFile(null);
       setError('');
       setNewLabel('');
       setCopiedToken(false);
@@ -95,6 +97,7 @@ export default function Mt5ConnectModal({
     runAction(async () => {
       const created = await api.createConnection(newLabel.trim() || 'Akun MT5');
       setRevealedToken(created.token);
+      setPresetFile(created.preset || null);
       setNewLabel('');
       if (onSelectConnection) onSelectConnection(created.id);
       return created;
@@ -109,6 +112,7 @@ export default function Mt5ConnectModal({
     return runAction(async () => {
       const rotated = await api.rotateConnectionToken(connection.id);
       setRevealedToken(rotated.token);
+      setPresetFile(rotated.preset || null);
       return rotated;
     });
   };
@@ -437,7 +441,36 @@ export default function Mt5ConnectModal({
                 <Download size={14} />
                 <span>Download PipstrideMonitor (.mq5)</span>
               </a>
+
+              <button
+                type="button"
+                className="btn alt"
+                onClick={() => downloadPreset(presetFile)}
+                disabled={!presetFile}
+                id="btn-download-monitor-preset"
+                title={
+                  presetFile
+                    ? 'Preset berisi URL backend dan token koneksi ini'
+                    : 'Preset dibuat saat token dibuat atau dirotasi'
+                }
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '11px',
+                  padding: '9px 10px',
+                  opacity: presetFile ? 1 : 0.55
+                }}
+              >
+                <Download size={14} />
+                <span>Download Preset (.set)</span>
+              </button>
             </div>
+            <span style={{ fontSize: '10px', color: '#8899a6', lineHeight: 1.4 }}>
+              Preset sudah terisi <code>InpBackendUrl</code>, <code>InpBridgeToken</code>, dan daftar simbol. Di MT5 buka
+              tab <em>Inputs</em> lalu klik <strong>Load</strong> untuk memuat file ini.
+            </span>
           </div>
 
           {/* Target Backend Endpoint */}
@@ -484,8 +517,9 @@ export default function Mt5ConnectModal({
                 <strong>Buat Token & Download EA</strong>
                 <p>
                   Klik <strong>Tambah Akun</strong> di atas lalu salin token yang muncul. Setelah itu klik tombol
-                  <strong> Download PipstrideMonitor</strong>. Buka terminal MT5 Anda: menu <strong>File &gt; Open Data
-                  Folder</strong>, lalu masuk ke <strong>MQL5 &gt; Experts</strong> dan tempelkan file tersebut.
+                  <strong> Download PipstrideMonitor</strong> dan <strong>Download Preset (.set)</strong>. Buka terminal
+                  MT5 Anda: menu <strong>File &gt; Open Data Folder</strong>, lalu masuk ke <strong>MQL5 &gt; Experts</strong>{' '}
+                  dan tempelkan file EA-nya. Simpan file <code>.set</code> di folder <strong>MQL5 &gt; Presets</strong>.
                 </p>
               </div>
             </div>
