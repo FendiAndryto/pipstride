@@ -109,7 +109,7 @@ class BridgeService:
 
         db.commit()
 
-        return HeartbeatResponse(status="ok", server_time=int(time.time()), commands=[])
+        return HeartbeatResponse(status="ok", server_time=int(time.time()))
 
     def _persist_snapshot(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> None:
         latest = db.scalar(

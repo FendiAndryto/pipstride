@@ -427,7 +427,7 @@ export default function HomeTab({
 
             const isNetPositive = (activeCurve?.current_equity ?? equity) >= (activeCurve?.starting_equity ?? balance);
             const strokeColor = isNetPositive ? '#45e0ad' : '#ff5b6b';
-            const gradientId = isNetPositive ? 'tradegear-area-pos' : 'tradegear-area-neg';
+            const gradientId = isNetPositive ? 'pipstride-area-pos' : 'pipstride-area-neg';
 
             if (points.length >= 2) {
               const equities = points.map((p) => p.equity);
@@ -454,11 +454,11 @@ export default function HomeTab({
               <>
                 <svg className="chart" viewBox="0 0 600 180" preserveAspectRatio="none" style={{ width: '100%', height: '175px', display: 'block', margin: '4px 0' }}>
                   <defs>
-                    <linearGradient id="tradegear-area-pos" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="pipstride-area-pos" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0" stopColor="#45e0ad" stopOpacity="0.30" />
                       <stop offset="1" stopColor="#45e0ad" stopOpacity="0" />
                     </linearGradient>
-                    <linearGradient id="tradegear-area-neg" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="pipstride-area-neg" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0" stopColor="#ff5b6b" stopOpacity="0.30" />
                       <stop offset="1" stopColor="#ff5b6b" stopOpacity="0" />
                     </linearGradient>

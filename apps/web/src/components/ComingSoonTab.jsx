@@ -89,7 +89,7 @@ export default function ComingSoonTab({ type = 'ai', onBackToHome }) {
           </div>
         </div>
         <p style={{ marginTop: '8px' }}>
-          Fitur ini sedang dalam tahap integrasi mendalam dengan backend TradeGear dan model telemetri MT5.
+          Fitur ini sedang dalam tahap integrasi mendalam dengan backend Pipstride dan model telemetri MT5.
           Sistem akan tersedia pada rilis mendatang untuk memaksimalkan performa trading Anda.
         </p>
 

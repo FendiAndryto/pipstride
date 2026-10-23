@@ -102,21 +102,9 @@ class HeartbeatPayload(BaseModel):
     timestamp: int = Field(..., description="Unix timestamp sent from terminal")
 
 
-class CommandItem(BaseModel):
-    command_id: str
-    action: str  # "BUY", "SELL", "CLOSE", "CLOSE_ALL"
-    symbol: Optional[str] = None
-    volume: Optional[float] = None
-    sl: Optional[float] = None
-    tp: Optional[float] = None
-    ticket: Optional[int] = None
-    created_at: int
-
-
 class HeartbeatResponse(BaseModel):
     status: str = "ok"
     server_time: int
-    commands: List[CommandItem] = []
 
 
 class InitialDepositRequest(BaseModel):
@@ -151,8 +139,4 @@ class BridgeStatusResponse(BaseModel):
     market_quotes: List[MarketQuoteItem] = []
     chart_symbol: Optional[str] = None
     closed_trades_count: int = 0
-    pending_commands_count: int = 0
-    is_kill_switch_active: bool = False
-    kill_switch_reason: Optional[str] = None
-    kill_switch_time: Optional[int] = None
 
