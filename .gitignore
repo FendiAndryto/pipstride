@@ -1,0 +1,63 @@
+# Environment and Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+backend/data/
+services/api/data/
+
+# Node & Frontend
+node_modules/
+.next/
+out/
+.vite/
+apps/web/dist/
+frontend/dist/
+
+# MT5 Binaries & Wine
+*.ex5
+*.log
+terminal_data/
+wine_prefix/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

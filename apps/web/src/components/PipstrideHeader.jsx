@@ -1,0 +1,85 @@
+import React from 'react';
+import { Monitor } from 'lucide-react';
+import { NAV_TABS } from '../constants/nav';
+
+export default function PipstrideHeader({
+  activeTab,
+  onSelectTab,
+  isConnected,
+  latency,
+  onOpenMt5Modal
+}) {
+  return (
+    <header className="tradegear-header" id="pipstride-header">
+      {/* Brand & Logo */}
+      <div
+        className="brand-group"
+        onClick={() => onSelectTab('home')}
+        title="Pipstride — Home"
+      >
+        <div className="brand-logo-box">
+          <img
+            src="/favicon.svg"
+            alt="Pipstride Logo"
+            className="brand-logo-img"
+          />
+        </div>
+        <div className="brand-text">
+          Pipstride
+          <small>JOURNAL • TELEMETRY • ANALYTICS</small>
+        </div>
+      </div>
+
+      {/* Desktop Navigation Links */}
+      <nav className="nav-desktop" aria-label="Main Navigation">
+        {NAV_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className={`nav-desktop-tab ${isActive ? 'active' : ''}`}
+              onClick={() => onSelectTab(tab.id)}
+              id={`nav-tab-${tab.id}`}
+            >
+              <Icon size={14} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Header Right Actions */}
+      <div className="header-right">
+        {/* Live MT5 Terminal Web-GUI Button */}
+        {onOpenMt5Modal && (
+          <button
+            type="button"
+            className="btn alt"
+            onClick={onOpenMt5Modal}
+            id="header-mt5-gui-btn"
+            title="Open MT5 Terminal Screen"
+            style={{ padding: '7px 10px', fontSize: '11px' }}
+          >
+            <Monitor size={14} />
+            <span className="desktop-only-inline">MT5</span>
+          </button>
+        )}
+
+        {/* MT5 Connection Telemetry Status Pill */}
+        <div
+          className={`status-pill ${isConnected ? 'connected' : 'disconnected'}`}
+          id="header-connection-status"
+          title={isConnected ? 'MT5 Bridge is actively streaming' : 'MT5 Bridge is disconnected or offline'}
+        >
+          <span className={`pulse-dot ${isConnected ? 'online' : 'offline'}`} />
+          <span>{isConnected ? 'LIVE' : 'OFFLINE'}</span>
+          {latency !== null && latency !== undefined && isConnected && (
+            <span style={{ opacity: 0.75, fontSize: '9px' }}>{latency}s</span>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}

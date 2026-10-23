@@ -1,0 +1,47 @@
+services:
+  api:
+    build:
+      context: ../services/api
+      dockerfile: Dockerfile
+    container_name: pipstride_api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8089}:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-default_secret_key_12345}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-change_this_password}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - MT5_MAGIC_NUMBER=${MT5_MAGIC_NUMBER:-778899}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - TELEGRAM_NOTIFICATIONS_ENABLED=${TELEGRAM_NOTIFICATIONS_ENABLED:-true}
+      - MAX_DAILY_DRAWDOWN_PERCENT=${MAX_DAILY_DRAWDOWN_PERCENT:-3.0}
+    volumes:
+      - api_data:/app/data
+    networks:
+      - pipstride_net
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    container_name: pipstride_web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - api
+    networks:
+      - pipstride_net
+
+networks:
+  pipstride_net:
+    name: pipstride_network
+    driver: bridge
+
+volumes:
+  api_data:
+    name: pipstride_api_data
