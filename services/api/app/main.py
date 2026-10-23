@@ -11,11 +11,14 @@ from app.api.v1.bridge import router as bridge_router
 from app.api.v1.connections import router as connections_router
 from app.api.v1.telegram import router as telegram_router
 from app.core.config import settings
+from app.core.logging import RequestContextMiddleware, configure_logging
 from app.core.security import hash_password
 from app.db.base import SessionLocal, engine, init_db
 from app.db.models import Base, Entitlement, Plan, User
 
 logger = logging.getLogger(__name__)
+
+configure_logging(settings.LOG_LEVEL)
 
 
 def _seed_defaults() -> None:
@@ -71,12 +74,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "PATCH"],
-    allow_headers=["Authorization", "Content-Type", "X-Bridge-Token", "X-Connection-Id"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Bridge-Token",
+        "X-Connection-Id",
+        "X-Request-ID",
+    ],
+    expose_headers=["X-Request-ID", "Retry-After"],
 )
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)

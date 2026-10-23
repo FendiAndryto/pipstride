@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user
-from app.core.security import create_access_token, rate_limiter
+from app.core.rate_limit import rate_limiter
+from app.core.security import create_access_token
 from app.db.base import get_db
 from app.db.models import User
 from app.models.auth import (
@@ -48,6 +49,7 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many registration attempts. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
         )
 
     try:
@@ -75,6 +77,7 @@ async def login(credentials: LoginRequest, request: Request, db: Session = Depen
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many failed login attempts. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
         )
 
     user = user_service.authenticate(db, username, credentials.password)

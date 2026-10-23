@@ -1,10 +1,13 @@
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.deps import get_active_connection, get_current_user
+from app.core.rate_limit import consume
+from app.core.tokens import hash_token
 from app.db.base import get_db
 from app.db.models import Mt5Connection, User
 from app.models.bridge import (
@@ -31,10 +34,28 @@ router = APIRouter(prefix="/bridge", tags=["Bridge"])
 )
 async def receive_heartbeat(
     payload: HeartbeatPayload,
+    response: Response,
     x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
     db: Session = Depends(get_db),
 ):
     token = x_bridge_token or payload.bridge_token
+
+    # A misconfigured terminal can push far faster than the 1s cadence. Limit
+    # per token so one runaway EA cannot starve the API for everyone else.
+    if token:
+        limited, retry_after = consume(
+            f"hb:{hash_token(token)}",
+            limit=settings.HEARTBEAT_RATE_LIMIT,
+            window_seconds=settings.HEARTBEAT_RATE_WINDOW_SECONDS,
+        )
+        if limited:
+            response.headers["Retry-After"] = str(retry_after)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Heartbeat rate limit exceeded; slow down the monitor interval.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
     return bridge_service.process_heartbeat(db, payload, raw_token=token)
 
 
