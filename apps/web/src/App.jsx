@@ -35,8 +35,8 @@ export default function App() {
       setSessionExpiredMsg('Sesi login telah berakhir. Silakan masuk kembali.');
     };
 
-    window.addEventListener('tradegear:session-expired', handleSessionExpired);
-    return () => window.removeEventListener('tradegear:session-expired', handleSessionExpired);
+    window.addEventListener('pipstride:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('pipstride:session-expired', handleSessionExpired);
   }, []);
 
   const handleLoginSuccess = async (authData) => {
@@ -72,7 +72,7 @@ export default function App() {
         gap: '1rem'
       }}>
         <div className="pulse-dot online" style={{ width: '16px', height: '16px' }} />
-        <span style={{ fontSize: '0.9rem', letterSpacing: '0.05em' }}>INITIALIZING ENGINE...</span>
+        <span style={{ fontSize: '0.9rem', letterSpacing: '0.05em' }}>MEMUAT PIPSTRIDE...</span>
       </div>
     );
   }

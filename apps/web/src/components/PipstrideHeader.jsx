@@ -1,12 +1,21 @@
 import React from 'react';
-import { Monitor } from 'lucide-react';
+import { ChevronDown, Monitor, Wallet } from 'lucide-react';
 import { NAV_TABS } from '../constants/nav';
+
+function connectionLabel(connection) {
+  if (!connection) return 'Belum ada akun';
+  const account = connection.account_number ? `#${connection.account_number}` : 'belum terhubung';
+  return `${connection.label} · ${account}`;
+}
 
 export default function PipstrideHeader({
   activeTab,
   onSelectTab,
   isConnected,
   latency,
+  connections = [],
+  activeConnectionId,
+  onSelectConnection,
   onOpenMt5Modal
 }) {
   return (
@@ -52,6 +61,34 @@ export default function PipstrideHeader({
 
       {/* Header Right Actions */}
       <div className="header-right">
+        {/* Account switcher: one token-bound connection per MT5 account */}
+        {connections.length > 0 && (
+          <div className="connection-switcher" title="Pilih akun MT5">
+            <Wallet size={14} />
+            {connections.length === 1 ? (
+              <span className="connection-switcher-static">
+                {connectionLabel(connections[0])}
+              </span>
+            ) : (
+              <>
+                <select
+                  id="header-connection-switcher"
+                  value={activeConnectionId || ''}
+                  onChange={(e) => onSelectConnection(e.target.value)}
+                  aria-label="Pilih akun MT5"
+                >
+                  {connections.map((connection) => (
+                    <option key={connection.id} value={connection.id}>
+                      {connectionLabel(connection)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={13} className="connection-switcher-caret" />
+              </>
+            )}
+          </div>
+        )}
+
         {/* Live MT5 Terminal Web-GUI Button */}
         {onOpenMt5Modal && (
           <button

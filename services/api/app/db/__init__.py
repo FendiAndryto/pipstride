@@ -1,8 +1,3 @@
-from app.db.database import (
-    get_db_connection,
-    init_db,
-    generate_bridge_token,
-    DB_FILE,
-)
+from app.db.base import Base, SessionLocal, engine, get_db, init_db, session_scope
 
-__all__ = ["get_db_connection", "init_db", "generate_bridge_token", "DB_FILE"]
+__all__ = ["Base", "SessionLocal", "engine", "get_db", "init_db", "session_scope"]

@@ -23,10 +23,12 @@ const formatCurrency = (val, currency = 'USD') => {
 
 export default function HomeTab({
   bridgeStatus,
-  autopilotStatus,
+  riskStatus,
+  hasConnection = false,
   onNavigateJournal,
   onNavigateAI,
   onNavigateMarket,
+  onOpenConnect,
   onRefresh
 }) {
   const [chartRange, setChartRange] = useState('Month');
@@ -166,7 +168,7 @@ export default function HomeTab({
         <div>
           <div className="eyebrow">MT5 LIVE COMMAND CENTER</div>
           <h1>Good day, Trader.</h1>
-          <div className="sub">Semua metrik dan eksekusi real-time dari MetaTrader 5 lokal laptop.</div>
+          <div className="sub">Semua metrik read-only dari MetaTrader 5 lokal laptop.</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
@@ -202,13 +204,42 @@ export default function HomeTab({
         </div>
       </div>
 
+      {/* First-run connection prompt */}
+      {!hasConnection && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '16px',
+            border: '1px solid rgba(69, 224, 173, 0.35)',
+            background: 'rgba(69, 224, 173, 0.07)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '13px' }}>Belum ada akun MT5 terhubung</div>
+            <div className="sub" style={{ fontSize: '11.5px' }}>
+              Buat koneksi, salin token sekali, lalu tempelkan ke <code>InpBridgeToken</code> di EA.
+            </div>
+          </div>
+          {onOpenConnect && (
+            <button type="button" className="btn" onClick={onOpenConnect} id="home-connect-mt5-btn">
+              Hubungkan MT5
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Hero Edge Banner */}
       <div className="banner" style={{ marginBottom: '16px' }}>
         <div className="eyebrow">YOUR EDGE, IN ONE PLACE</div>
         <h2>Trade smarter. Review deeper.</h2>
         <p>
-          Pantau posisi aktif, pahami performa akun secara objektif, dan eksekusi sinyal presisi
-          dengan proteksi risiko drawdown otomatis.
+          Pantau posisi aktif, pahami performa akun secara objektif, dan tinjau drawdown
+          dengan pemantauan risiko yang sepenuhnya read-only.
         </p>
         <div className="btns" style={{ marginTop: '14px' }}>
           {onNavigateJournal && (
@@ -505,7 +536,7 @@ export default function HomeTab({
             ) : (
               <div style={{ padding: '36px 12px', textAlign: 'center', color: 'var(--muted)' }}>
                 <div style={{ fontSize: '12px', marginBottom: '8px' }}>Tidak ada posisi aktif yang sedang berjalan di terminal MT5.</div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Posisi akan dibuka otomatis oleh AutoPilot saat sinyal konfluensi terkonfirmasi.</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Posisi yang Anda buka secara manual di MT5 akan muncul di sini secara otomatis.</div>
               </div>
             )}
           </div>
@@ -607,7 +638,7 @@ export default function HomeTab({
             </div>
             <div className="card">
               {(() => {
-                const ddPct = autopilotStatus?.daily_drawdown_percent ?? (
+                const ddPct = riskStatus?.daily_drawdown_percent ?? (
                   balance > 0 && equity < balance ? ((balance - equity) / balance) * 100 : 0
                 );
                 const isNegative = ddPct > 0;
@@ -618,7 +649,7 @@ export default function HomeTab({
                     </div>
                     <div className="label">Daily Drawdown</div>
                     <div className="tiny">
-                      Guard limit: {autopilotStatus?.max_daily_drawdown_percent ?? 3.0}% max buffer
+                      Watchdog alert: {riskStatus?.max_daily_drawdown_percent ?? 3.0}% (read-only)
                     </div>
                   </>
                 );

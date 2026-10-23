@@ -24,7 +24,7 @@ export default function PositionsTable({ positions = [], currency = 'USD' }) {
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Active Open Positions</h3>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {positions.length} active trade{positions.length === 1 ? '' : 's'} on MT5 · Full-Auto Telemetry
+              {positions.length} active trade{positions.length === 1 ? '' : 's'} on MT5 · Read-Only Telemetry
             </span>
           </div>
         </div>
@@ -53,7 +53,7 @@ export default function PositionsTable({ positions = [], currency = 'USD' }) {
           <Layers size={36} style={{ opacity: 0.25, marginBottom: '0.5rem' }} />
           <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No Active Open Positions</p>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Posisi akan dibuka secara otomatis oleh robot AutoPilot saat konfluensi sinyal terpenuhi.
+            Posisi yang Anda buka secara manual di MT5 akan tampil di sini secara otomatis.
           </span>
         </div>
       ) : (

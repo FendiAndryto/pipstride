@@ -32,9 +32,29 @@ _Avoid_: Grafik saldo, profit line, chart trade
 An authenticated account holder registered in Pipstride with private resources.
 _Avoid_: Client, member, trader account
 
+**MT5 Connection**:
+One binding between a Pipstride user and a single MT5 account, identified by its own connection token. A user may own several connections and switch the active one in the dashboard.
+_Avoid_: Bridge session, account slot, terminal
+
 **Connection Token**:
-A cryptographically secure, high-entropy API authentication token assigned to identify and bind incoming MT5 telemetry to an isolated user connection session.
+A cryptographically secure, high-entropy API token assigned to exactly one MT5 connection. Pipstride stores only its SHA-256 digest and a short display prefix; the raw value is shown once at creation or rotation.
 _Avoid_: MT5 password, broker pin, user secret
+
+**Binding Lock**:
+The rule that a connection token is permanently tied to the `account_number` of the first MT5 account that reports through it. Heartbeats from any other account are rejected with `409`.
+_Avoid_: Account pairing, token whitelist
+
+**Active Connection**:
+The connection a dashboard request operates on, selected through the `X-Connection-Id` header. When the header is absent the oldest active connection is used.
+_Avoid_: Current session, selected broker
+
+**Live Telemetry State**:
+The most recent heartbeat payload for a connection, cached in Redis with a short TTL. Durable history lives in PostgreSQL as snapshots and trades.
+_Avoid_: Cache table, session payload
+
+**Plan / Entitlement**:
+A plan is a product tier (free, core, plus, pro) defining `max_connections`. An entitlement is a user's current assignment to a plan. Billing is not implemented yet; the schema is ready for it.
+_Avoid_: Subscription record, licence key
 
 **PipstrideMonitor**:
 The ultra-lightweight, 100% pure read-only MetaTrader 5 Expert Advisor that transmits real-time account telemetry (balances, equity, margin, positions, history, quotes) to Pipstride without trade execution capabilities.

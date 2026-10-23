@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   LogOut,
-  ShieldAlert,
   ShieldCheck,
   Monitor,
   Send,
-  RotateCcw,
   Clock,
   KeyRound,
   Lock,
@@ -15,7 +13,10 @@ import {
   AlertCircle,
   Copy,
   Check,
-  RefreshCw
+  RefreshCw,
+  RotateCw,
+  Trash2,
+  Wallet
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -33,12 +34,14 @@ export default function ProfileTab({
   user,
   onLogout,
   bridgeStatus,
-  autopilotStatus,
+  riskStatus,
+  connections = [],
+  activeConnectionId,
+  onSelectConnection,
+  onConnectionsChanged,
   pollInterval,
   onPollIntervalChange,
   onOpenMt5Modal,
-  onResetDrawdown,
-  isResettingDrawdown,
   onTestTelegram,
   isTestingTelegram,
   telegramStatusMsg
@@ -50,59 +53,73 @@ export default function ProfileTab({
   const accountNumber = metrics.account_number || 0;
   const currency = metrics.currency || 'USD';
 
-  // Drawdown Guard metrics
-  const dailyDrawdownPercent = autopilotStatus?.daily_drawdown_percent ?? 0;
-  const maxDrawdownPercent = autopilotStatus?.max_daily_drawdown_percent ?? 3.0;
-  const isDrawdownLocked = autopilotStatus?.is_drawdown_lockout_active ?? false;
-  const startingEquity = autopilotStatus?.starting_equity ?? metrics.equity ?? 10000;
+  // Passive risk watchdog metrics (read-only, never liquidates positions)
+  const dailyDrawdownPercent = riskStatus?.daily_drawdown_percent ?? 0;
+  const maxDrawdownPercent = riskStatus?.max_daily_drawdown_percent ?? 3.0;
+  const isRiskAlert = riskStatus?.is_alert_active ?? false;
+  const marginLevel = riskStatus?.margin_level ?? metrics.margin_level ?? 0;
   const limitUsed = maxDrawdownPercent > 0 ? Math.min(100, (dailyDrawdownPercent / maxDrawdownPercent) * 100) : 0;
 
-  // Bridge Token state
-  const [bridgeToken, setBridgeToken] = useState(user?.bridge_token || '');
-  const [showToken, setShowToken] = useState(false);
+  // Connection management state
+  const [isBusy, setIsBusy] = useState(false);
+  const [connectionMsg, setConnectionMsg] = useState(null);
+  const [revealedToken, setRevealedToken] = useState('');
   const [copiedToken, setCopiedToken] = useState(false);
-  const [isRegeneratingToken, setIsRegeneratingToken] = useState(false);
-  const [tokenMsg, setTokenMsg] = useState(null);
 
-  useEffect(() => {
-    if (!bridgeToken) {
-      api.getBridgeToken()
-        .then(data => {
-          if (data?.bridge_token) {
-            setBridgeToken(data.bridge_token);
-          }
-        })
-        .catch(() => {});
+  const runAction = async (action, successText) => {
+    setIsBusy(true);
+    setConnectionMsg(null);
+    try {
+      const result = await action();
+      if (onConnectionsChanged) await onConnectionsChanged();
+      if (successText) setConnectionMsg({ type: 'success', text: successText });
+      return result;
+    } catch (err) {
+      setConnectionMsg({ type: 'error', text: err.message || 'Gagal memproses koneksi.' });
+      return null;
+    } finally {
+      setIsBusy(false);
     }
-  }, [bridgeToken]);
-
-  const handleCopyToken = () => {
-    if (!bridgeToken) return;
-    navigator.clipboard.writeText(bridgeToken);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
   };
 
-  const handleRegenerateToken = async () => {
-    const confirmed = window.confirm(
-      'Peringatan: Membuat Bridge Token baru akan membatalkan token lama seketika. ' +
-      'Terminal MT5 yang sedang terhubung akan terputus hingga Anda memasukkan token baru di EA. Lanjutkan?'
+  const handleCreateConnection = async () => {
+    const created = await runAction(
+      () => api.createConnection(`Akun ${connections.length + 1}`),
+      'Koneksi dibuat. Salin token di bawah dan tempelkan ke InpBridgeToken.'
     );
-    if (!confirmed) return;
-
-    setIsRegeneratingToken(true);
-    setTokenMsg(null);
-    try {
-      const data = await api.regenerateBridgeToken();
-      if (data?.bridge_token) {
-        setBridgeToken(data.bridge_token);
-        setTokenMsg({ type: 'success', text: 'Bridge Token baru berhasil dibuat! Masukkan ke input InpBridgeToken di MT5 EA Anda.' });
-      }
-    } catch (err) {
-      setTokenMsg({ type: 'error', text: err.message || 'Gagal membuat token baru.' });
-    } finally {
-      setIsRegeneratingToken(false);
+    if (created?.token) {
+      setRevealedToken(created.token);
+      if (onSelectConnection) onSelectConnection(created.id);
     }
+  };
+
+  const handleRotate = (connection) => {
+    if (!window.confirm(
+      `Rotasi token "${connection.label}"? Token lama langsung berhenti bekerja dan EA harus diperbarui.`
+    )) {
+      return;
+    }
+    runAction(async () => {
+      const rotated = await api.rotateConnectionToken(connection.id);
+      setRevealedToken(rotated.token);
+      return rotated;
+    }, 'Token baru dibuat. Salin sekarang — token hanya ditampilkan sekali.');
+  };
+
+  const handleRevoke = (connection) => {
+    if (!window.confirm(
+      `Hapus koneksi "${connection.label}"? Token-nya langsung tidak berlaku.`
+    )) {
+      return;
+    }
+    runAction(() => api.revokeConnection(connection.id), 'Koneksi dihapus.');
+  };
+
+  const handleCopyToken = () => {
+    if (!revealedToken) return;
+    navigator.clipboard.writeText(revealedToken);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
   };
 
   // Change password state
@@ -160,15 +177,15 @@ export default function ProfileTab({
       <div className="heading">
         <div>
           <div className="eyebrow">ACCOUNT & PREFERENCES</div>
-          <h1>Profile & Engine Security</h1>
-          <div className="sub">Kelola koneksi privat MT5, kredensial Bridge, batas drawdown, dan akun.</div>
+          <h1>Profile & Connection Security</h1>
+          <div className="sub">Kelola akun MT5 terhubung, token koneksi, dan keamanan akun Pipstride Anda.</div>
         </div>
         <button
           type="button"
           className="btn danger"
           onClick={onLogout}
           id="profile-logout-btn"
-          title="Sign out of TradeGear"
+          title="Sign out of Pipstride"
         >
           <LogOut size={14} />
           <span>Keluar</span>
@@ -190,107 +207,245 @@ export default function ProfileTab({
               fontWeight: 900
             }}
           >
-            {user?.username ? user.username.slice(0, 2).toUpperCase() : 'TG'}
+            {user?.username ? user.username.slice(0, 2).toUpperCase() : 'PS'}
           </div>
           <div className="grow">
             <div style={{ fontSize: '15px', fontWeight: 800 }}>{user?.username || 'Trader'}</div>
             <div className="sub" style={{ fontSize: '11px' }}>
-              {user?.role === 'admin' ? 'Administrator' : 'Trader'} Account · TradeGear Engine v1.0
+              {user?.role === 'admin' ? 'Administrator' : 'Trader'} Account · Pipstride Journal v1.0
             </div>
           </div>
           <span className="tag">{user?.role ? user.role.toUpperCase() : 'ACTIVE'}</span>
         </div>
       </div>
 
-      {/* Bridge MT5 Private Credentials */}
+      {/* MT5 Connections */}
       <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        Kredensial Bridge MT5 Pribadi
+        Koneksi MT5 Terhubung
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>
         <div className="cardhead">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <KeyRound size={17} style={{ color: 'var(--g)' }} />
-            <h3>Bridge Token Pribadi (InpBridgeToken)</h3>
+            <Wallet size={17} style={{ color: 'var(--g)' }} />
+            <h3>Akun & Token Koneksi</h3>
           </div>
-          <span className="tag green">PRIVATE ACCESS</span>
+          <span className="tag green">{connections.length} AKUN</span>
         </div>
 
         <p className="sub" style={{ fontSize: '11.5px', marginBottom: '14px', lineHeight: 1.45 }}>
-          Token ini memastikan terminal MT5 di laptop Anda terhubung secara eksklusif ke akun Anda. Pengguna lain tidak akan dapat melihat saldo atau order Anda.
+          Setiap akun MT5 punya token sendiri dan terikat permanen ke nomor akun yang pertama kali melapor.
+          Token hanya ditampilkan sekali, baik saat dibuat maupun dirotasi.
         </p>
 
-        {tokenMsg && (
+        {connectionMsg && (
           <div
             style={{
               padding: '9px 12px',
               borderRadius: '9px',
               fontSize: '11.5px',
               marginBottom: '14px',
-              background: tokenMsg.type === 'success' ? 'rgba(69, 224, 173, 0.12)' : 'rgba(255, 113, 128, 0.12)',
-              border: `1px solid ${tokenMsg.type === 'success' ? 'rgba(69, 224, 173, 0.4)' : 'rgba(255, 113, 128, 0.4)'}`,
-              color: tokenMsg.type === 'success' ? 'var(--g)' : 'var(--red)',
+              background: connectionMsg.type === 'success' ? 'rgba(69, 224, 173, 0.12)' : 'rgba(255, 113, 128, 0.12)',
+              border: `1px solid ${connectionMsg.type === 'success' ? 'rgba(69, 224, 173, 0.4)' : 'rgba(255, 113, 128, 0.4)'}`,
+              color: connectionMsg.type === 'success' ? 'var(--g)' : 'var(--red)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}
           >
-            {tokenMsg.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-            <span>{tokenMsg.text}</span>
+            {connectionMsg.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+            <span>{connectionMsg.text}</span>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-          <input
-            type={showToken ? 'text' : 'password'}
-            readOnly
-            value={bridgeToken || 'Memuat token...'}
-            style={{
-              flex: 1,
-              background: '#0a1419',
-              border: '1px solid rgba(69, 224, 173, 0.35)',
-              borderRadius: '8px',
-              color: '#45e0ad',
-              fontFamily: 'monospace',
-              fontSize: '12px',
-              fontWeight: 600,
-              padding: '9px 12px',
-              letterSpacing: showToken ? 'normal' : '2px'
-            }}
-          />
+        {connections.length === 0 ? (
+          <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginBottom: '12px' }}>
+            Belum ada akun MT5. Buat koneksi pertama untuk mendapatkan token.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+            {connections.map((connection) => {
+              const isActive = connection.id === activeConnectionId;
+              return (
+                <div
+                  key={connection.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: `1px solid ${isActive ? 'rgba(69, 224, 173, 0.45)' : 'var(--line)'}`,
+                    background: isActive ? 'rgba(69, 224, 173, 0.07)' : 'transparent'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectConnection && onSelectConnection(connection.id)}
+                    style={{
+                      flex: 1,
+                      textAlign: 'left',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'inherit',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                    title="Jadikan akun aktif"
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 700 }}>
+                      {connection.label} {isActive ? '· aktif' : ''}
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: '#8899a6', fontFamily: 'monospace' }}>
+                      {connection.account_number ? `#${connection.account_number}` : 'belum terhubung'} ·{' '}
+                      {connection.broker_server || 'server -'} · {connection.token_prefix}…
+                    </div>
+                  </button>
+                  <span className={`tag ${connection.status === 'connected' ? 'green' : ''}`} style={{ fontSize: '9px' }}>
+                    {connection.status.toUpperCase()}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn alt"
+                    onClick={() => handleRotate(connection)}
+                    disabled={isBusy}
+                    title="Rotasi token"
+                    style={{ padding: '5px 7px' }}
+                  >
+                    <RotateCw size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn alt"
+                    onClick={() => handleRevoke(connection)}
+                    disabled={isBusy}
+                    title="Hapus koneksi"
+                    style={{ padding: '5px 7px', color: '#ff8fa3' }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {revealedToken && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            <input
+              type="text"
+              readOnly
+              value={revealedToken}
+              style={{
+                flex: 1,
+                background: '#0a1419',
+                border: '1px solid rgba(69, 224, 173, 0.35)',
+                borderRadius: '8px',
+                color: '#45e0ad',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                fontWeight: 600,
+                padding: '9px 12px'
+              }}
+            />
+            <button
+              type="button"
+              className="btn alt"
+              onClick={handleCopyToken}
+              style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              {copiedToken ? <Check size={14} style={{ color: '#45e0ad' }} /> : <Copy size={14} />}
+              <span>{copiedToken ? 'Tersalin' : 'Copy'}</span>
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
             className="btn alt"
-            onClick={() => setShowToken(!showToken)}
-            style={{ padding: '8px 12px' }}
-            title={showToken ? 'Sembunyikan Token' : 'Tampilkan Token'}
+            onClick={handleCreateConnection}
+            disabled={isBusy}
+            style={{ fontSize: '11px', padding: '7px 12px' }}
           >
-            {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+            <RefreshCw size={12} className={isBusy ? 'animate-spin' : ''} />
+            <span>Tambah Akun MT5</span>
           </button>
           <button
             type="button"
             className="btn alt"
-            onClick={handleCopyToken}
-            disabled={!bridgeToken}
-            style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            onClick={onOpenMt5Modal}
+            style={{ padding: '7px 12px', fontSize: '11px' }}
+            id="profile-open-mt5-screen-btn"
+            title="Panduan koneksi MT5"
           >
-            {copiedToken ? <Check size={14} style={{ color: '#45e0ad' }} /> : <Copy size={14} />}
-            <span>{copiedToken ? 'Tersalin' : 'Copy'}</span>
+            <Monitor size={13} />
+            <span>Panduan Koneksi MT5</span>
           </button>
         </div>
+      </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            className="btn alt"
-            onClick={handleRegenerateToken}
-            disabled={isRegeneratingToken}
-            style={{ fontSize: '11px', padding: '6px 12px', color: '#ffb366' }}
-            title="Generate ulang token jika dicurigai bocor"
-          >
-            <RefreshCw size={12} className={isRegeneratingToken ? 'animate-spin' : ''} />
-            <span>{isRegeneratingToken ? 'Generating...' : 'Regenerate Token Baru'}</span>
-          </button>
+      {/* Active Account Telemetry */}
+      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
+        Akun Aktif
+      </div>
+
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="row">
+          <div className="coin">MT</div>
+          <div className="grow">
+            <div className="rowtitle">{server}</div>
+            <div className="rowsub">
+              Login #{accountNumber || 'Offline'} · MT5 Direct Laptop Bridge
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className={`tag ${isConnected ? '' : 'red'}`} title="FastAPI to MT5 Bridge Telemetry">
+              {isConnected ? 'BRIDGE LIVE' : 'BRIDGE OFFLINE'}
+            </span>
+            <span className={`tag ${terminalConnected ? '' : 'red'}`} title="MT5 Terminal to Broker Server Connection">
+              {terminalConnected ? 'BROKER ONLINE' : 'BROKER OFFLINE'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Passive Risk Watchdog */}
+      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
+        Risk Watchdog (Read-Only)
+      </div>
+
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="cardhead">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={18} style={{ color: isRiskAlert ? 'var(--amber)' : 'var(--g)' }} />
+            <h3>Drawdown Monitor</h3>
+          </div>
+          <span className={`tag ${isRiskAlert ? 'amber' : ''}`}>
+            {dailyDrawdownPercent.toFixed(2)}% / {maxDrawdownPercent}%
+          </span>
+        </div>
+
+        <p className="sub" style={{ fontSize: '11.5px', marginBottom: '12px', lineHeight: 1.45 }}>
+          Pipstride hanya <b>memantau</b> drawdown ekuitas terhadap baseline deposit. Platform tidak pernah menutup
+          posisi, mengunci order, atau mengirim perintah eksekusi ke MT5 — peringatan hanya informatif.
+        </p>
+
+        <div style={{ background: '#0a1419', height: '8px', borderRadius: '99px', overflow: 'hidden', marginBottom: '8px', border: '1px solid var(--line)' }}>
+          <div
+            style={{
+              width: `${Math.min(100, Math.max(0, limitUsed))}%`,
+              height: '100%',
+              background: isRiskAlert || limitUsed > 75 ? 'var(--red)' : limitUsed > 40 ? 'var(--amber)' : 'var(--g)',
+              borderRadius: '99px',
+              transition: 'width 0.4s ease'
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
+          <span>Baseline deposit: {formatCurrency(bridgeStatus?.initial_deposit, currency)}</span>
+          <span>Margin level: {marginLevel ? `${marginLevel.toFixed(1)}%` : '—'}</span>
         </div>
       </div>
 
@@ -435,99 +590,6 @@ export default function ProfileTab({
             <span>{isChangingPass ? 'Memperbarui...' : 'Simpan Password Baru'}</span>
           </button>
         </form>
-      </div>
-
-      {/* Connected Accounts */}
-      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        Connected MT5 Accounts
-      </div>
-
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <div className="row">
-          <div className="coin">MT</div>
-          <div className="grow">
-            <div className="rowtitle">{server}</div>
-            <div className="rowsub">
-              Login #{accountNumber || 'Offline'} · MT5 Direct Laptop Bridge
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className={`tag ${isConnected ? '' : 'red'}`} title="FastAPI to MT5 Bridge Telemetry">
-              {isConnected ? 'BRIDGE LIVE' : 'BRIDGE OFFLINE'}
-            </span>
-            <span className={`tag ${terminalConnected ? '' : 'red'}`} title="MT5 Terminal to Broker Server Connection">
-              {terminalConnected ? 'BROKER ONLINE' : 'BROKER OFFLINE'}
-            </span>
-            <button
-              type="button"
-              className="btn alt"
-              style={{ padding: '6px 10px', fontSize: '11px' }}
-              onClick={onOpenMt5Modal}
-              id="profile-open-mt5-screen-btn"
-              title="Buka Layar MT5 GUI"
-            >
-              <Monitor size={13} />
-              <span>Panduan Koneksi MT5</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Daily Drawdown Guard Progress */}
-      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        Daily Drawdown Guard & Safeguards
-      </div>
-
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <div className="cardhead">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isDrawdownLocked ? (
-              <ShieldAlert size={18} style={{ color: 'var(--red)' }} />
-            ) : (
-              <ShieldCheck size={18} style={{ color: 'var(--g)' }} />
-            )}
-            <h3>Drawdown Protection Limit</h3>
-          </div>
-          <span className={`tag ${isDrawdownLocked ? 'red' : limitUsed > 70 ? 'amber' : ''}`}>
-            {isDrawdownLocked ? 'LOCKED OUT' : `${dailyDrawdownPercent.toFixed(2)}% / ${maxDrawdownPercent}%`}
-          </span>
-        </div>
-
-        <p className="sub" style={{ fontSize: '11.5px', marginBottom: '12px', lineHeight: 1.45 }}>
-          Melindungi modal dari penurunan ekuitas beruntun. Jika drawdown hari ini menyentuh{' '}
-          <b>{maxDrawdownPercent}%</b>, seluruh order baru dan AutoPilot akan otomatis dikunci hingga batas direset.
-        </p>
-
-        {/* Drawdown Progress Bar */}
-        <div style={{ background: '#0a1419', height: '8px', borderRadius: '99px', overflow: 'hidden', marginBottom: '8px', border: '1px solid var(--line)' }}>
-          <div
-            style={{
-              width: `${Math.min(100, Math.max(0, limitUsed))}%`,
-              height: '100%',
-              background: isDrawdownLocked || limitUsed > 75 ? 'var(--red)' : limitUsed > 40 ? 'var(--amber)' : 'var(--g)',
-              borderRadius: '99px',
-              transition: 'width 0.4s ease'
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
-          <span>Starting Baseline: {formatCurrency(startingEquity, currency)}</span>
-          <span>Buffer: {Math.max(0, maxDrawdownPercent - dailyDrawdownPercent).toFixed(2)}%</span>
-        </div>
-
-        <div className="btns">
-          <button
-            type="button"
-            className="btn alt"
-            onClick={() => onResetDrawdown(metrics.equity)}
-            disabled={isResettingDrawdown}
-            id="profile-reset-drawdown-btn"
-          >
-            <RotateCcw size={13} />
-            <span>{isResettingDrawdown ? 'Resetting...' : 'Reset Baseline Equity Sekarang'}</span>
-          </button>
-        </div>
       </div>
 
       {/* Preferences & Telemetry */}

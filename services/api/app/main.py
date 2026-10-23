@@ -1,51 +1,87 @@
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.db.database import init_db
-from app.api.v1.bridge import router as bridge_router
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.api.v1.auth import router as auth_router
-from app.api.v1.risk import router as risk_router
+from app.api.v1.bridge import router as bridge_router
+from app.api.v1.connections import router as connections_router
 from app.api.v1.telegram import router as telegram_router
+from app.core.config import settings
+from app.core.security import hash_password
+from app.db.base import SessionLocal, engine, init_db
+from app.db.models import Base, Entitlement, Plan, User
 
 logger = logging.getLogger(__name__)
 
 
+def _seed_defaults() -> None:
+    """Seed the plan catalogue and the initial admin account."""
+    with SessionLocal() as db:
+        for code, name, max_conn, price in (
+            ("free", "Free", 1, 0),
+            ("core", "Core", 1, 5900),
+            ("plus", "Plus", 3, 12900),
+            ("pro", "Pro", 5, 19900),
+        ):
+            if db.get(Plan, code) is None:
+                db.add(Plan(code=code, name=name, max_connections=max_conn, price_cents=price))
+
+        admin = db.scalar(select(User).where(User.username == settings.ADMIN_USERNAME.strip()))
+        if admin is None:
+            admin = User(
+                username=settings.ADMIN_USERNAME.strip(),
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
+                role="admin",
+            )
+            db.add(admin)
+            db.flush()
+            db.add(Entitlement(user_id=admin.id, plan_code="pro", max_connections=5))
+            logger.info("Seeded default admin user '%s'", admin.username)
+
+        db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize SQLite database and run auto-migration if needed
-    init_db()
-    if settings.SECRET_KEY == "default_insecure_secret_key_change_in_production":
-        logger.warning(
-            "SECURITY WARNING: SECRET_KEY is set to default insecure key! "
-            "Please provide a strong SECRET_KEY in your .env file."
-        )
+    settings.validate_runtime()
+
+    if settings.DATABASE_URL.startswith("sqlite"):
+        init_db()
+    elif settings.ENVIRONMENT.lower() not in {"development", "test"}:
+        # Production schema is managed by Alembic, never by create_all.
+        with engine.connect() as conn:
+            conn.exec_driver_sql("SELECT 1")
+
+    _seed_defaults()
     yield
 
+
+_docs_enabled = not settings.is_production
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=f"{settings.API_V1_STR}/redoc",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if _docs_enabled else None,
+    docs_url=f"{settings.API_V1_STR}/docs" if _docs_enabled else None,
+    redoc_url=f"{settings.API_V1_STR}/redoc" if _docs_enabled else None,
     lifespan=lifespan,
 )
 
-# Set up CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "X-Bridge-Token", "X-Connection-Id"],
 )
 
-# Register routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(connections_router, prefix=settings.API_V1_STR)
 app.include_router(bridge_router, prefix=settings.API_V1_STR)
-app.include_router(risk_router, prefix=settings.API_V1_STR)
 app.include_router(telegram_router, prefix=settings.API_V1_STR)
 
 
@@ -54,8 +90,8 @@ async def root():
     return {
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
-        "docs": f"{settings.API_V1_STR}/docs",
-        "status": "healthy"
+        "status": "healthy",
+        "mode": "read-only",
     }
 
 

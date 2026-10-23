@@ -32,13 +32,13 @@ async def get_telegram_status():
 )
 async def send_test_alert(
     payload: TelegramTestAlertRequest = TelegramTestAlertRequest(),
-    current_user: str = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     msg = payload.message or (
-        "🚀 <b>ROBOT TRADING MT5 — TEST NOTIFICATION</b>\n\n"
-        "Your Telegram alert bridge is operating normally!\n"
-        f"<b>Triggered by:</b> <code>{current_user}</code>\n"
-        "<b>Status:</b> 🟢 Operational"
+        "Pipstride — TEST NOTIFICATION\n\n"
+        "Your Telegram watchdog alert channel is operating normally!\n"
+        f"Triggered by: {current_user.username}\n"
+        "Status: operational"
     )
 
     success = await telegram_service.send_message(msg)
@@ -58,11 +58,11 @@ async def send_test_alert(
 )
 async def toggle_telegram(
     payload: TelegramToggleRequest,
-    current_user: str = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     settings.TELEGRAM_NOTIFICATIONS_ENABLED = payload.enabled
     return {
         "status": "success",
         "notifications_enabled": settings.TELEGRAM_NOTIFICATIONS_ENABLED,
-        "updated_by": current_user
+        "updated_by": current_user.username
     }

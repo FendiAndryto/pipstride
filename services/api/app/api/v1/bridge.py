@@ -1,19 +1,24 @@
 import time
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.core.deps import get_active_connection, get_current_user
+from app.db.base import get_db
+from app.db.models import Mt5Connection, User
 from app.models.bridge import (
+    BridgeStatusResponse,
     HeartbeatPayload,
     HeartbeatResponse,
-    BridgeStatusResponse,
-    PositionItem,
-    MarketQuoteItem,
-    TradeHistoryResponse,
-    EquityCurveResponse,
     InitialDepositRequest,
     InitialDepositResponse,
+    MarketQuoteItem,
+    PositionItem,
+    TradeHistoryResponse,
 )
+from app.models.risk import RiskWatchdogStatusResponse
 from app.services.bridge_service import bridge_service
-from app.core.deps import get_current_user
 
 router = APIRouter(prefix="/bridge", tags=["Bridge"])
 
@@ -22,119 +27,130 @@ router = APIRouter(prefix="/bridge", tags=["Bridge"])
     "/heartbeat",
     response_model=HeartbeatResponse,
     status_code=status.HTTP_200_OK,
-    summary="Receive periodic heartbeat telemetry from MT5 Bridge EA"
+    summary="Receive periodic telemetry from the read-only MT5 monitor",
 )
 async def receive_heartbeat(
     payload: HeartbeatPayload,
-    x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token")
+    x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
+    db: Session = Depends(get_db),
 ):
     token = x_bridge_token or payload.bridge_token
-    return bridge_service.process_heartbeat(payload, bridge_token=token)
+    return bridge_service.process_heartbeat(db, payload, raw_token=token)
 
 
 @router.get(
     "/status",
     response_model=BridgeStatusResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Retrieve current MT5 bridge connectivity status and latest metrics for current user"
+    summary="Current bridge connectivity and latest metrics for the active connection",
 )
-async def get_bridge_status(current_user: str = Depends(get_current_user)):
-    return bridge_service.get_status(username=current_user)
-
-
-@router.get(
-    "/initial-deposit",
-    response_model=InitialDepositResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get initial deposit baseline settings and all-time P/L return for current user"
-)
-async def get_initial_deposit(current_user: str = Depends(get_current_user)):
-    return bridge_service.get_initial_deposit_info(username=current_user)
-
-
-@router.post(
-    "/initial-deposit",
-    response_model=InitialDepositResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Set or override manual initial deposit baseline for current user"
-)
-async def set_initial_deposit(
-    req: InitialDepositRequest,
-    current_user: str = Depends(get_current_user)
+async def get_bridge_status(
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
 ):
-    return bridge_service.set_initial_deposit_override(req.initial_deposit, username=current_user)
+    return bridge_service.get_status(db, connection)
 
 
-@router.get(
-    "/history",
-    response_model=TradeHistoryResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Retrieve real closed deals history and calculated metrics directly from user's MT5"
-)
-async def get_trade_history(current_user: str = Depends(get_current_user)):
-    return bridge_service.get_trade_history(username=current_user)
+@router.get("/positions", response_model=List[PositionItem])
+async def get_positions(connection: Mt5Connection = Depends(get_active_connection)):
+    return bridge_service.get_positions(connection)
 
 
-@router.post(
-    "/history/reset",
-    status_code=status.HTTP_200_OK,
-    summary="Reset cached journal trade history and force resync with active MT5 account"
-)
-async def reset_trade_history(current_user: str = Depends(get_current_user)):
-    return bridge_service.reset_trade_history(username=current_user)
+@router.get("/market", response_model=List[MarketQuoteItem])
+async def get_market_quotes(connection: Mt5Connection = Depends(get_active_connection)):
+    return bridge_service.get_market_quotes(connection)
 
 
-@router.get(
-    "/market",
-    response_model=List[MarketQuoteItem],
-    status_code=status.HTTP_200_OK,
-    summary="Retrieve live quotes for monitored instruments from user's MT5 feed"
-)
-async def get_market_quotes(current_user: str = Depends(get_current_user)):
-    return bridge_service.get_market_quotes(username=current_user)
+@router.get("/history", response_model=TradeHistoryResponse)
+async def get_trade_history(
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
+):
+    return bridge_service.get_trade_history(db, connection)
 
 
-@router.get(
-    "/equity-curve",
-    response_model=EquityCurveResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Retrieve equity snapshots over time for dynamic performance chart for current user"
-)
+@router.post("/history/reset")
+async def reset_trade_history(
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
+):
+    return bridge_service.reset_journal(db, connection)
+
+
+@router.get("/equity-curve")
 async def get_equity_curve(
     range: str = "1M",
-    current_user: str = Depends(get_current_user)
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
 ):
-    return bridge_service.get_equity_curve(time_range=range, username=current_user)
+    return bridge_service.get_equity_curve(db, connection, time_range=range)
+
+
+@router.get("/initial-deposit", response_model=InitialDepositResponse)
+async def get_initial_deposit(
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
+):
+    return bridge_service.get_initial_deposit_info(db, connection)
+
+
+@router.post("/initial-deposit", response_model=InitialDepositResponse)
+async def set_initial_deposit(
+    req: InitialDepositRequest,
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
+):
+    return bridge_service.set_initial_deposit_override(db, connection, req.initial_deposit)
+
+
+@router.get("/risk", response_model=RiskWatchdogStatusResponse, tags=["Risk Watchdog"])
+async def get_risk_watchdog(
+    connection: Mt5Connection = Depends(get_active_connection),
+    db: Session = Depends(get_db),
+):
+    from app.core.config import settings
+
+    status_response = bridge_service.get_status(db, connection)
+    drawdown = 0.0
+    if status_response.initial_deposit and status_response.metrics:
+        drawdown = max(
+            0.0,
+            ((status_response.initial_deposit - status_response.metrics.equity)
+             / status_response.initial_deposit) * 100.0,
+        )
+
+    return RiskWatchdogStatusResponse(
+        is_alert_active=drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT,
+        alert_reason=(
+            f"Equity drawdown {drawdown:.2f}% melampaui batas "
+            f"{settings.MAX_DAILY_DRAWDOWN_PERCENT}%"
+            if drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT
+            else None
+        ),
+        alert_time=int(time.time()) if drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT else None,
+        daily_drawdown_percent=round(drawdown, 2),
+        max_daily_drawdown_percent=settings.MAX_DAILY_DRAWDOWN_PERCENT,
+        margin_level=status_response.metrics.margin_level if status_response.metrics else 0.0,
+        max_spread_points=settings.MAX_SPREAD_POINTS,
+        default_risk_percent=settings.DEFAULT_RISK_PER_TRADE_PERCENT,
+        max_risk_percent=settings.MAX_RISK_PER_TRADE_PERCENT,
+        min_lot=settings.MIN_LOT_SIZE,
+        max_lot=settings.MAX_LOT_SIZE,
+    )
 
 
 @router.post(
     "/order",
     status_code=status.HTTP_403_FORBIDDEN,
-    summary="Order execution disabled (Pure Read-Only Journal)"
+    summary="Order execution disabled (Pure Read-Only Journal)",
 )
 async def submit_order():
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Pipstride is a 100% Pure Read-Only Journal platform. Trade execution and liquidations are disabled."
+        detail="Pipstride is a 100% Pure Read-Only Journal platform. "
+        "Trade execution and liquidations are disabled.",
     )
 
 
-@router.get(
-    "/positions",
-    response_model=List[PositionItem],
-    status_code=status.HTTP_200_OK,
-    summary="Retrieve currently open trading positions from user's MT5"
-)
-async def get_positions(current_user: str = Depends(get_current_user)):
-    return bridge_service.get_positions(username=current_user)
-
-
-@router.get(
-    "/ping",
-    summary="Simple ping-pong health check"
-)
+@router.get("/ping")
 async def ping():
-    return {
-        "status": "pong",
-        "timestamp": int(time.time())
-    }
+    return {"status": "pong", "timestamp": int(time.time())}

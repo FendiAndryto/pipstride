@@ -6,12 +6,17 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Pipstride Journal Bridge"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
-    
+
+    ENVIRONMENT: str = "development"
+
     SECRET_KEY: str = "default_insecure_secret_key_change_in_production"
     ALLOWED_HOSTS: str = "*"
-    
+
     CORS_ORIGINS: str = ""
-    
+
+    DATABASE_URL: str = "sqlite:///./data/pipstride.db"
+    REDIS_URL: str = ""
+
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "change_this_password"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
@@ -40,6 +45,31 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() in {"production", "prod"}
+
+    def validate_runtime(self) -> None:
+        """Refuse to boot with insecure defaults outside development."""
+        if not self.is_production:
+            return
+
+        problems = []
+        if self.SECRET_KEY == "default_insecure_secret_key_change_in_production":
+            problems.append("SECRET_KEY is still the insecure default")
+        if self.ADMIN_PASSWORD == "change_this_password":
+            problems.append("ADMIN_PASSWORD is still the insecure default")
+        if self.ALLOWED_HOSTS == "*":
+            problems.append("ALLOWED_HOSTS must be restricted in production")
+        if self.DATABASE_URL.startswith("sqlite"):
+            problems.append("DATABASE_URL must point to PostgreSQL in production")
+
+        if problems:
+            raise RuntimeError(
+                "Refusing to start in production with insecure configuration: "
+                + "; ".join(problems)
+            )
+
     @property
     def cors_origins(self) -> List[str]:
         base_origins = [

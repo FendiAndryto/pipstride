@@ -1,4 +1,42 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pipstride_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-pipstride}
+      - POSTGRES_USER=${POSTGRES_USER:-pipstride}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pipstride_dev_password}
+    ports:
+      # Bound to loopback so the database is never exposed publicly.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipstride} -d ${POSTGRES_DB:-pipstride}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pipstride_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: pipstride_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - pipstride_net
+
   api:
     build:
       context: ../services/api
@@ -8,19 +46,32 @@ services:
     ports:
       - "${API_PORT:-8089}:8000"
     environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://pipstride:pipstride_dev_password@postgres:5432/pipstride}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - SECRET_KEY=${SECRET_KEY:-default_secret_key_12345}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-change_this_password}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       - MT5_MAGIC_NUMBER=${MT5_MAGIC_NUMBER:-778899}
+      - HEARTBEAT_TIMEOUT_SECONDS=${HEARTBEAT_TIMEOUT_SECONDS:-10}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - TELEGRAM_NOTIFICATIONS_ENABLED=${TELEGRAM_NOTIFICATIONS_ENABLED:-true}
       - MAX_DAILY_DRAWDOWN_PERCENT=${MAX_DAILY_DRAWDOWN_PERCENT:-3.0}
-    volumes:
-      - api_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - pipstride_net
 
@@ -43,5 +94,7 @@ networks:
     driver: bridge
 
 volumes:
-  api_data:
-    name: pipstride_api_data
+  postgres_data:
+    name: pipstride_postgres_data
+  redis_data:
+    name: pipstride_redis_data

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PipstrideHeader from './PipstrideHeader';
 import PipstrideBottomNav from './PipstrideBottomNav';
 import HomeTab from './HomeTab';
@@ -6,27 +6,62 @@ import JournalTab from './JournalTab';
 import MarketTab from './MarketTab';
 import ComingSoonTab from './ComingSoonTab';
 import ProfileTab from './ProfileTab';
-import DrawdownBanner from './DrawdownBanner';
 import Mt5ConnectModal from './Mt5ConnectModal';
-import { api } from '../services/api';
+import {
+  api,
+  getActiveConnectionId,
+  setActiveConnectionId as persistActiveConnectionId
+} from '../services/api';
 
 export default function Dashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('home');
   const [bridgeStatus, setBridgeStatus] = useState(null);
+  const [riskStatus, setRiskStatus] = useState(null);
+  const [connections, setConnections] = useState([]);
+  const [activeConnectionId, setActiveConnectionId] = useState(getActiveConnectionId());
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
   const [pollInterval, setPollInterval] = useState(1000);
-  const [autopilotStatus, setAutopilotStatus] = useState(null);
 
   // Modals state
   const [isMt5ModalOpen, setIsMt5ModalOpen] = useState(false);
-  const [isResettingDrawdown, setIsResettingDrawdown] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
   const [telegramStatusMsg, setTelegramStatusMsg] = useState(null);
   const timerRef = useRef(null);
 
-  const fetchStatus = async () => {
+  const loadConnections = useCallback(async () => {
     try {
-      const data = await api.getBridgeStatus();
-      setBridgeStatus(data);
+      const list = await api.getConnections();
+      setConnections(list);
+      setConnectionsLoaded(true);
+
+      const stored = getActiveConnectionId();
+      const stillValid = stored && list.some((c) => c.id === stored);
+      if (!stillValid) {
+        const fallback = list[0]?.id || null;
+        persistActiveConnectionId(fallback);
+        setActiveConnectionId(fallback);
+      }
+      return list;
+    } catch {
+      setConnectionsLoaded(true);
+      return [];
+    }
+  }, []);
+
+  const fetchStatus = useCallback(async () => {
+    if (!activeConnectionId) {
+      setBridgeStatus(null);
+      setRiskStatus(null);
+      return;
+    }
+
+    try {
+      const [status, risk] = await Promise.all([
+        api.getBridgeStatus(),
+        api.getRiskStatus().catch(() => null)
+      ]);
+      setBridgeStatus(status);
+      setRiskStatus(risk);
     } catch {
       setBridgeStatus((prev) => ({
         ...prev,
@@ -35,17 +70,17 @@ export default function Dashboard({ user, onLogout }) {
         seconds_since_last_heartbeat: null
       }));
     }
-  };
+  }, [activeConnectionId]);
+
+  useEffect(() => {
+    loadConnections();
+  }, [loadConnections]);
 
   useEffect(() => {
     let isMounted = true;
     const runPoll = async () => {
       if (!isMounted) return;
-      try {
-        await fetchStatus();
-      } catch {
-        // Polling errors handled within individual fetchers
-      }
+      await fetchStatus();
     };
 
     runPoll();
@@ -55,28 +90,19 @@ export default function Dashboard({ user, onLogout }) {
       isMounted = false;
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [pollInterval]);
+  }, [fetchStatus, pollInterval]);
 
-  const handleToggleAutoPilot = async (enabled) => {
-    try {
-      await api.toggleAutoPilot(enabled);
-      await fetchAutoPilotStatus();
-    } catch (err) {
-      console.error('Failed to toggle AutoPilot:', err);
-    }
+  const handleSelectConnection = (connectionId) => {
+    persistActiveConnectionId(connectionId);
+    setActiveConnectionId(connectionId);
+    setBridgeStatus(null);
+    setRiskStatus(null);
   };
 
-  const handleResetDrawdown = async (newBaseline) => {
-    setIsResettingDrawdown(true);
-    try {
-      await api.resetDrawdownGuard(newBaseline);
-      await fetchAutoPilotStatus();
-      await fetchStatus();
-    } catch (err) {
-      console.error('Failed to reset Drawdown Guard:', err);
-    } finally {
-      setIsResettingDrawdown(false);
-    }
+  const handleConnectionsChanged = async () => {
+    const list = await loadConnections();
+    await fetchStatus();
+    return list;
   };
 
   const handleTestTelegram = async () => {
@@ -108,29 +134,24 @@ export default function Dashboard({ user, onLogout }) {
         onSelectTab={setActiveTab}
         isConnected={isConnected}
         latency={secondsSinceHeartbeat}
+        connections={connections}
+        activeConnectionId={activeConnectionId}
+        onSelectConnection={handleSelectConnection}
         onOpenMt5Modal={() => setIsMt5ModalOpen(true)}
       />
 
       {/* Main Container */}
       <main className="app-main">
-        {/* Global Daily Drawdown Lockout Warning Banner */}
-        {autopilotStatus?.is_drawdown_lockout_active && (
-          <DrawdownBanner
-            reason={autopilotStatus.drawdown_lockout_reason}
-            lockoutTime={autopilotStatus.lockout_time}
-            onResetGuard={handleResetDrawdown}
-            isResetting={isResettingDrawdown}
-          />
-        )}
-
         {/* Tab 1: Home Command Center */}
         <div className={`page-container ${activeTab === 'home' ? 'active' : ''}`} id="tab-home">
           <HomeTab
             bridgeStatus={bridgeStatus}
-            autopilotStatus={autopilotStatus}
+            riskStatus={riskStatus}
+            hasConnection={connections.length > 0}
             onNavigateJournal={() => setActiveTab('journal')}
             onNavigateAI={() => setActiveTab('ai')}
             onNavigateMarket={() => setActiveTab('market')}
+            onOpenConnect={() => setIsMt5ModalOpen(true)}
             onRefresh={fetchStatus}
           />
         </div>
@@ -166,12 +187,14 @@ export default function Dashboard({ user, onLogout }) {
             user={user}
             onLogout={onLogout}
             bridgeStatus={bridgeStatus}
-            autopilotStatus={autopilotStatus}
+            riskStatus={riskStatus}
+            connections={connections}
+            activeConnectionId={activeConnectionId}
+            onSelectConnection={handleSelectConnection}
+            onConnectionsChanged={handleConnectionsChanged}
             pollInterval={pollInterval}
             onPollIntervalChange={setPollInterval}
             onOpenMt5Modal={() => setIsMt5ModalOpen(true)}
-            onResetDrawdown={handleResetDrawdown}
-            isResettingDrawdown={isResettingDrawdown}
             onTestTelegram={handleTestTelegram}
             isTestingTelegram={isTestingTelegram}
             telegramStatusMsg={telegramStatusMsg}
@@ -182,12 +205,17 @@ export default function Dashboard({ user, onLogout }) {
       {/* Mobile Fixed Bottom Navigation Bar */}
       <PipstrideBottomNav activeTab={activeTab} onSelectTab={setActiveTab} />
 
-      {/* MT5 Web-GUI Connect & Broker Screen Modal */}
+      {/* MT5 Connect & Broker Screen Modal */}
       <Mt5ConnectModal
         isOpen={isMt5ModalOpen}
         onClose={() => setIsMt5ModalOpen(false)}
         isConnected={isConnected}
         accountNumber={metrics.account_number}
+        connections={connections}
+        connectionsLoaded={connectionsLoaded}
+        activeConnectionId={activeConnectionId}
+        onSelectConnection={handleSelectConnection}
+        onConnectionsChanged={handleConnectionsChanged}
         onCheckStatus={fetchStatus}
       />
     </div>

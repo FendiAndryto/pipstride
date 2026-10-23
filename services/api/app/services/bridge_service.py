@@ -1,557 +1,406 @@
-import os
-import json
+"""Telemetry ingest and journal reads for a single MT5 connection.
+
+Pipstride is strictly read-only: this module persists what the MT5 monitor
+reports and never sends execution commands back to the terminal.
+"""
+
+from __future__ import annotations
+
 import time
-import uuid
-import threading
-from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+
 from fastapi import HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.core import live_state
+from app.core.config import settings
+from app.db.models import AccountSettings, Mt5Connection, TelemetrySnapshot, Trade
 from app.models.bridge import (
+    BridgeStatusResponse,
+    ClosedTradeItem,
+    EquityCurveResponse,
+    EquityPointItem,
     HeartbeatPayload,
     HeartbeatResponse,
-    BridgeStatusResponse,
-    CommandItem,
-    PositionItem,
-    MarketQuoteItem,
-    ClosedTradeItem,
-    TradeHistoryResponse,
-    EquityPointItem,
-    EquityCurveResponse,
-    InitialDepositRequest,
     InitialDepositResponse,
+    MarketQuoteItem,
+    PositionItem,
+    TradeHistoryResponse,
 )
-from app.core.config import settings
-from app.services.user_service import user_service
+from app.services.connection_service import connection_service
+
+SNAPSHOT_MIN_INTERVAL_SECONDS = 30
 
 
-class UserBridgeSession:
-    def __init__(self, username: str):
-        self.username = username
-        self.account_number: Optional[int] = None
-        self.server: Optional[str] = None
-        self.latest_payload: Optional[HeartbeatPayload] = None
-        self.last_received_time: Optional[float] = None
-        self.pending_commands: List[CommandItem] = []
-        self.is_kill_switch_active: bool = False
-        self.kill_switch_reason: Optional[str] = None
-        self.kill_switch_time: Optional[int] = None
-        self.kill_switch_user: Optional[str] = None
-        self.previous_positions_map: dict = {}
-        self.previous_balance: Optional[float] = None
-        self.market_quotes: Dict[str, MarketQuoteItem] = {}
-        self.account_trades: Dict[int, Dict[int, ClosedTradeItem]] = {}
-        self.account_initial_deposits: Dict[int, float] = {}
-        self.account_custom_deposits: Dict[int, Optional[float]] = {}
-        self.closed_trades_map: Dict[int, ClosedTradeItem] = {}
-        self.equity_snapshots: List[dict] = []
-        self.chart_symbol: Optional[str] = None
-        self.mt5_initial_deposit: Optional[float] = None
-        self.custom_initial_deposit: Optional[float] = None
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
-    def get_effective_initial_deposit(self, account_number: Optional[int] = None) -> Optional[float]:
-        acct = account_number or self.account_number
-        if acct:
-            custom = self.account_custom_deposits.get(acct)
-            if custom is not None and custom > 0:
-                return custom
-            mt5_dep = self.account_initial_deposits.get(acct)
-            if mt5_dep is not None and mt5_dep > 0:
-                return mt5_dep
 
-        # Fallback to current session payload balance
-        if self.latest_payload and self.latest_payload.balance > 0:
-            return self.latest_payload.balance
+def _to_dt(ts: Optional[int]) -> Optional[datetime]:
+    if not ts:
         return None
+    return datetime.fromtimestamp(int(ts), tz=timezone.utc)
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Normalise datetimes across backends.
+
+    PostgreSQL returns timezone-aware values, SQLite returns naive ones. Mixing
+    the two raises ``TypeError`` on subtraction, so anything read back from the
+    database goes through here before being compared or converted.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _ts(value: Optional[datetime]) -> Optional[int]:
+    normalised = _as_utc(value)
+    return int(normalised.timestamp()) if normalised else None
 
 
 class BridgeService:
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._sessions: Dict[str, UserBridgeSession] = {}
+    # ------------------------------------------------------------------ ingest
+    def process_heartbeat(
+        self,
+        db: Session,
+        payload: HeartbeatPayload,
+        raw_token: Optional[str],
+    ) -> HeartbeatResponse:
+        connection = connection_service.get_by_token(db, raw_token or "")
+        if connection is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or revoked connection token.",
+            )
 
-    def _normalize_user(self, username: Optional[str]) -> str:
-        return (username or settings.ADMIN_USERNAME).strip().lower()
-
-    def _get_or_create_session(self, username: Optional[str]) -> UserBridgeSession:
-        user_key = self._normalize_user(username)
-        if user_key not in self._sessions:
-            self._sessions[user_key] = UserBridgeSession(username=user_key)
-        return self._sessions[user_key]
-
-    def reset_state(self):
-        """Reset internal state across all sessions (for unit test isolation)."""
-        with self._lock:
-            self._sessions.clear()
-
-    def get_equity(self, username: Optional[str] = None) -> Optional[float]:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            if session.latest_payload and session.latest_payload.equity > 0:
-                return session.latest_payload.equity
-            return None
-
-    def trigger_kill_switch(self, reason: str = "Manual Emergency Watchdog Alert", username: str = "admin") -> dict:
-        current_time = int(time.time())
-        with self._lock:
-            session = self._get_or_create_session(username)
-            session.is_kill_switch_active = True
-            session.kill_switch_reason = reason
-            session.kill_switch_time = current_time
-            session.kill_switch_user = username
-            open_count = len(session.latest_payload.positions) if session.latest_payload else 0
-
-        # Dispatch structured Telegram watchdog alert (zero remote execution commands sent to MT5)
         try:
-            from app.services.telegram_service import telegram_service
-            telegram_service.send_kill_switch_alert_background(
-                reason=reason,
-                triggered_by=username,
-                closed_count=open_count
+            connection_service.bind_account(
+                db,
+                connection,
+                account_number=payload.account_number,
+                broker_server=payload.server,
+                currency=payload.currency,
             )
-        except Exception:
-            pass
-
-        return {
-            "status": "engaged",
-            "is_kill_switch_active": True,
-            "reason": reason,
-            "triggered_at": current_time,
-            "triggered_by": username,
-            "command_id": None,
-            "message": "Risk Watchdog alert engaged. Telegram notification dispatched. Note: In Pure Read-Only mode, no liquidation commands are sent to MT5."
-        }
-
-    def disarm_kill_switch(self, username: str = "admin") -> dict:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            session.is_kill_switch_active = False
-            session.kill_switch_reason = None
-            session.kill_switch_time = None
-            session.kill_switch_user = None
-
-        return {
-            "status": "disarmed",
-            "is_kill_switch_active": False,
-            "message": "Risk Watchdog alert disarmed and unlocked. Normal analytical operations restored.",
-            "unlocked_by": username
-        }
-
-    def get_kill_switch_status(self, username: Optional[str] = None) -> dict:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            return {
-                "is_kill_switch_active": session.is_kill_switch_active,
-                "kill_switch_reason": session.kill_switch_reason,
-                "kill_switch_time": session.kill_switch_time,
-                "kill_switch_user": session.kill_switch_user,
-                "default_risk_percent": settings.DEFAULT_RISK_PER_TRADE_PERCENT,
-                "max_risk_percent": settings.MAX_RISK_PER_TRADE_PERCENT,
-                "max_daily_drawdown_percent": settings.MAX_DAILY_DRAWDOWN_PERCENT,
-                "min_lot": settings.MIN_LOT_SIZE,
-                "max_lot": settings.MAX_LOT_SIZE
-            }
-
-    def process_heartbeat(self, payload: HeartbeatPayload, bridge_token: Optional[str] = None) -> HeartbeatResponse:
-        current_time = time.time()
-        token = (bridge_token or payload.bridge_token or "").strip()
-
-        if not token:
+        except Exception as exc:  # ConnectionBindingError
+            db.rollback()
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Bridge Token required. Please provide X-Bridge-Token header or bridge_token in payload."
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
             )
 
-        user = user_service.get_user_by_bridge_token(token)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Bridge Token. Authentication failed."
+        connection.last_seen_at = _now()
+        connection.status = "connected"
+
+        self._persist_snapshot(db, connection, payload)
+        self._persist_trades(db, connection, payload)
+
+        live_state.save_live_payload(
+            connection.id,
+            {
+                "captured_at": int(time.time()),
+                "payload": payload.model_dump(mode="json"),
+            },
+        )
+
+        db.commit()
+
+        return HeartbeatResponse(status="ok", server_time=int(time.time()), commands=[])
+
+    def _persist_snapshot(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> None:
+        latest = db.scalar(
+            select(TelemetrySnapshot)
+            .where(TelemetrySnapshot.connection_id == connection.id)
+            .order_by(TelemetrySnapshot.captured_at.desc())
+            .limit(1)
+        )
+        if latest is not None:
+            age = (_now() - _as_utc(latest.captured_at)).total_seconds()
+            if age < SNAPSHOT_MIN_INTERVAL_SECONDS:
+                return
+
+        db.add(
+            TelemetrySnapshot(
+                connection_id=connection.id,
+                balance=payload.balance,
+                equity=payload.equity,
+                margin=payload.margin,
+                free_margin=payload.free_margin,
+                margin_level=payload.margin_level,
+                floating_pnl=payload.floating_pnl,
+                open_positions=payload.open_positions,
+            )
+        )
+
+    def _persist_trades(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> None:
+        if not payload.closed_trades:
+            return
+
+        existing = set(
+            db.scalars(
+                select(Trade.ticket).where(Trade.connection_id == connection.id)
+            )
+        )
+        for item in payload.closed_trades:
+            if item.ticket in existing:
+                continue
+            db.add(
+                Trade(
+                    connection_id=connection.id,
+                    ticket=item.ticket,
+                    symbol=item.symbol,
+                    direction=item.type,
+                    volume=item.volume,
+                    open_price=item.open_price,
+                    close_price=item.close_price,
+                    profit=item.profit,
+                    magic=item.magic,
+                    opened_at=_to_dt(item.open_time),
+                    closed_at=_to_dt(item.close_time),
+                )
+            )
+            existing.add(item.ticket)
+
+    # ------------------------------------------------------------------- reads
+    def _live(self, connection: Mt5Connection) -> Optional[dict]:
+        return live_state.load_live_payload(connection.id)
+
+    def _is_fresh(self, live: Optional[dict]) -> bool:
+        if not live:
+            return False
+        return (time.time() - float(live.get("captured_at", 0))) <= settings.HEARTBEAT_TIMEOUT_SECONDS
+
+    def get_status(self, db: Session, connection: Mt5Connection) -> BridgeStatusResponse:
+        live = self._live(connection)
+        fresh = self._is_fresh(live)
+        deposit = self.get_effective_initial_deposit(db, connection)
+
+        if not fresh:
+            return BridgeStatusResponse(
+                is_connected=False,
+                terminal_connected=False,
+                last_heartbeat_at=_ts(connection.last_seen_at),
+                seconds_since_last_heartbeat=None,
+                metrics=None,
+                initial_deposit=deposit,
+                is_deposit_overridden=self._has_override(db, connection),
+                settled_pnl=0.0,
+                settled_pnl_percent=0.0,
+                all_time_pnl=0.0,
+                all_time_pnl_percent=0.0,
+                positions=[],
+                market_quotes=[],
+                closed_trades_count=self._closed_trade_count(db, connection),
             )
 
-        username = user["username"]
-        closed_positions = []
+        payload = HeartbeatPayload(**live["payload"])
+        payload.bridge_token = None
 
-        with self._lock:
-            session = self._get_or_create_session(username)
+        balance = payload.balance
+        equity = payload.equity
+        settled_pnl = round(balance - deposit, 2) if deposit else 0.0
+        settled_pnl_pct = round((settled_pnl / deposit) * 100.0, 2) if deposit else 0.0
+        all_time_pnl = round(equity - deposit, 2) if deposit else 0.0
+        all_time_pnl_pct = round((all_time_pnl / deposit) * 100.0, 2) if deposit else 0.0
 
-            # Determine whether MT5 account has changed
-            acct = payload.account_number
-            account_changed = False
-            if session.account_number is not None and acct != session.account_number:
-                account_changed = True
-            elif session.latest_payload is not None and acct != session.latest_payload.account_number:
-                account_changed = True
+        return BridgeStatusResponse(
+            is_connected=True,
+            terminal_connected=payload.terminal_connected,
+            last_heartbeat_at=int(live.get("captured_at", 0)),
+            seconds_since_last_heartbeat=round(time.time() - float(live.get("captured_at", 0)), 2),
+            metrics=payload,
+            initial_deposit=deposit,
+            is_deposit_overridden=self._has_override(db, connection),
+            settled_pnl=settled_pnl,
+            settled_pnl_percent=settled_pnl_pct,
+            all_time_pnl=all_time_pnl,
+            all_time_pnl_percent=all_time_pnl_pct,
+            positions=payload.positions,
+            market_quotes=payload.market_quotes,
+            chart_symbol=payload.chart_symbol,
+            closed_trades_count=self._closed_trade_count(db, connection),
+        )
 
-            if account_changed:
-                # MT5 Account has switched! Reset previous account's telemetry
-                session.previous_positions_map.clear()
-                session.equity_snapshots.clear()
-                session.account_trades[acct] = {}
-                session.closed_trades_map = session.account_trades[acct]
-                session.previous_balance = payload.balance
-                # Ensure custom initial deposit is isolated and does not leak from previous account
-                session.custom_initial_deposit = session.account_custom_deposits.get(acct)
+    def _closed_trade_count(self, db: Session, connection: Mt5Connection) -> int:
+        return int(
+            db.scalar(
+                select(func.count(Trade.id)).where(Trade.connection_id == connection.id)
+            )
+            or 0
+        )
 
-            session.account_number = acct
-            session.server = payload.server
+    def get_positions(self, connection: Mt5Connection) -> List[PositionItem]:
+        live = self._live(connection)
+        if not self._is_fresh(live):
+            return []
+        return list(HeartbeatPayload(**live["payload"]).positions)
 
-            # Ensure active account trades map exists and closed_trades_map points to it
-            if session.account_number not in session.account_trades:
-                session.account_trades[session.account_number] = {}
-            session.closed_trades_map = session.account_trades[session.account_number]
+    def get_market_quotes(self, connection: Mt5Connection) -> List[MarketQuoteItem]:
+        live = self._live(connection)
+        if not live:
+            return []
+        return list(HeartbeatPayload(**live["payload"]).market_quotes)
 
-            # Update market quotes
-            if payload.market_quotes:
-                for q in payload.market_quotes:
-                    session.market_quotes[q.symbol.upper()] = q
+    def get_trade_history(self, db: Session, connection: Mt5Connection) -> TradeHistoryResponse:
+        rows = list(
+            db.scalars(
+                select(Trade)
+                .where(Trade.connection_id == connection.id)
+                .order_by(Trade.closed_at.desc().nullslast())
+            )
+        )
 
-            # Update closed trades from MT5 history for this account
-            if payload.closed_trades is not None:
-                session.closed_trades_map.clear()
-                for t in payload.closed_trades:
-                    session.closed_trades_map[t.ticket] = t
+        trades = [
+            ClosedTradeItem(
+                ticket=row.ticket,
+                symbol=row.symbol,
+                type=row.direction,
+                volume=row.volume,
+                open_price=row.open_price,
+                close_price=row.close_price,
+                profit=row.profit,
+                open_time=_ts(row.opened_at) or 0,
+                close_time=_ts(row.closed_at) or 0,
+                magic=row.magic,
+            )
+            for row in rows
+        ]
 
-            # Record initial deposit for this specific account
+        gross_profit = round(sum(t.profit for t in trades if t.profit > 0), 2)
+        gross_loss = round(sum(t.profit for t in trades if t.profit < 0), 2)
+        net_pnl = round(gross_profit + gross_loss, 2)
+        wins = sum(1 for t in trades if t.profit > 0)
+        losses = sum(1 for t in trades if t.profit < 0)
+        total = len(trades)
+
+        return TradeHistoryResponse(
+            trades=trades,
+            net_pnl=net_pnl,
+            win_rate=round((wins / total) * 100.0, 2) if total else 0.0,
+            profit_factor=round(gross_profit / abs(gross_loss), 2) if gross_loss else 0.0,
+            total_trades=total,
+            winning_trades=wins,
+            losing_trades=losses,
+            gross_profit=gross_profit,
+            gross_loss=gross_loss,
+            account_number=connection.account_number,
+            server=connection.broker_server,
+        )
+
+    def get_equity_curve(
+        self, db: Session, connection: Mt5Connection, time_range: str = "1M"
+    ) -> EquityCurveResponse:
+        days = {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "1Y": 365}.get(time_range.upper(), 30)
+        since = _now() - timedelta(days=days)
+
+        rows = list(
+            db.scalars(
+                select(TelemetrySnapshot)
+                .where(
+                    TelemetrySnapshot.connection_id == connection.id,
+                    TelemetrySnapshot.captured_at >= since,
+                )
+                .order_by(TelemetrySnapshot.captured_at)
+            )
+        )
+
+        points = [
+            EquityPointItem(
+                timestamp=_ts(row.captured_at) or 0,
+                equity=row.equity,
+                balance=row.balance,
+            )
+            for row in rows
+        ]
+
+        deposit = self.get_effective_initial_deposit(db, connection)
+        current_equity = points[-1].equity if points else 0.0
+        peak = max((p.equity for p in points), default=0.0)
+
+        return EquityCurveResponse(
+            starting_equity=points[0].equity if points else 0.0,
+            initial_deposit=deposit,
+            current_equity=current_equity,
+            peak_equity=peak,
+            all_time_pnl=round(current_equity - deposit, 2) if deposit else None,
+            roi_percent=round(((current_equity - deposit) / deposit) * 100.0, 2) if deposit else None,
+            account_number=connection.account_number,
+            server=connection.broker_server,
+            points=points,
+        )
+
+    # --------------------------------------------------------- initial deposit
+    def _has_override(self, db: Session, connection: Mt5Connection) -> bool:
+        row = db.get(AccountSettings, connection.id)
+        return bool(row and row.custom_initial_deposit and row.custom_initial_deposit > 0)
+
+    def get_effective_initial_deposit(self, db: Session, connection: Mt5Connection) -> Optional[float]:
+        row = db.get(AccountSettings, connection.id)
+        if row and row.custom_initial_deposit and row.custom_initial_deposit > 0:
+            return float(row.custom_initial_deposit)
+
+        live = self._live(connection)
+        if live:
+            payload = HeartbeatPayload(**live["payload"])
             if payload.initial_deposit and payload.initial_deposit > 0:
-                session.account_initial_deposits[acct] = payload.initial_deposit
-            elif acct not in session.account_initial_deposits or session.account_initial_deposits[acct] <= 0:
-                session.account_initial_deposits[acct] = payload.balance
-            session.mt5_initial_deposit = session.account_initial_deposits.get(acct)
+                return float(payload.initial_deposit)
+            if payload.balance > 0:
+                return float(payload.balance)
+        return None
 
-            if payload.chart_symbol:
-                session.chart_symbol = payload.chart_symbol.strip()
+    def get_initial_deposit_info(self, db: Session, connection: Mt5Connection) -> InitialDepositResponse:
+        effective = self.get_effective_initial_deposit(db, connection)
+        overridden = self._has_override(db, connection)
+        status_response = self.get_status(db, connection)
 
-            # Record equity snapshot
-            if payload.equity > 0:
-                session.equity_snapshots.append({
-                    "timestamp": int(current_time),
-                    "equity": payload.equity,
-                    "balance": payload.balance
-                })
-                if len(session.equity_snapshots) > 500:
-                    session.equity_snapshots.pop(0)
-
-            # Detect closed positions (only if account did not switch to avoid false alerts)
-            current_tickets = {pos.ticket for pos in payload.positions}
-            if session.previous_positions_map and not account_changed:
-                for old_ticket, old_pos in session.previous_positions_map.items():
-                    if old_ticket not in current_tickets:
-                        closed_positions.append(old_pos)
-
-            session.previous_positions_map = {pos.ticket: pos for pos in payload.positions}
-            session.previous_balance = payload.balance
-            session.latest_payload = payload
-            session.last_received_time = current_time
-
-        # Dispatch alerts for closed trades
-        if closed_positions:
-            try:
-                from app.services.telegram_service import telegram_service
-                for pos in closed_positions:
-                    pnl = pos.pnl if pos.pnl != 0 else (pos.profit or 0.0)
-                    telegram_service.send_trade_closed_alert_background(
-                        ticket=pos.ticket,
-                        symbol=pos.symbol,
-                        pnl=pnl,
-                        reason="TP / SL / Manual Close"
-                    )
-            except Exception:
-                pass
-
-        # In Pure Read-Only Journal architecture, Pipstride never sends execution commands to MT5
-        with self._lock:
-            session.pending_commands.clear()
-
-        return HeartbeatResponse(
-            status="ok",
-            server_time=int(current_time),
-            commands=[]
+        return InitialDepositResponse(
+            initial_deposit=effective,
+            is_overridden=overridden,
+            source="override" if overridden else "mt5",
+            settled_pnl=status_response.settled_pnl,
+            settled_pnl_percent=status_response.settled_pnl_percent,
+            all_time_pnl=status_response.all_time_pnl,
+            all_time_pnl_percent=status_response.all_time_pnl_percent,
+            message="Initial deposit baseline loaded.",
         )
 
-    def submit_order(self, *args, **kwargs):
-        """Pure Read-Only Journal Enforcement: Direct order execution is permanently disabled."""
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Pipstride is a 100% Pure Read-Only Journal platform. Trade execution and liquidations are disabled."
-        )
+    def set_initial_deposit_override(
+        self, db: Session, connection: Mt5Connection, amount: Optional[float]
+    ) -> InitialDepositResponse:
+        row = db.get(AccountSettings, connection.id)
+        if row is None:
+            row = AccountSettings(connection_id=connection.id)
+            db.add(row)
 
-    def get_positions(self, username: Optional[str] = None) -> List[PositionItem]:
-        current_time = time.time()
-        with self._lock:
-            session = self._get_or_create_session(username)
-            if session.last_received_time is None or session.latest_payload is None:
-                return []
-            if (current_time - session.last_received_time) > settings.HEARTBEAT_TIMEOUT_SECONDS:
-                return []
-            return list(session.latest_payload.positions)
+        row.custom_initial_deposit = float(amount) if amount and amount > 0 else None
+        db.commit()
 
-    def get_market_quotes(self, username: Optional[str] = None) -> List[MarketQuoteItem]:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            return list(session.market_quotes.values())
+        return self.get_initial_deposit_info(db, connection)
 
-    def reset_trade_history(self, username: Optional[str] = None) -> dict:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            if session.account_number and session.account_number in session.account_trades:
-                session.account_trades[session.account_number].clear()
-            session.closed_trades_map.clear()
-            session.equity_snapshots.clear()
-            acct = session.account_number
+    def reset_journal(self, db: Session, connection: Mt5Connection) -> dict:
+        db.query(Trade).filter(Trade.connection_id == connection.id).delete()
+        db.query(TelemetrySnapshot).filter(
+            TelemetrySnapshot.connection_id == connection.id
+        ).delete()
+        db.commit()
         return {
             "status": "success",
-            "message": "Riwayat jurnal berhasil di-reset dan disinkronkan ulang dengan akun MT5 aktif.",
-            "account_number": acct
+            "message": "Riwayat jurnal dihapus. Data akan tersinkron ulang dari MT5.",
+            "account_number": connection.account_number,
         }
 
-    def get_trade_history(self, username: Optional[str] = None) -> TradeHistoryResponse:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            acct = session.account_number
-            active_trades_map = session.account_trades.get(acct) if acct else {}
-            if active_trades_map is None:
-                active_trades_map = {}
-
-            trades = sorted(
-                list(active_trades_map.values()),
-                key=lambda x: x.close_time or 0,
-                reverse=True
-            )
-            total = len(trades)
-            if total == 0:
-                return TradeHistoryResponse(
-                    trades=[],
-                    net_pnl=0.0,
-                    win_rate=0.0,
-                    profit_factor=0.0,
-                    total_trades=0,
-                    winning_trades=0,
-                    losing_trades=0,
-                    gross_profit=0.0,
-                    gross_loss=0.0,
-                    account_number=acct,
-                    server=session.server
-                )
-
-            profits = [t.profit for t in trades]
-            net_pnl = round(sum(profits), 2)
-            wins = sum(1 for p in profits if p > 0)
-            losses = sum(1 for p in profits if p < 0)
-            win_rate = round((wins / total) * 100.0, 1) if total > 0 else 0.0
-
-            gross_profit = round(sum(p for p in profits if p > 0), 2)
-            gross_loss = round(abs(sum(p for p in profits if p < 0)), 2)
-            profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.99 if gross_profit > 0 else 0.0)
-
-            return TradeHistoryResponse(
-                trades=trades,
-                net_pnl=net_pnl,
-                win_rate=win_rate,
-                profit_factor=profit_factor,
-                total_trades=total,
-                winning_trades=wins,
-                losing_trades=losses,
-                gross_profit=gross_profit,
-                gross_loss=gross_loss,
-                account_number=acct,
-                server=session.server
-            )
-
-    def get_initial_deposit_info(self, username: Optional[str] = None) -> dict:
-        with self._lock:
-            session = self._get_or_create_session(username)
-            acct = session.account_number
-            eff_deposit = session.get_effective_initial_deposit(acct)
-            bal = session.latest_payload.balance if session.latest_payload else (eff_deposit or 0.0)
-            eq = session.latest_payload.equity if session.latest_payload else (eff_deposit or 0.0)
-            settled_pnl = round(bal - eff_deposit, 2) if eff_deposit else 0.0
-            settled_pnl_pct = round((settled_pnl / eff_deposit) * 100.0, 2) if eff_deposit else 0.0
-            all_time_pnl = round(eq - eff_deposit, 2) if eff_deposit else 0.0
-            all_time_pnl_pct = round((all_time_pnl / eff_deposit) * 100.0, 2) if eff_deposit else 0.0
-
-            custom_override = session.account_custom_deposits.get(acct) if acct else None
-            is_overridden = custom_override is not None and custom_override > 0
-            mt5_dep = session.account_initial_deposits.get(acct) if acct else None
-            source = "override" if is_overridden else ("mt5" if mt5_dep else "balance")
-            return {
-                "status": "success",
-                "initial_deposit": eff_deposit,
-                "is_overridden": is_overridden,
-                "source": source,
-                "settled_pnl": settled_pnl,
-                "settled_pnl_percent": settled_pnl_pct,
-                "all_time_pnl": all_time_pnl,
-                "all_time_pnl_percent": all_time_pnl_pct,
-                "account_number": acct,
-                "message": "Initial deposit retrieved successfully."
-            }
-
-    def set_initial_deposit_override(self, initial_deposit: Optional[float], username: Optional[str] = None) -> dict:
-        user_key = self._normalize_user(username)
-        with self._lock:
-            session = self._get_or_create_session(user_key)
-            acct = session.account_number
-            if initial_deposit is not None and float(initial_deposit) > 0:
-                val = round(float(initial_deposit), 2)
-                session.custom_initial_deposit = val
-                if acct:
-                    session.account_custom_deposits[acct] = val
-            else:
-                session.custom_initial_deposit = None
-                if acct:
-                    session.account_custom_deposits.pop(acct, None)
-
-        user_service.set_custom_initial_deposit(user_key, session.custom_initial_deposit)
-        return self.get_initial_deposit_info(username=user_key)
-
-    def get_equity_curve(self, time_range: str = "1M", username: Optional[str] = None) -> EquityCurveResponse:
-        current_time = time.time()
-        rng = (time_range or "1M").strip().upper()
-
-        with self._lock:
-            session = self._get_or_create_session(username)
-            acct = session.account_number
-            cur_bal = session.latest_payload.balance if session.latest_payload else 0.0
-            cur_eq = session.latest_payload.equity if session.latest_payload else cur_bal
-            eff_deposit = session.get_effective_initial_deposit(acct) or cur_bal
-
-            if rng in ("DAY", "1D", "D"):
-                now_utc = datetime.now(timezone.utc)
-                start_ts = int(datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=timezone.utc).timestamp())
-            elif rng in ("WEEK", "1W", "W"):
-                start_ts = int(current_time - (7 * 86400))
-            elif rng in ("MONTH", "1M", "M"):
-                start_ts = int(current_time - (30 * 86400))
-            else:
-                start_ts = 0
-
-            active_trades_map = session.account_trades.get(acct) if acct else {}
-            if active_trades_map is None:
-                active_trades_map = {}
-
-            trades_in_window = [
-                t for t in active_trades_map.values()
-                if (t.close_time or 0) >= start_ts
-            ]
-            trades_in_window.sort(key=lambda x: x.close_time or 0)
-
-            total_profit_in_window = sum(t.profit for t in trades_in_window)
-            starting_bal_window = round(cur_bal - total_profit_in_window, 2)
-            if starting_bal_window <= 0 and eff_deposit > 0:
-                starting_bal_window = eff_deposit
-
-            points: List[EquityPointItem] = []
-            p0_time = start_ts if start_ts > 0 else (trades_in_window[0].close_time if trades_in_window else int(current_time - 3600))
-            points.append(EquityPointItem(
-                timestamp=p0_time,
-                balance=starting_bal_window,
-                equity=starting_bal_window
-            ))
-
-            running_bal = starting_bal_window
-            for t in trades_in_window:
-                running_bal = round(running_bal + t.profit, 2)
-                points.append(EquityPointItem(
-                    timestamp=t.close_time,
-                    balance=running_bal,
-                    equity=running_bal
-                ))
-
-            points.append(EquityPointItem(
-                timestamp=int(current_time),
-                balance=cur_bal,
-                equity=cur_eq
-            ))
-
-            equities = [p.equity for p in points]
-            peak_eq = max(equities) if equities else cur_eq
-            starting_eq = points[0].equity if points else cur_eq
-
-            all_time_pnl = round(cur_eq - eff_deposit, 2) if eff_deposit else 0.0
-            roi_percent = round((all_time_pnl / eff_deposit) * 100.0, 2) if eff_deposit else 0.0
-
-            return EquityCurveResponse(
-                starting_equity=starting_eq,
-                initial_deposit=eff_deposit,
-                current_equity=cur_eq,
-                peak_equity=peak_eq,
-                all_time_pnl=all_time_pnl,
-                roi_percent=roi_percent,
-                account_number=acct,
-                server=session.server,
-                points=points
-            )
-
-    def get_status(self, username: Optional[str] = None) -> BridgeStatusResponse:
-        current_time = time.time()
-        with self._lock:
-            session = self._get_or_create_session(username)
-            acct = session.account_number
-            pending_count = len(session.pending_commands)
-            eff_deposit = session.get_effective_initial_deposit(acct)
-            custom_override = session.account_custom_deposits.get(acct) if acct else None
-            is_overridden = custom_override is not None and custom_override > 0
-            
-            active_trades_map = session.account_trades.get(acct) if acct else {}
-            closed_trades_count = len(active_trades_map) if active_trades_map is not None else 0
-
-            if session.last_received_time is None or session.latest_payload is None:
-                return BridgeStatusResponse(
-                    is_connected=False,
-                    terminal_connected=False,
-                    last_heartbeat_at=None,
-                    seconds_since_last_heartbeat=None,
-                    metrics=None,
-                    initial_deposit=eff_deposit,
-                    is_deposit_overridden=is_overridden,
-                    settled_pnl=0.0,
-                    settled_pnl_percent=0.0,
-                    all_time_pnl=0.0,
-                    all_time_pnl_percent=0.0,
-                    positions=[],
-                    market_quotes=list(session.market_quotes.values()),
-                    chart_symbol=session.chart_symbol,
-                    closed_trades_count=closed_trades_count,
-                    pending_commands_count=pending_count,
-                    is_kill_switch_active=session.is_kill_switch_active,
-                    kill_switch_reason=session.kill_switch_reason,
-                    kill_switch_time=session.kill_switch_time
-                )
-            
-            diff = current_time - session.last_received_time
-            is_active = (diff <= settings.HEARTBEAT_TIMEOUT_SECONDS)
-            positions = list(session.latest_payload.positions) if is_active else []
-            
-            bal = session.latest_payload.balance
-            eq = session.latest_payload.equity
-            settled_pnl = round(bal - eff_deposit, 2) if eff_deposit else 0.0
-            settled_pnl_pct = round((settled_pnl / eff_deposit) * 100.0, 2) if eff_deposit else 0.0
-            all_time_pnl = round(eq - eff_deposit, 2) if eff_deposit else 0.0
-            all_time_pnl_pct = round((all_time_pnl / eff_deposit) * 100.0, 2) if eff_deposit else 0.0
-
-            safe_metrics = session.latest_payload.model_copy(update={"bridge_token": None}) if session.latest_payload else None
-
-            return BridgeStatusResponse(
-                is_connected=is_active,
-                terminal_connected=session.latest_payload.terminal_connected if is_active else False,
-                last_heartbeat_at=int(session.last_received_time),
-                seconds_since_last_heartbeat=round(diff, 2),
-                metrics=safe_metrics,
-                initial_deposit=eff_deposit,
-                is_deposit_overridden=is_overridden,
-                settled_pnl=settled_pnl,
-                settled_pnl_percent=settled_pnl_pct,
-                all_time_pnl=all_time_pnl,
-                all_time_pnl_percent=all_time_pnl_pct,
-                positions=positions,
-                market_quotes=list(session.market_quotes.values()),
-                chart_symbol=session.chart_symbol,
-                closed_trades_count=closed_trades_count,
-                pending_commands_count=pending_count,
-                is_kill_switch_active=session.is_kill_switch_active,
-                kill_switch_reason=session.kill_switch_reason,
-                kill_switch_time=session.kill_switch_time
-            )
+    # ----------------------------------------------------------------- guards
+    def submit_order(self, *args, **kwargs):
+        """Pure read-only enforcement: execution is permanently disabled."""
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pipstride is a 100% Pure Read-Only Journal platform. "
+            "Trade execution and liquidations are disabled.",
+        )
 
 
 bridge_service = BridgeService()
