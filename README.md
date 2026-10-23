@@ -85,6 +85,10 @@ docker compose up --build
 
 The API container runs `alembic upgrade head` before serving.
 
+If host port `5432` is already taken (another local PostgreSQL), set `POSTGRES_PORT=55432` before `docker compose up`; the containers talk to each other on the internal network regardless.
+
+The web container's nginx proxies `/api/` to the API service, so the dashboard works from a single origin without extra configuration.
+
 ### Option B — Local development
 
 Start Postgres and Redis (any local install or `docker compose up postgres redis`), then:
