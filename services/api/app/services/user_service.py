@@ -62,6 +62,9 @@ class UserService:
     def authenticate(self, db: Session, username: str, plain_password: str) -> Optional[User]:
         user = self.get_user(db, username)
         if not user or not user.is_active:
+            # Constant-time: always run bcrypt even when user is missing
+            # to prevent username enumeration via response timing.
+            hash_password("dummy-password-timing-pad")
             return None
         if verify_password(plain_password, user.password_hash):
             return user

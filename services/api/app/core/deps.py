@@ -41,7 +41,7 @@ async def get_current_user(
     if not user or not user.is_active:
         raise _unauthorized("User not recognized or account deactivated")
 
-    if token_ver is not None and int(token_ver) != int(user.token_version):
+    if token_ver is None or int(token_ver) != int(user.token_version):
         raise _unauthorized("Session has been revoked or expired. Please log in again.")
 
     return user

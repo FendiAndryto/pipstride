@@ -13,6 +13,8 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# pytest is dev-only; not installed in the production image.
+
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY alembic.ini .

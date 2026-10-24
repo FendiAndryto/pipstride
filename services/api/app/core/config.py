@@ -87,10 +87,16 @@ class Settings(BaseSettings):
             return
 
         problems = []
-        if self.SECRET_KEY == "default_insecure_secret_key_change_in_production":
-            problems.append("SECRET_KEY is still the insecure default")
-        if self.ADMIN_PASSWORD == "change_this_password":
-            problems.append("ADMIN_PASSWORD is still the insecure default")
+        insecure_secrets = {
+            "default_insecure_secret_key_change_in_production",
+            "default_secret_key_12345",
+            "change-me-to-a-secure-random-32-byte-hex",
+            "dev-only-secret-key-change-me-please",
+        }
+        if self.SECRET_KEY in insecure_secrets or len(self.SECRET_KEY) < 32:
+            problems.append("SECRET_KEY is insecure or too short (need ≥32 chars)")
+        if self.ADMIN_PASSWORD in {"change_this_password", "AdminPass123"} or len(self.ADMIN_PASSWORD) < 12:
+            problems.append("ADMIN_PASSWORD is insecure or too short (need ≥12 chars)")
         if self.ALLOWED_HOSTS == "*":
             problems.append("ALLOWED_HOSTS must be restricted in production")
         if self.DATABASE_URL.startswith("sqlite"):
@@ -104,30 +110,37 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> List[str]:
-        base_origins = [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8080",
-            "http://localhost:8089",
-        ]
+        origins: list[str] = []
+
+        # Dev-only convenience origins — excluded in production.
+        if not self.is_production:
+            origins.extend([
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:8080",
+                "http://localhost:8089",
+            ])
+
         if self.CORS_ORIGINS:
             custom = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
-            base_origins.extend(custom)
+            origins.extend(custom)
             
         if self.ALLOWED_HOSTS and self.ALLOWED_HOSTS != "*":
             for host in self.ALLOWED_HOSTS.split(","):
                 h = host.strip()
                 if h:
                     if not h.startswith("http://") and not h.startswith("https://"):
-                        base_origins.append(f"http://{h}")
-                        base_origins.append(f"http://{h}:5173")
-                        base_origins.append(f"http://{h}:3000")
+                        origins.append(f"https://{h}")
+                        if not self.is_production:
+                            origins.append(f"http://{h}")
+                            origins.append(f"http://{h}:5173")
+                            origins.append(f"http://{h}:3000")
                     else:
-                        base_origins.append(h)
+                        origins.append(h)
                         
-        return list(dict.fromkeys(base_origins))
+        return list(dict.fromkeys(origins))
 
 
 settings = Settings()
