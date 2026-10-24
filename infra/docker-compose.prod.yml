@@ -1,0 +1,29 @@
+# Production Compose Override: Automatic HTTPS with Caddy
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: pipstride_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - PIPSTRIDE_DOMAIN=${PIPSTRIDE_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    networks:
+      - pipstride_net
+
+volumes:
+  caddy_data:
+    name: pipstride_caddy_data
+  caddy_config:
+    name: pipstride_caddy_config

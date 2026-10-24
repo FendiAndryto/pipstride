@@ -38,6 +38,8 @@ htmlcov/
 *.db-journal
 *.db-wal
 *.db-shm
+*.sql.gz
+backups/
 data/
 backend/data/
 services/api/data/

@@ -76,6 +76,14 @@ jobs:
       - name: Check models match migrations
         run: python scripts/check_migrations.py
 
+      - name: Verify database backup and restore tool
+        run: |
+          python scripts/backup_db.py
+          python scripts/backup_db.py --list
+          BACKUP_FILE=$(find ../../backups -name "pipstride_backup_*.sql.gz" | head -n 1)
+          python scripts/backup_db.py --verify "$BACKUP_FILE"
+          python scripts/backup_db.py --restore "$BACKUP_FILE" --force
+
   web:
     name: Web build
     runs-on: ubuntu-latest

@@ -9,6 +9,15 @@ def test_health_check(client):
     assert res.json() == {"status": "ok"}
 
 
+def test_readiness_probe(client):
+    res = client.get("/ready")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "ready"
+    assert body["database"] == "ok"
+    assert body["redis"] in {"ok", "disabled"}
+
+
 def test_root_reports_read_only_mode(client):
     res = client.get("/")
     assert res.status_code == 200

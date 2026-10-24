@@ -1,8 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -111,3 +112,40 @@ async def root():
 @app.get("/health", tags=["Root"])
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/ready", tags=["Root"])
+async def ready():
+    """Readiness probe verifying database and cache connectivity."""
+    status_code = status.HTTP_200_OK
+    report = {
+        "status": "ready",
+        "database": "ok",
+        "redis": "ok" if settings.REDIS_URL else "disabled",
+    }
+
+    try:
+        with SessionLocal() as db:
+            db.execute(select(1)).scalar()
+    except Exception as exc:
+        logger.error("Database readiness check failed: %s", exc)
+        report["database"] = "error"
+        report["status"] = "unready"
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    if settings.REDIS_URL:
+        try:
+            import redis
+
+            client = redis.Redis.from_url(settings.REDIS_URL, socket_timeout=1.0)
+            if not client.ping():
+                report["redis"] = "error"
+                report["status"] = "unready"
+                status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        except Exception as exc:
+            logger.error("Redis readiness check failed: %s", exc)
+            report["redis"] = "error"
+            report["status"] = "unready"
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return JSONResponse(status_code=status_code, content=report)
