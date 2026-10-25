@@ -66,13 +66,24 @@ class _RedisCounter:
                     )
         return self._client
 
+    # Lua script: atomic INCR + conditional EXPIRE (only set TTL on first hit).
+    _LUA_INCR = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {count, ttl}
+"""
+    _script = None
+
     def incr(self, key: str, window_seconds: int) -> _Window:
         client = self._connection()
-        pipe = client.pipeline()
-        pipe.incr(key)
-        pipe.expire(key, window_seconds)
-        count, _ = pipe.execute()
-        return int(count), time.time() + window_seconds
+        if self._script is None:
+            self.__class__._script = client.register_script(self._LUA_INCR)
+        result = self._script(keys=[key], args=[window_seconds], client=client)
+        count, ttl = int(result[0]), int(result[1])
+        return count, time.time() + max(ttl, 0)
 
     def peek(self, key: str) -> _Window:
         client = self._connection()
