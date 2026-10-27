@@ -1025,3 +1025,132 @@ main.app-main {
   }
 }
 
+/* Journal Period Segmented Control & Month Stepper */
+.journal-period-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+@media (min-width: 640px) {
+  .journal-period-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.journal-period-segmented {
+  display: flex;
+  align-items: center;
+  background: #091014;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.journal-period-segmented::-webkit-scrollbar {
+  display: none;
+}
+
+.journal-period-tab {
+  flex: 1;
+  min-width: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.journal-period-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.journal-period-tab.active {
+  background: rgba(69, 224, 173, 0.14);
+  color: var(--g);
+  border-color: rgba(69, 224, 173, 0.35);
+  box-shadow: 0 0 10px rgba(69, 224, 173, 0.15);
+}
+
+.journal-month-stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #091014;
+  border: 1px solid rgba(69, 224, 173, 0.35);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 4px;
+}
+
+@media (max-width: 639.98px) {
+  .journal-period-tab {
+    padding: 6px 6px;
+    font-size: 10.5px;
+    min-width: 0;
+  }
+  .journal-month-stepper {
+    width: 100%;
+  }
+}
+
+.journal-stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.journal-stepper-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.journal-month-display {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  flex: 1;
+}
+
+.journal-month-input-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+

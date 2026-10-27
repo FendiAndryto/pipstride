@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { BookOpen, Calendar, ArrowUpRight, RefreshCw, Layers } from 'lucide-react';
+import {
+  BookOpen,
+  Calendar,
+  ArrowUpRight,
+  RefreshCw,
+  Layers,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { api } from '../services/api';
 import JournalAnalytics from './JournalAnalytics';
 
 const PERIODS = [
-  { value: '1M', label: '1 Bulan' },
-  { value: '3M', label: '3 Bulan' },
+  { value: '1M', label: '30 Hari' },
+  { value: '3M', label: '90 Hari' },
   { value: '1Y', label: '1 Tahun' },
-  { value: 'ALL', label: 'Semua' }
+  { value: 'ALL', label: 'Semua' },
+  { value: 'MONTH', label: 'Per Bulan' }
 ];
 
 const PERIOD_LABELS = {
@@ -153,6 +162,30 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
     const name = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(year, monthIdx, 1));
     return { selectedYear: year, selectedMonthIndex: monthIdx, daysInMonth: days, monthName: name };
   }, [selectedMonth]);
+
+  const handlePrevMonth = () => {
+    let y = selectedYear;
+    let m = selectedMonthIndex - 1;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    }
+    const formatted = `${y}-${String(m + 1).padStart(2, '0')}`;
+    setSelectedMonth(formatted);
+    setSelectedDate(null);
+  };
+
+  const handleNextMonth = () => {
+    let y = selectedYear;
+    let m = selectedMonthIndex + 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+    const formatted = `${y}-${String(m + 1).padStart(2, '0')}`;
+    setSelectedMonth(formatted);
+    setSelectedDate(null);
+  };
 
   const trades = useMemo(() => historyData?.trades || [], [historyData]);
 
@@ -465,63 +498,73 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
         </div>
       </div>
 
-      {/* Period selector drives every statistic below */}
-      <div style={{ display: 'flex', gap: '7px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
-        <span className="tiny" style={{ color: 'var(--muted)', fontWeight: 600, marginRight: '2px' }}>
-          PERIODE
-        </span>
-        {PERIODS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={`btn ${period === option.value ? '' : 'alt'}`}
-            style={{ fontSize: '11px', padding: '6px 13px' }}
-            onClick={() => setPeriod(option.value)}
-            id={`journal-period-${option.value.toLowerCase()}`}
-          >
-            {option.label}
-          </button>
-        ))}
-
-        {/* Month Selector for specific monthly review */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: period === 'MONTH' ? 'rgba(69, 224, 173, 0.15)' : '#0d171d',
-            border: `1px solid ${period === 'MONTH' ? 'var(--g)' : 'var(--line)'}`,
-            borderRadius: '8px',
-            padding: '3px 8px'
-          }}
-          title="Pilih Bulan Spesifik untuk review jurnal"
-        >
-          <Calendar size={13} style={{ color: period === 'MONTH' ? 'var(--g)' : 'var(--muted)' }} />
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => {
-              if (e.target.value) {
-                setSelectedMonth(e.target.value);
-                setPeriod('MONTH');
-                setSelectedDate(null);
-              }
-            }}
-            onClick={() => setPeriod('MONTH')}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: period === 'MONTH' ? '#fff' : '#c9d8dc',
-              fontSize: '11px',
-              fontWeight: 600,
-              fontFamily: 'inherit',
-              cursor: 'pointer',
-              outline: 'none',
-              padding: '2px 0'
-            }}
-            id="journal-month-selector"
-          />
+      {/* Segmented Period Filter Bar with Month Stepper */}
+      <div className="journal-period-bar">
+        <div className="journal-period-segmented" role="tablist" aria-label="Filter Periode Jurnal">
+          {PERIODS.map((option) => {
+            const isActive = period === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`journal-period-tab ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setPeriod(option.value);
+                  if (option.value === 'MONTH') {
+                    setSelectedDate(null);
+                  }
+                }}
+                id={`journal-period-${option.value.toLowerCase()}`}
+              >
+                {option.value === 'MONTH' && <Calendar size={12} />}
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
         </div>
+
+        {period === 'MONTH' && (
+          <div className="journal-month-stepper animate-fade-in" id="journal-month-stepper">
+            <button
+              type="button"
+              className="journal-stepper-btn"
+              onClick={handlePrevMonth}
+              title="Bulan sebelumnya"
+              id="journal-prev-month-btn"
+            >
+              <ChevronLeft size={15} />
+            </button>
+
+            <div className="journal-month-display" title="Klik untuk pilih bulan spesifik">
+              <Calendar size={13} style={{ color: 'var(--g)' }} />
+              <span style={{ textTransform: 'capitalize' }}>{monthName}</span>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setSelectedMonth(e.target.value);
+                    setSelectedDate(null);
+                  }
+                }}
+                className="journal-month-input-overlay"
+                id="journal-month-input"
+              />
+            </div>
+
+            <button
+              type="button"
+              className="journal-stepper-btn"
+              onClick={handleNextMonth}
+              title="Bulan berikutnya"
+              id="journal-next-month-btn"
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Real KPIs Grid */}
