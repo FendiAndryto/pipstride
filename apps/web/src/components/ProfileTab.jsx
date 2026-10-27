@@ -474,8 +474,8 @@ export default function ProfileTab({
             <ShieldCheck size={18} style={{ color: isRiskAlert ? 'var(--amber)' : 'var(--g)' }} />
             <h3>Drawdown Monitor</h3>
           </div>
-          <span className={`tag ${isRiskAlert ? 'amber' : ''}`}>
-            {dailyDrawdownPercent.toFixed(2)}% / {maxDrawdownPercent}%
+          <span className="tag">
+            {dailyDrawdownPercent.toFixed(2)}% (Monitoring Pasif)
           </span>
         </div>
 

@@ -648,8 +648,8 @@ export default function HomeTab({
                       {isNegative ? `−${ddPct.toFixed(2)}%` : '0.0%'}
                     </div>
                     <div className="label">Daily Drawdown</div>
-                    <div className="tiny">
-                      Watchdog alert: {riskStatus?.max_daily_drawdown_percent ?? 3.0}% (read-only)
+                    <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
+                      Total drawdown harian akun: {ddPct.toFixed(2)}% (Monitoring Pasif)
                     </div>
                   </>
                 );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, Monitor, Wallet } from 'lucide-react';
+import { ChevronDown, Monitor, User, Wallet } from 'lucide-react';
 import { NAV_TABS } from '../constants/nav';
 
 function connectionLabel(connection) {
@@ -116,6 +116,18 @@ export default function PipstrideHeader({
             <span style={{ opacity: 0.75, fontSize: '9px' }}>{latency}s</span>
           )}
         </div>
+
+        {/* Profile Avatar & Settings Icon Button */}
+        <button
+          type="button"
+          className={`header-profile-btn ${activeTab === 'profile' ? 'active' : ''}`}
+          onClick={() => onSelectTab('profile')}
+          id="header-profile-btn"
+          title="Profil Akun & Pengaturan"
+          aria-label="Profil Akun"
+        >
+          <User size={15} />
+        </button>
       </div>
     </header>
   );

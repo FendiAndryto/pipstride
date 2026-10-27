@@ -142,6 +142,35 @@ body {
   gap: 10px;
 }
 
+.header-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #0d171d;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.header-profile-btn:hover {
+  color: #fff;
+  border-color: #3b5766;
+  background: #14232c;
+}
+
+.header-profile-btn.active {
+  color: var(--g);
+  border-color: var(--g);
+  background: rgba(69, 224, 173, 0.12);
+  box-shadow: 0 0 10px rgba(69, 224, 173, 0.2);
+}
+
 /* Multi-account connection switcher */
 .connection-switcher {
   display: none;
@@ -741,8 +770,44 @@ main.app-main {
   }
 }
 
-/* Mobile (< 640px): Compact header and typography */
-@media (max-width: 640px) {
+/* Responsive card grids that preserve 2 columns on mobile instead of wasting space */
+.grid-cards-responsive-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+@media (max-width: 639.98px) {
+  .grid-cards-responsive-2col > :last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 640px) {
+  .grid-cards-responsive-2col.three-cols-desktop {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .grid-cards-responsive-2col.four-cols-desktop {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .grid-cards-responsive-2col.five-cols-desktop {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (min-width: 992px) {
+  .grid-cards-responsive-2col.five-cols-desktop {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+/* Mobile (< 640px): Compact header, cards, and typography */
+@media (max-width: 639.98px) {
   .tradegear-header {
     padding: 10px 14px;
   }
@@ -754,9 +819,26 @@ main.app-main {
   .banner h2 {
     font-size: 19px;
   }
-  
+
+  .card {
+    padding: 12px 14px;
+  }
+
+  .card .metric {
+    font-size: 18px;
+  }
+
+  .card .cardhead {
+    margin-bottom: 6px;
+  }
+
   .three {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .three > :last-child:nth-child(odd) {
+    grid-column: span 2;
   }
 }
 
@@ -830,7 +912,7 @@ main.app-main {
   animation: pageIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 639.98px) {
   .floating-signals-card {
     width: calc(100vw - 20px);
     max-height: calc(100vh - 130px);

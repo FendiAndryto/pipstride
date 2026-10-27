@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BookOpen, Calendar, ArrowUpRight, RefreshCw, Layers } from 'lucide-react';
 import { api } from '../services/api';
 import JournalAnalytics from './JournalAnalytics';
@@ -10,7 +10,15 @@ const PERIODS = [
   { value: 'ALL', label: 'Semua' }
 ];
 
-const PERIOD_LABELS = { '1M': '30 hari terakhir', '3M': '90 hari terakhir', '1Y': '1 tahun terakhir', ALL: 'semua waktu' };
+const PERIOD_LABELS = {
+  '1M': '30 hari terakhir',
+  '3M': '90 hari terakhir',
+  '1Y': '1 tahun terakhir',
+  ALL: 'semua waktu',
+  MONTH: 'pilihan bulan'
+};
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 const formatCurrency = (val) => {
   if (val === null || val === undefined || isNaN(val)) return '$0.00';
@@ -26,6 +34,12 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
   const [selectedDate, setSelectedDate] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState('1M');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -63,6 +77,10 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
   const statsSource = filter === 'EA' ? 'ea' : filter === 'Manual' ? 'manual' : 'all';
 
   const fetchStats = async () => {
+    if (period === 'MONTH') {
+      setStatsLoading(false);
+      return;
+    }
     try {
       const data = await api.getJournalStats(period, statsSource);
       // Same guard as history: never show stats from another MT5 account.
@@ -127,15 +145,172 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
     fetchStats();
   };
 
-  const trades = historyData?.trades || [];
-  const totals = stats?.totals;
-  const netPnl = totals?.net_profit ?? historyData?.net_pnl ?? 0;
-  const winRate = totals?.win_rate ?? historyData?.win_rate ?? 0;
-  const profitFactor = totals ? totals.profit_factor : historyData?.profit_factor;
-  const totalTrades = totals?.trades ?? historyData?.total_trades ?? 0;
-  const winningTrades = totals?.wins ?? historyData?.winning_trades ?? 0;
-  const losingTrades = totals?.losses ?? historyData?.losing_trades ?? 0;
-  const periodLabel = PERIOD_LABELS[period];
+  const { selectedYear, selectedMonthIndex, daysInMonth, monthName } = useMemo(() => {
+    const parts = (selectedMonth || '').split('-');
+    const year = parseInt(parts[0], 10) || CURRENT_YEAR;
+    const monthIdx = (parseInt(parts[1], 10) || 1) - 1;
+    const days = new Date(year, monthIdx + 1, 0).getDate();
+    const name = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(year, monthIdx, 1));
+    return { selectedYear: year, selectedMonthIndex: monthIdx, daysInMonth: days, monthName: name };
+  }, [selectedMonth]);
+
+  const trades = useMemo(() => historyData?.trades || [], [historyData]);
+
+  const dailyPnlMap = useMemo(() => {
+    const map = {};
+    trades.forEach((t) => {
+      if (t.close_time) {
+        const d = new Date(t.close_time * 1000);
+        if (d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear) {
+          const dayNum = d.getDate();
+          map[dayNum] = (map[dayNum] || 0) + t.profit;
+        }
+      }
+    });
+    return map;
+  }, [trades, selectedMonthIndex, selectedYear]);
+
+  const monthTrades = useMemo(() => {
+    return trades.filter((t) => {
+      if (!t.close_time) return false;
+      const d = new Date(t.close_time * 1000);
+      const inMonth = d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear;
+      if (!inMonth) return false;
+      const isEa = t.magic > 0;
+      const source = isEa ? 'EA' : 'Manual';
+      return filter === 'All' || source === filter;
+    });
+  }, [trades, selectedMonthIndex, selectedYear, filter]);
+
+  const monthStats = useMemo(() => {
+    if (period !== 'MONTH') return null;
+    const count = monthTrades.length;
+    const wins = monthTrades.filter((t) => t.profit > 0);
+    const losses = monthTrades.filter((t) => t.profit < 0);
+    const net = monthTrades.reduce((acc, t) => acc + (t.profit || 0), 0);
+    const grossProfit = wins.reduce((acc, t) => acc + (t.profit || 0), 0);
+    const grossLoss = Math.abs(losses.reduce((acc, t) => acc + (t.profit || 0), 0));
+    const pf = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? null : 0);
+    const wr = count > 0 ? (wins.length / count) * 100 : 0;
+    const avgWin = wins.length > 0 ? grossProfit / wins.length : 0;
+    const avgLoss = losses.length > 0 ? grossLoss / losses.length : 0;
+    const payoff = avgLoss > 0 ? avgWin / avgLoss : null;
+    const expectancy = count > 0 ? net / count : 0;
+
+    const profits = monthTrades.map((t) => t.profit || 0);
+    const bestTrade = profits.length > 0 ? Math.max(...profits) : 0;
+    const worstTrade = profits.length > 0 ? Math.min(...profits) : 0;
+
+    let maxWinStreak = 0;
+    let maxLossStreak = 0;
+    let curWin = 0;
+    let curLoss = 0;
+    let totalVolume = 0;
+    let totalHoldMinutes = 0;
+    let holdCount = 0;
+
+    const sorted = [...monthTrades].sort((a, b) => (a.close_time || 0) - (b.close_time || 0));
+    sorted.forEach((t) => {
+      totalVolume += t.volume || 0;
+      if (t.profit > 0) {
+        curWin += 1;
+        curLoss = 0;
+        if (curWin > maxWinStreak) maxWinStreak = curWin;
+      } else if (t.profit < 0) {
+        curLoss += 1;
+        curWin = 0;
+        if (curLoss > maxLossStreak) maxLossStreak = curLoss;
+      }
+      if (t.close_time && t.open_time && t.close_time > t.open_time) {
+        totalHoldMinutes += (t.close_time - t.open_time) / 60;
+        holdCount += 1;
+      }
+    });
+
+    const avgHold = holdCount > 0 ? totalHoldMinutes / holdCount : 0;
+
+    const symbolMap = {};
+    monthTrades.forEach((t) => {
+      const sym = t.symbol || 'OTHER';
+      if (!symbolMap[sym]) {
+        symbolMap[sym] = { key: sym, trades: 0, wins: 0, losses: 0, net_profit: 0, gross_profit: 0, gross_loss: 0 };
+      }
+      const s = symbolMap[sym];
+      s.trades += 1;
+      s.net_profit += t.profit || 0;
+      if (t.profit > 0) {
+        s.wins += 1;
+        s.gross_profit += t.profit;
+      } else if (t.profit < 0) {
+        s.losses += 1;
+        s.gross_loss += Math.abs(t.profit);
+      }
+    });
+
+    const bySymbol = Object.values(symbolMap).map((s) => ({
+      ...s,
+      win_rate: s.trades > 0 ? (s.wins / s.trades) * 100 : 0,
+      profit_factor: s.gross_loss > 0 ? s.gross_profit / s.gross_loss : (s.gross_profit > 0 ? null : 0)
+    }));
+
+    const dirMap = {
+      BUY: { key: 'BUY', trades: 0, net_profit: 0, gross_profit: 0, gross_loss: 0, wins: 0 },
+      SELL: { key: 'SELL', trades: 0, net_profit: 0, gross_profit: 0, gross_loss: 0, wins: 0 }
+    };
+    monthTrades.forEach((t) => {
+      const dir = (t.type || t.direction || '').toUpperCase().includes('SELL') ? 'SELL' : 'BUY';
+      dirMap[dir].trades += 1;
+      const prof = t.profit || 0;
+      dirMap[dir].net_profit += prof;
+      if (prof > 0) {
+        dirMap[dir].wins += 1;
+        dirMap[dir].gross_profit += prof;
+      } else if (prof < 0) {
+        dirMap[dir].gross_loss += Math.abs(prof);
+      }
+    });
+
+    const byDirection = Object.values(dirMap).map((d) => ({
+      ...d,
+      win_rate: d.trades > 0 ? (d.wins / d.trades) * 100 : 0,
+      profit_factor: d.gross_loss > 0 ? d.gross_profit / d.gross_loss : (d.gross_profit > 0 ? null : 0)
+    }));
+
+    return {
+      totals: {
+        trades: count,
+        wins: wins.length,
+        losses: losses.length,
+        net_profit: net,
+        gross_profit: grossProfit,
+        gross_loss: grossLoss,
+        profit_factor: pf,
+        win_rate: wr,
+        avg_win: avgWin,
+        avg_loss: avgLoss,
+        payoff_ratio: payoff,
+        expectancy: expectancy,
+        max_win_streak: maxWinStreak,
+        max_loss_streak: maxLossStreak,
+        total_volume: totalVolume,
+        best_trade: bestTrade,
+        worst_trade: worstTrade,
+        avg_hold_minutes: avgHold
+      },
+      by_symbol: bySymbol,
+      by_direction: byDirection
+    };
+  }, [period, monthTrades]);
+
+  const activeStats = period === 'MONTH' ? (monthStats || stats) : stats;
+  const totals = activeStats?.totals;
+  const netPnl = totals?.net_profit ?? (period === 'MONTH' ? 0 : (historyData?.net_pnl ?? 0));
+  const winRate = totals?.win_rate ?? (period === 'MONTH' ? 0 : (historyData?.win_rate ?? 0));
+  const profitFactor = totals ? totals.profit_factor : (period === 'MONTH' ? null : historyData?.profit_factor);
+  const totalTrades = totals?.trades ?? (period === 'MONTH' ? 0 : (historyData?.total_trades ?? 0));
+  const winningTrades = totals?.wins ?? (period === 'MONTH' ? 0 : (historyData?.winning_trades ?? 0));
+  const losingTrades = totals?.losses ?? (period === 'MONTH' ? 0 : (historyData?.losing_trades ?? 0));
+  const periodLabel = period === 'MONTH' ? `Bulan ${monthName}` : PERIOD_LABELS[period];
 
   const filteredTrades = trades.filter((t) => {
     const isEa = t.magic > 0;
@@ -145,7 +320,17 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
       t.symbol.toLowerCase().includes(search.toLowerCase()) ||
       source.toLowerCase().includes(search.toLowerCase()) ||
       String(t.ticket).includes(search);
-    return matchesFilter && matchesSearch;
+
+    let matchesMonth = true;
+    if (period === 'MONTH') {
+      if (t.close_time) {
+        const d = new Date(t.close_time * 1000);
+        matchesMonth = d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear;
+      } else {
+        matchesMonth = false;
+      }
+    }
+    return matchesFilter && matchesSearch && matchesMonth;
   });
 
   const handleExportCSV = () => {
@@ -176,23 +361,6 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
     link.click();
     document.body.removeChild(link);
   };
-
-  // Group real trades by day of current month for calendar
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const monthName = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date());
-
-  const dailyPnlMap = {};
-  trades.forEach((t) => {
-    if (t.close_time) {
-      const d = new Date(t.close_time * 1000);
-      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-        const dayNum = d.getDate();
-        dailyPnlMap[dayNum] = (dailyPnlMap[dayNum] || 0) + t.profit;
-      }
-    }
-  });
 
   return (
     <div className="journal-tab-container animate-fade-in">
@@ -314,10 +482,50 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
             {option.label}
           </button>
         ))}
+
+        {/* Month Selector for specific monthly review */}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: period === 'MONTH' ? 'rgba(69, 224, 173, 0.15)' : '#0d171d',
+            border: `1px solid ${period === 'MONTH' ? 'var(--g)' : 'var(--line)'}`,
+            borderRadius: '8px',
+            padding: '3px 8px'
+          }}
+          title="Pilih Bulan Spesifik untuk review jurnal"
+        >
+          <Calendar size={13} style={{ color: period === 'MONTH' ? 'var(--g)' : 'var(--muted)' }} />
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => {
+              if (e.target.value) {
+                setSelectedMonth(e.target.value);
+                setPeriod('MONTH');
+                setSelectedDate(null);
+              }
+            }}
+            onClick={() => setPeriod('MONTH')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: period === 'MONTH' ? '#fff' : '#c9d8dc',
+              fontSize: '11px',
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              outline: 'none',
+              padding: '2px 0'
+            }}
+            id="journal-month-selector"
+          />
+        </div>
       </div>
 
       {/* Real KPIs Grid */}
-      <div className="grid kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+      <div className="grid-cards-responsive-2col five-cols-desktop">
         <div className="card" id="journal-kpi-net-pnl">
           <div className={`metric ${netPnl >= 0 ? 'positive' : 'negative'}`}>
             {formatCurrency(netPnl)}
@@ -363,7 +571,7 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
         </div>
       </div>
 
-      <JournalAnalytics stats={stats} loading={statsLoading} periodLabel={periodLabel} />
+      <JournalAnalytics stats={activeStats} loading={statsLoading} periodLabel={periodLabel} />
 
 
       {/* Filter Tabs */}
@@ -505,7 +713,7 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
       <div className="section" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
         <Calendar size={16} style={{ color: 'var(--g)' }} />
         <span>Trading Calendar</span>
-        <span className="tiny">{monthName} {currentYear}</span>
+        <span className="tiny" style={{ textTransform: 'capitalize' }}>{monthName}</span>
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>

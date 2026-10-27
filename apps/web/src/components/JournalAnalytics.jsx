@@ -125,7 +125,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
-      <div className="grid kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+      <div className="grid-cards-responsive-2col four-cols-desktop">
         <MetricTile
           id="journal-metric-expectancy"
           label="Expectancy / Trade"
@@ -156,26 +156,26 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
         <MetricTile
           id="journal-metric-streak-win"
           label="Win Streak Terpanjang"
-          value={`${totals.max_win_streak}x`}
+          value={`${totals.max_win_streak ?? 0}x`}
           tone="positive"
-          hint={`Loss streak ${totals.max_loss_streak}x`}
+          hint={`Loss streak ${totals.max_loss_streak ?? 0}x`}
         />
         <MetricTile
           id="journal-metric-hold"
           label="Rata-rata Holding"
           value={holdTime(totals.avg_hold_minutes)}
-          hint={`Volume ${totals.total_volume} lot`}
+          hint={`Volume ${Number(totals.total_volume ?? 0).toFixed(2)} lot`}
         />
         <MetricTile
           id="journal-metric-best"
           label="Best Trade"
-          value={money(totals.best_trade)}
+          value={money(totals.best_trade ?? 0)}
           tone="positive"
         />
         <MetricTile
           id="journal-metric-worst"
           label="Worst Trade"
-          value={money(totals.worst_trade)}
+          value={money(totals.worst_trade ?? 0)}
           tone="negative"
         />
       </div>
@@ -263,7 +263,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
                     </span>
                   </div>
                   <div className="tiny" style={{ marginTop: '3px', color: 'var(--muted)' }}>
-                    {bucket.trades} trade · win {bucket.win_rate.toFixed(1)}% · PF {ratio(bucket.profit_factor)}
+                    {bucket.trades} trade · win {(bucket.win_rate ?? 0).toFixed(1)}% · PF {ratio(bucket.profit_factor)}
                   </div>
                 </div>
               );

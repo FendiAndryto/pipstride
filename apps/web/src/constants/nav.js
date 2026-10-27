@@ -3,8 +3,7 @@ import {
   BookOpen,
   TrendingUp,
   Sparkles,
-  PlaySquare,
-  User
+  PlaySquare
 } from 'lucide-react';
 
 export const NAV_TABS = [
@@ -12,6 +11,5 @@ export const NAV_TABS = [
   { id: 'journal', label: 'Journal', icon: BookOpen, symbol: '▤' },
   { id: 'market', label: 'Market', icon: TrendingUp, symbol: '◈' },
   { id: 'ai', label: 'AI Assistant', icon: Sparkles, symbol: '✧' },
-  { id: 'replay', label: 'Replay', icon: PlaySquare, symbol: '▷' },
-  { id: 'profile', label: 'Profile', icon: User, symbol: '◉' }
+  { id: 'replay', label: 'Replay', icon: PlaySquare, symbol: '▷' }
 ];
