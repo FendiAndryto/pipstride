@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  LogOut,
   ShieldCheck,
   Monitor,
   Send,
@@ -34,7 +33,6 @@ const formatCurrency = (val, currency = 'USD') => {
 
 export default function ProfileTab({
   user,
-  onLogout,
   bridgeStatus,
   riskStatus,
   connections = [],
@@ -222,16 +220,6 @@ export default function ProfileTab({
           <h1>Profile & Connection Security</h1>
           <div className="sub">Kelola akun MT5 terhubung, token koneksi, dan keamanan akun Pipstride Anda.</div>
         </div>
-        <button
-          type="button"
-          className="btn danger"
-          onClick={onLogout}
-          id="profile-logout-btn"
-          title="Sign out of Pipstride"
-        >
-          <LogOut size={14} />
-          <span>Keluar</span>
-        </button>
       </div>
 
       {/* User Card */}

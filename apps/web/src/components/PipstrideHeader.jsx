@@ -1,5 +1,5 @@
-import React from 'react';
-import { ChevronDown, Monitor, User, Wallet } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ChevronDown, Monitor, User, Wallet, LogOut } from 'lucide-react';
 import { NAV_TABS } from '../constants/nav';
 
 function connectionLabel(connection) {
@@ -16,8 +16,35 @@ export default function PipstrideHeader({
   connections = [],
   activeConnectionId,
   onSelectConnection,
-  onOpenMt5Modal
+  onOpenMt5Modal,
+  user,
+  onLogout
 }) {
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false);
+      }
+    }
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileMenuOpen]);
+
+  const activeConn = connections.find((c) => c.id === activeConnectionId) || connections[0];
   return (
     <header className="tradegear-header" id="pipstride-header">
       {/* Brand & Logo */}
@@ -117,17 +144,66 @@ export default function PipstrideHeader({
           )}
         </div>
 
-        {/* Profile Avatar & Settings Icon Button */}
-        <button
-          type="button"
-          className={`header-profile-btn ${activeTab === 'profile' ? 'active' : ''}`}
-          onClick={() => onSelectTab('profile')}
-          id="header-profile-btn"
-          title="Profil Akun & Pengaturan"
-          aria-label="Profil Akun"
-        >
-          <User size={15} />
-        </button>
+        {/* Profile Avatar & Popover Dropdown Menu */}
+        <div className="header-profile-menu-container" ref={profileMenuRef}>
+          <button
+            type="button"
+            className={`header-profile-btn ${activeTab === 'profile' || isProfileMenuOpen ? 'active' : ''}`}
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+            id="header-profile-btn"
+            title="Menu Akun & Sesi"
+            aria-label="Menu Akun"
+            aria-expanded={isProfileMenuOpen}
+          >
+            <User size={15} />
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="header-profile-dropdown animate-fade-in" id="header-profile-dropdown">
+              <div className="header-profile-dropdown-user">
+                <div className="header-profile-dropdown-avatar">
+                  {user?.username ? user.username.slice(0, 2).toUpperCase() : 'PS'}
+                </div>
+                <div className="header-profile-dropdown-meta">
+                  <div className="header-profile-dropdown-name">{user?.username || 'Trader'}</div>
+                  <div className="header-profile-dropdown-sub">
+                    {user?.email || (activeConn?.account_number ? `MT5 #${activeConn.account_number}` : (user?.role === 'admin' ? 'Administrator' : 'Trader Account'))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="header-profile-dropdown-divider" />
+
+              <button
+                type="button"
+                className="header-profile-dropdown-item"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  onSelectTab('profile');
+                }}
+                id="header-menu-profile-btn"
+              >
+                <User size={14} />
+                <span>Profil & Pengaturan</span>
+              </button>
+
+              <div className="header-profile-dropdown-divider" />
+
+              <button
+                type="button"
+                className="header-profile-dropdown-item danger"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  if (onLogout) onLogout();
+                }}
+                id="header-menu-logout-btn"
+              >
+                <LogOut size={14} />
+                <span>Keluar</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

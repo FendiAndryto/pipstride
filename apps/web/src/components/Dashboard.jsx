@@ -138,6 +138,8 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
         activeConnectionId={activeConnectionId}
         onSelectConnection={handleSelectConnection}
         onOpenMt5Modal={() => setIsMt5ModalOpen(true)}
+        user={user}
+        onLogout={onLogout}
       />
 
       {/* Main Container */}
@@ -185,7 +187,6 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
         <div className={`page-container ${activeTab === 'profile' ? 'active' : ''}`} id="tab-profile">
           <ProfileTab
             user={user}
-            onLogout={onLogout}
             bridgeStatus={bridgeStatus}
             riskStatus={riskStatus}
             connections={connections}
