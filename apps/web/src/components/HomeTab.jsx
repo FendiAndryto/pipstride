@@ -5,9 +5,7 @@ import {
   TrendingUp,
   TrendingDown,
   Layers,
-  RefreshCw,
-  XCircle,
-  Edit2
+  RefreshCw
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -34,12 +32,6 @@ export default function HomeTab({
   const [chartRange, setChartRange] = useState('Month');
   const [equityCurveData, setEquityCurveData] = useState(null);
   const [historyData, setHistoryData] = useState(null);
-
-  // Initial Balance Benchmark Quick-Edit Modal States
-  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [depositInput, setDepositInput] = useState('');
-  const [isSavingDeposit, setIsSavingDeposit] = useState(false);
-  const [depositSaveMsg, setDepositSaveMsg] = useState(null);
 
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
@@ -119,47 +111,6 @@ export default function HomeTab({
       clearInterval(syncInterval);
     };
   }, [currentAccountNumber, chartRange, bridgeStatus?.closed_trades_count]);
-
-  const handleSaveInitialDeposit = async () => {
-    const num = parseFloat(depositInput);
-    if (isNaN(num) || num <= 0) {
-      setDepositSaveMsg({ type: 'error', text: 'Masukkan nominal saldo awal yang valid (> 0).' });
-      return;
-    }
-    setIsSavingDeposit(true);
-    setDepositSaveMsg(null);
-    try {
-      await api.setInitialDeposit(num);
-      if (onRefresh) onRefresh();
-      setDepositSaveMsg({ type: 'success', text: 'Benchmark saldo awal berhasil diperbarui!' });
-      setTimeout(() => {
-        setIsDepositModalOpen(false);
-        setDepositSaveMsg(null);
-      }, 700);
-    } catch (err) {
-      setDepositSaveMsg({ type: 'error', text: err.message || 'Gagal menyimpan benchmark saldo awal.' });
-    } finally {
-      setIsSavingDeposit(false);
-    }
-  };
-
-  const handleResetInitialDeposit = async () => {
-    setIsSavingDeposit(true);
-    setDepositSaveMsg(null);
-    try {
-      await api.setInitialDeposit(null);
-      if (onRefresh) onRefresh();
-      setDepositSaveMsg({ type: 'success', text: 'Berhasil dikembalikan ke deteksi otomatis MT5!' });
-      setTimeout(() => {
-        setIsDepositModalOpen(false);
-        setDepositSaveMsg(null);
-      }, 700);
-    } catch (err) {
-      setDepositSaveMsg({ type: 'error', text: err.message || 'Gagal mereset saldo awal.' });
-    } finally {
-      setIsSavingDeposit(false);
-    }
-  };
 
   return (
     <div className="home-tab-container animate-fade-in">
@@ -271,37 +222,9 @@ export default function HomeTab({
         <div className="card" id="home-kpi-balance">
           <div className="cardhead">
             <span className="label">Total Balance</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDepositInput(initialDeposit > 0 ? String(initialDeposit) : '');
-                  setDepositSaveMsg(null);
-                  setIsDepositModalOpen(true);
-                }}
-                title="Sesuaikan Benchmark Saldo Awal Akun"
-                style={{
-                  background: 'rgba(69, 224, 173, 0.1)',
-                  border: '1px solid rgba(69, 224, 173, 0.25)',
-                  color: 'var(--g)',
-                  padding: '3px 7px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '10px',
-                  fontWeight: 600
-                }}
-                id="edit-initial-deposit-btn"
-              >
-                <Edit2 size={10} />
-                <span>Saldo Awal</span>
-              </button>
-              <span className="icon-box">
-                <DollarSign size={16} />
-              </span>
-            </div>
+            <span className="icon-box">
+              <DollarSign size={16} />
+            </span>
           </div>
           <div className="metric">{formatCurrency(balance, currency)}</div>
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
@@ -658,139 +581,6 @@ export default function HomeTab({
           </div>
         );
       })()}
-
-      {/* Modal Quick-Edit Initial Deposit */}
-      {isDepositModalOpen && (
-        <div className="modal-backdrop animate-fade-in" style={{ zIndex: 9999 }}>
-          <div
-            className="card glass-panel"
-            style={{
-              maxWidth: '460px',
-              width: '100%',
-              margin: 'auto',
-              background: '#0d171d',
-              border: '1px solid #29404a',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.8)'
-            }}
-          >
-            <div className="cardhead" style={{ borderBottom: '1px solid var(--line)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <DollarSign size={18} style={{ color: 'var(--g)' }} />
-                <h3 style={{ margin: 0, fontSize: '14px' }}>Kalibrasi Benchmark Saldo Awal</h3>
-              </div>
-              <button
-                type="button"
-                className="btn ghost"
-                style={{ padding: '4px' }}
-                onClick={() => setIsDepositModalOpen(false)}
-              >
-                <XCircle size={16} />
-              </button>
-            </div>
-
-            <div style={{ padding: '16px 0', fontSize: '12px', color: '#c9d8dc', lineHeight: 1.5 }}>
-              {/* Regulatory Notice Banner */}
-              <div
-                style={{
-                  background: 'rgba(38, 166, 154, 0.08)',
-                  border: '1px solid rgba(38, 166, 154, 0.25)',
-                  borderRadius: '8px',
-                  padding: '9px 12px',
-                  fontSize: '11px',
-                  color: '#a0c4cf',
-                  marginBottom: '12px',
-                  lineHeight: 1.45
-                }}
-              >
-                <strong style={{ color: 'var(--g)' }}>Analitik Telemetry:</strong> Nilai ini murni sebagai parameter baseline analitik untuk menghitung performa P/L & persentase pertumbuhan akun. Aplikasi ini tidak melayani transaksi setor/tarik dana (deposit/withdrawal). Seluruh transaksi keuangan dilakukan langsung dengan broker Anda di terminal MT5.
-              </div>
-
-              <p style={{ margin: '0 0 12px' }}>
-                Sistem mendeteksi transaksi balance pertama dari deal history MT5. Anda dapat menyesuaikan nominal ini sebagai benchmark kalkulasi All-Time P/L dan kurva pertumbuhan.
-              </p>
-
-              <div style={{ background: '#091014', border: '1px solid var(--line)', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '11px', color: 'var(--muted)' }}>
-                  <span>Status Deteksi:</span>
-                  <span style={{ color: isDepositOverridden ? 'var(--amber)' : 'var(--g)', fontWeight: 600 }}>
-                    {isDepositOverridden ? 'Manual Override Aktif' : 'Otomatis dari MT5'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                  <span>Saldo Awal Efektif:</span>
-                  <span style={{ fontWeight: 700, color: '#fff' }}>
-                    {formatCurrency(initialDeposit, currency)}
-                  </span>
-                </div>
-              </div>
-
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--muted)' }}>
-                NOMINAL SALDO AWAL BENCHMARK ({currency})
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="1"
-                value={depositInput}
-                onChange={(e) => setDepositInput(e.target.value)}
-                placeholder="Contoh: 1000.00"
-                style={{
-                  width: '100%',
-                  background: '#091014',
-                  border: '1px solid var(--line)',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  padding: '10px 12px',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-                id="initial-deposit-input"
-              />
-
-              {depositSaveMsg && (
-                <div style={{ marginTop: '8px', fontSize: '11px', color: depositSaveMsg.type === 'error' ? 'var(--red)' : 'var(--g)' }}>
-                  {depositSaveMsg.text}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', borderTop: '1px solid var(--line)', paddingTop: '12px' }}>
-              <button
-                type="button"
-                className="btn alt"
-                style={{ fontSize: '11px' }}
-                disabled={isSavingDeposit}
-                onClick={handleResetInitialDeposit}
-                id="reset-initial-deposit-btn"
-              >
-                Reset ke Auto MT5
-              </button>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="btn ghost"
-                  style={{ fontSize: '11px' }}
-                  onClick={() => setIsDepositModalOpen(false)}
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ fontSize: '11px' }}
-                  disabled={isSavingDeposit || !depositInput}
-                  onClick={handleSaveInitialDeposit}
-                  id="save-initial-deposit-btn"
-                >
-                  {isSavingDeposit ? 'Menyimpan...' : 'Simpan Baseline'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
