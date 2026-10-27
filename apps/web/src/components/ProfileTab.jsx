@@ -53,6 +53,7 @@ export default function ProfileTab({
   const server = metrics.server || 'MetaQuotes-Demo';
   const accountNumber = metrics.account_number || 0;
   const currency = metrics.currency || 'USD';
+  const activeConn = connections.find((c) => c.id === activeConnectionId) || connections[0];
 
   // Passive risk watchdog metrics (read-only, never liquidates positions)
   const dailyDrawdownPercent = riskStatus?.daily_drawdown_percent ?? 0;
@@ -432,21 +433,65 @@ export default function ProfileTab({
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>
-        <div className="row">
-          <div className="coin">MT</div>
-          <div className="grow">
-            <div className="rowtitle">{server}</div>
-            <div className="rowsub">
-              Login #{accountNumber || 'Offline'} · MT5 Direct Laptop Bridge
+        <div className="cardhead" style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <div className="coin" style={{ width: '32px', height: '32px', flexShrink: 0, fontSize: '11px' }}>MT</div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontWeight: 800, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {server}
+              </div>
+              <div className="tiny" style={{ color: 'var(--muted)', fontSize: '10.5px' }}>
+                {activeConn?.label || 'MT5 Direct Laptop Bridge'}
+              </div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className={`tag ${isConnected ? '' : 'red'}`} title="FastAPI to MT5 Bridge Telemetry">
-              {isConnected ? 'BRIDGE LIVE' : 'BRIDGE OFFLINE'}
-            </span>
-            <span className={`tag ${terminalConnected ? '' : 'red'}`} title="MT5 Terminal to Broker Server Connection">
-              {terminalConnected ? 'BROKER ONLINE' : 'BROKER OFFLINE'}
-            </span>
+          <span
+            className={`tag ${isConnected && terminalConnected ? 'green' : (isConnected ? 'amber' : 'red')}`}
+            style={{ fontSize: '9px', flexShrink: 0 }}
+          >
+            {isConnected && terminalConnected ? 'ONLINE' : (isConnected ? 'STANDBY' : 'OFFLINE')}
+          </span>
+        </div>
+
+        <div className="grid-cards-responsive-2col" style={{ margin: 0, gap: '8px' }}>
+          <div style={{ background: '#0a1419', border: '1px solid var(--line)', borderRadius: '8px', padding: '9px 12px' }}>
+            <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>
+              Login MT5
+            </div>
+            <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '13px', color: '#fff' }}>
+              {accountNumber ? `#${accountNumber}` : 'Offline'}
+            </div>
+          </div>
+
+          <div style={{ background: '#0a1419', border: '1px solid var(--line)', borderRadius: '8px', padding: '9px 12px' }}>
+            <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>
+              Saldo Akun
+            </div>
+            <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '13px', color: 'var(--g)' }}>
+              {formatCurrency(metrics.balance ?? 0, currency)}
+            </div>
+          </div>
+
+          <div style={{ background: '#0a1419', border: '1px solid var(--line)', borderRadius: '8px', padding: '9px 12px' }}>
+            <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+              Bridge Telemetri
+            </div>
+            <div>
+              <span className={`tag ${isConnected ? '' : 'red'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                {isConnected ? 'BRIDGE LIVE' : 'BRIDGE OFFLINE'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ background: '#0a1419', border: '1px solid var(--line)', borderRadius: '8px', padding: '9px 12px' }}>
+            <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+              Koneksi Broker
+            </div>
+            <div>
+              <span className={`tag ${terminalConnected ? '' : 'red'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                {terminalConnected ? 'BROKER ONLINE' : 'BROKER OFFLINE'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
