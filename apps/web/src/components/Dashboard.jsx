@@ -125,6 +125,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
   const secondsSinceHeartbeat = bridgeStatus?.seconds_since_last_heartbeat ?? null;
+  const hostType = bridgeStatus?.host_type || bridgeStatus?.metrics?.host_type || 'local';
 
   return (
     <div className="app-shell" id="pipstride-dashboard">
@@ -134,6 +135,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
         onSelectTab={setActiveTab}
         isConnected={isConnected}
         latency={secondsSinceHeartbeat}
+        hostType={hostType}
         connections={connections}
         activeConnectionId={activeConnectionId}
         onSelectConnection={handleSelectConnection}
@@ -216,6 +218,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
         isOpen={isMt5ModalOpen}
         onClose={() => setIsMt5ModalOpen(false)}
         isConnected={isConnected}
+        hostType={hostType}
         accountNumber={metrics.account_number}
         connections={connections}
         connectionsLoaded={connectionsLoaded}

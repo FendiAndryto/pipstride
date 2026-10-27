@@ -99,6 +99,7 @@ class HeartbeatPayload(BaseModel):
     candles_m5: List[Any] = Field(default_factory=list, max_length=500, description="Recent M5 candles for scalping trigger")
     chart_symbol: Optional[str] = Field(None, description="Current symbol on active MT5 chart")
     bridge_token: Optional[str] = Field(None, description="Pipstride User Bridge Token")
+    host_type: Optional[str] = Field("local", description="Terminal host environment: local or vps")
     timestamp: int = Field(..., description="Unix timestamp sent from terminal")
 
 
@@ -139,4 +140,5 @@ class BridgeStatusResponse(BaseModel):
     market_quotes: List[MarketQuoteItem] = []
     chart_symbol: Optional[str] = None
     closed_trades_count: int = 0
+    host_type: Optional[str] = "local"
 

@@ -223,6 +223,7 @@ class BridgeService:
             market_quotes=payload.market_quotes,
             chart_symbol=payload.chart_symbol,
             closed_trades_count=self._closed_trade_count(db, connection),
+            host_type=payload.host_type or "local",
         )
 
     def _closed_trade_count(self, db: Session, connection: Mt5Connection) -> int:

@@ -5,6 +5,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Laptop,
+  Server,
+  Monitor,
   Check,
   ShieldCheck,
   KeyRound,
@@ -15,15 +17,13 @@ import {
   Trash2
 } from 'lucide-react';
 import { api, downloadPreset } from '../services/api';
-
-const TOKEN_NOTE =
-  'Token ditampilkan satu kali saja. Salin sekarang dan tempelkan ke input InpBridgeToken di MT5. ' +
-  'Server hanya menyimpan hash-nya, jadi token tidak bisa ditampilkan ulang.';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Mt5ConnectModal({
   isOpen,
   onClose,
   isConnected,
+  hostType = 'local',
   accountNumber,
   connections = [],
   connectionsLoaded = false,
@@ -32,6 +32,7 @@ export default function Mt5ConnectModal({
   onConnectionsChanged,
   onCheckStatus
 }) {
+  const { t } = useLanguage();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [revealedToken, setRevealedToken] = useState('');
@@ -133,18 +134,18 @@ export default function Mt5ConnectModal({
         <div className="mt5-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="mt5-modal-icon-box">
-              <Laptop size={22} style={{ color: '#45e0ad' }} />
+              <Monitor size={22} style={{ color: '#45e0ad' }} />
             </div>
             <div>
-              <h3 className="mt5-modal-title">KONEKSI MT5 TELEMETRY MONITOR</h3>
-              <span className="mt5-modal-subtitle">Pure Read-Only Telemetry (100% Aman & Bebas Risiko Eksekusi)</span>
+              <h3 className="mt5-modal-title">{t('modal_title', 'KONEKSI MT5 TELEMETRY MONITOR')}</h3>
+              <span className="mt5-modal-subtitle">{t('modal_subtitle', 'Pure Read-Only Telemetry (100% Aman & Bebas Risiko Eksekusi)')}</span>
             </div>
           </div>
           <button
             onClick={onClose}
             className="btn-modal-close"
             id="close-mt5-connect-modal-btn"
-            title="Tutup Modal"
+            title={t('modal_close', 'Tutup Modal')}
           >
             <X size={18} />
           </button>
@@ -161,12 +162,32 @@ export default function Mt5ConnectModal({
                 <AlertTriangle size={18} className="text-rose" />
               )}
               <span style={{ fontWeight: 700 }}>
-                Status Bridge: {isConnected ? 'MT5 LOKAL TERHUBUNG (ONLINE)' : 'MENUNGGU KONEKSI MT5 LOKAL'}
+                {t('modal_status_title', 'Status Bridge')}:{' '}
+                {isConnected ? t('modal_status_connected', 'MT5 TERHUBUNG (ONLINE)') : t('modal_status_waiting', 'MENUNGGU KONEKSI MT5')}
               </span>
+              {isConnected && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    background: hostType === 'vps' ? 'rgba(96, 165, 250, 0.2)' : 'rgba(69, 224, 173, 0.2)',
+                    color: hostType === 'vps' ? '#60a5fa' : '#45e0ad',
+                    border: `1px solid ${hostType === 'vps' ? 'rgba(96, 165, 250, 0.4)' : 'rgba(69, 224, 173, 0.4)'}`
+                  }}
+                >
+                  {hostType === 'vps' ? <Server size={11} /> : <Laptop size={11} />}
+                  <span>{hostType === 'vps' ? 'VPS' : 'LOCAL'}</span>
+                </span>
+              )}
             </div>
             {isConnected && accountNumber ? (
               <span style={{ fontSize: '0.8rem', opacity: 0.9, fontFamily: 'monospace' }}>
-                Akun #{accountNumber}
+                #{accountNumber}
               </span>
             ) : null}
           </div>
@@ -508,7 +529,7 @@ export default function Mt5ConnectModal({
           {/* 3 Steps */}
           <div className="mt5-steps-container">
             <h4 className="mt5-steps-title">
-              Cara Menghubungkan PipstrideMonitor di MT5 Laptop:
+              {t('modal_instruction_title', 'Cara Menghubungkan PipstrideMonitor di MetaTrader 5:')}
             </h4>
 
             <div className="mt5-step-card">
@@ -541,9 +562,9 @@ export default function Mt5ConnectModal({
                 <strong>Pasang PipstrideMonitor pada Chart & Masukkan Token</strong>
                 <p>
                   Drag <code>PipstrideMonitor.mq5</code> (atau hasil compile <code>.ex5</code>) ke chart aktif. Pada tab
-                  <em> Inputs</em>, isi <code>InpBridgeToken</code> dengan token tadi. Pada tab <em>Common</em>, centang
+                  <em> Inputs</em>, isi <code>InpBridgeToken</code> dengan token tadi dan sesuaikan <code>InpHostEnv</code> (Auto / Local / VPS). Pada tab <em>Common</em>, centang
                   <strong> Allow Algo Trading</strong>. EA ini 100% Read-Only (telemetri) tanpa izin eksekusi order
-                  sehingga aman dipakai berdampingan dengan EA trading lain milik Anda.
+                  sehingga aman dipakai di PC lokal maupun VPS.
                 </p>
               </div>
             </div>

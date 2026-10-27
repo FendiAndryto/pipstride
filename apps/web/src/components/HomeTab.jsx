@@ -8,6 +8,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const formatCurrency = (val, currency = 'USD') => {
   if (val === null || val === undefined || isNaN(val)) return '$0.00';
@@ -29,6 +30,7 @@ export default function HomeTab({
   onOpenConnect,
   onRefresh
 }) {
+  const { t } = useLanguage();
   const [chartRange, setChartRange] = useState('Month');
   const [equityCurveData, setEquityCurveData] = useState(null);
   const [historyData, setHistoryData] = useState(null);
@@ -121,7 +123,7 @@ export default function HomeTab({
         <div>
           <div className="eyebrow">MT5 LIVE COMMAND CENTER</div>
           <h1>Good day, Trader.</h1>
-          <div className="sub">Semua metrik read-only dari MetaTrader 5 lokal laptop.</div>
+          <div className="sub">{t('home_banner_sub', 'Read-only telemetry and performance metrics from MetaTrader 5.')}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
@@ -517,7 +519,7 @@ export default function HomeTab({
           </div>
         ) : (
           <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-            Sinkronisasi feed harga instrumen dari MT5 lokal laptop...
+            {t('market_syncing', 'Sinkronisasi feed harga instrumen dari MT5...')}
           </div>
         )}
       </div>

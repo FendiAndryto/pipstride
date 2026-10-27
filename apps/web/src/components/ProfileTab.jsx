@@ -17,9 +17,12 @@ import {
   Trash2,
   Download,
   Wallet,
-  Mail
+  Mail,
+  Server,
+  Laptop
 } from 'lucide-react';
 import { api, downloadPreset } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const formatCurrency = (val, currency = 'USD') => {
   if (val === null || val === undefined) return '$0.00';
@@ -47,9 +50,11 @@ export default function ProfileTab({
   telegramStatusMsg,
   onRefreshUser
 }) {
+  const { t } = useLanguage();
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
   const terminalConnected = bridgeStatus?.terminal_connected || false;
+  const hostType = bridgeStatus?.host_type || bridgeStatus?.metrics?.host_type || 'local';
   const server = metrics.server || 'MetaQuotes-Demo';
   const accountNumber = metrics.account_number || 0;
   const currency = metrics.currency || 'USD';
@@ -429,7 +434,7 @@ export default function ProfileTab({
 
       {/* Active Account Telemetry */}
       <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        Akun Aktif
+        {t('profile_active_account', 'Akun Aktif')}
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>
@@ -441,16 +446,33 @@ export default function ProfileTab({
                 {server}
               </div>
               <div className="tiny" style={{ color: 'var(--muted)', fontSize: '10.5px' }}>
-                {activeConn?.label || 'MT5 Direct Laptop Bridge'}
+                {activeConn?.label || 'MT5 Terminal Bridge'}
               </div>
             </div>
           </div>
-          <span
-            className={`tag ${isConnected && terminalConnected ? 'green' : (isConnected ? 'amber' : 'red')}`}
-            style={{ fontSize: '9px', flexShrink: 0 }}
-          >
-            {isConnected && terminalConnected ? 'ONLINE' : (isConnected ? 'STANDBY' : 'OFFLINE')}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {isConnected && (
+              <span
+                className={`tag ${hostType === 'vps' ? 'blue' : 'green'}`}
+                style={{
+                  fontSize: '9px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 6px'
+                }}
+              >
+                {hostType === 'vps' ? <Server size={11} /> : <Laptop size={11} />}
+                <span>{hostType === 'vps' ? 'VPS' : 'LOCAL'}</span>
+              </span>
+            )}
+            <span
+              className={`tag ${isConnected && terminalConnected ? 'green' : (isConnected ? 'amber' : 'red')}`}
+              style={{ fontSize: '9px', flexShrink: 0 }}
+            >
+              {isConnected && terminalConnected ? 'ONLINE' : (isConnected ? 'STANDBY' : 'OFFLINE')}
+            </span>
+          </div>
         </div>
 
         <div className="grid-cards-responsive-2col" style={{ margin: 0, gap: '8px' }}>

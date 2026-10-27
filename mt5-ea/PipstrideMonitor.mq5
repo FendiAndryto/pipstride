@@ -8,14 +8,23 @@
 #property version   "1.00"
 #property description "Pipstride Pure Read-Only MT5 Telemetry & Account Analytics Monitor v1.00 (Zero Trade Execution - 100% Safe)"
 
+//--- Host Environment Enum
+enum ENUM_HOST_ENV
+{
+   HOST_ENV_AUTO  = 0, // Auto Detect (Local vs VPS)
+   HOST_ENV_LOCAL = 1, // Local PC / Laptop
+   HOST_ENV_VPS   = 2  // VPS / Cloud Server
+};
+
 //--- Inputs
 input group "--- Pipstride Telemetry Settings ---"
-input string InpBackendUrl        = "http://localhost:8089";                    // Backend API URL
-input string InpBridgeToken       = "";                                        // Pipstride Connection Token (from Web Dashboard)
-input string InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
-input int    InpHistoryDays       = 90;                                        // History lookback days (0 = All History)
-input int    InpHeartbeatInterval = 1;                                         // Heartbeat interval in seconds
-input bool   InpVerboseLog        = false;                                     // Print detailed logs to Experts tab
+input string        InpBackendUrl        = "http://localhost:8089";                    // Backend API URL
+input string        InpBridgeToken       = "";                                        // Pipstride Connection Token (from Web Dashboard)
+input ENUM_HOST_ENV InpHostEnv           = HOST_ENV_AUTO;                             // Host Environment (Auto/Local/VPS)
+input string        InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
+input int           InpHistoryDays       = 90;                                        // History lookback days (0 = All History)
+input int           InpHeartbeatInterval = 1;                                         // Heartbeat interval in seconds
+input bool          InpVerboseLog        = false;                                     // Print detailed logs to Experts tab
 
 //--- Global Variables
 datetime g_last_heartbeat = 0;
@@ -417,6 +426,17 @@ string BuildHeartbeatJson()
    string candlesM15Json = BuildCandlesJson(PERIOD_M15);
    string candlesM5Json = BuildCandlesJson(PERIOD_M5);
 
+   string host_type = "local";
+   if(InpHostEnv == HOST_ENV_VPS)
+      host_type = "vps";
+   else if(InpHostEnv == HOST_ENV_LOCAL)
+      host_type = "local";
+   else
+   {
+      bool isMqlVps = (bool)TerminalInfoInteger(TERMINAL_VPS);
+      host_type = (isMqlVps ? "vps" : "local");
+   }
+
    string json = "{"
       + StringFormat("\"account_number\":%I64d,", login)
       + "\"server\":\"" + server + "\","
@@ -437,6 +457,7 @@ string BuildHeartbeatJson()
       + "\"candles_m5\":" + candlesM5Json + ","
       + "\"chart_symbol\":\"" + EscapeJsonString(_Symbol) + "\","
       + "\"bridge_token\":\"" + EscapeJsonString(InpBridgeToken) + "\","
+      + "\"host_type\":\"" + host_type + "\","
       + StringFormat("\"timestamp\":%I64d", timestamp)
       + "}";
 
@@ -520,10 +541,12 @@ void SendHeartbeat()
 //+------------------------------------------------------------------+
 void UpdateChartHUD(string status_text)
 {
+   string host_desc = (InpHostEnv == HOST_ENV_VPS ? "VPS / Cloud" : (InpHostEnv == HOST_ENV_LOCAL ? "Local PC" : "Auto (" + ((bool)TerminalInfoInteger(TERMINAL_VPS) ? "VPS" : "Local") + ")"));
    string hud = "========================================\n"
-              + "  TRADEGEAR MONITOR - 100% READ-ONLY   \n"
+              + "  PIPSTRIDE MONITOR - 100% READ-ONLY   \n"
               + "========================================\n"
               + "Backend URL    : " + InpBackendUrl + "\n"
+              + "Host Env       : " + host_desc + "\n"
               + "Monitor Status : " + status_text + "\n"
               + "Execution Mode : READ-ONLY (No Orders Executed)\n"
               + "Last Telemetry : " + (g_last_heartbeat > 0 ? TimeToString(g_last_heartbeat, TIME_DATE|TIME_SECONDS) : "None") + "\n"

@@ -357,6 +357,65 @@ body {
   color: var(--red);
 }
 
+.status-pill .host-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-pill.connected .host-badge.vps {
+  background: rgba(96, 165, 250, 0.18);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+}
+
+.status-pill.connected .host-badge.local {
+  background: rgba(69, 224, 173, 0.15);
+  color: #45e0ad;
+  border: 1px solid rgba(69, 224, 173, 0.3);
+}
+
+/* Header Language Switcher */
+.header-lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: #091014;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.header-lang-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  line-height: 1.1;
+}
+
+.header-lang-btn:hover {
+  color: #fff;
+}
+
+.header-lang-btn.active {
+  background: rgba(69, 224, 173, 0.16);
+  color: var(--g);
+  font-weight: 800;
+}
+
 /* Desktop Navigation in Header */
 .nav-desktop {
   display: none;
