@@ -164,13 +164,17 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
             activeTab={activeTab}
             closedTradesCount={bridgeStatus?.closed_trades_count}
             bridgeStatus={bridgeStatus}
+            hasConnection={connections.length > 0}
             onNavigateAI={() => setActiveTab('ai')}
           />
         </div>
 
         {/* Tab 3: Market Overview */}
         <div className={`page-container ${activeTab === 'market' ? 'active' : ''}`} id="tab-market">
-          <MarketTab bridgeStatus={bridgeStatus} />
+          <MarketTab
+            bridgeStatus={bridgeStatus}
+            hasConnection={connections.length > 0}
+          />
         </div>
 
         {/* Tab 4: AI Assistant (Coming Soon) */}

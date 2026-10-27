@@ -286,6 +286,7 @@ export const api = {
 
   async getMarketQuotes() {
     const res = await authFetch(`${API_BASE}/api/v1/bridge/market`, { method: 'GET' });
+    if (res.status === 409) return [];
     if (!res.ok) {
       throw new Error('Failed to fetch market quotes');
     }
@@ -294,6 +295,17 @@ export const api = {
 
   async getTradeHistory() {
     const res = await authFetch(`${API_BASE}/api/v1/bridge/history`, { method: 'GET' });
+    if (res.status === 409) {
+      return {
+        trades: [],
+        total_trades: 0,
+        winning_trades: 0,
+        losing_trades: 0,
+        net_pnl: 0,
+        profit_factor: null,
+        win_rate: 0
+      };
+    }
     if (!res.ok) {
       throw new Error('Failed to fetch trade history');
     }
@@ -309,6 +321,7 @@ export const api = {
     const res = await authFetch(`${API_BASE}/api/v1/journal/stats?${query.toString()}`, {
       method: 'GET'
     });
+    if (res.status === 409) return null;
     if (!res.ok) {
       throw new Error('Failed to fetch journal statistics');
     }
@@ -328,6 +341,7 @@ export const api = {
       `${API_BASE}/api/v1/bridge/equity-curve?range=${encodeURIComponent(range)}`,
       { method: 'GET' }
     );
+    if (res.status === 409) return null;
     if (!res.ok) {
       throw new Error('Failed to fetch equity curve');
     }

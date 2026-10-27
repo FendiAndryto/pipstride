@@ -75,6 +75,8 @@ export default function HomeTab({
 
   // Reactive automatic data fetch for active account
   useEffect(() => {
+    if (!hasConnection || !isConnected) return;
+
     let isMounted = true;
     const fetchData = async () => {
       try {
@@ -110,7 +112,7 @@ export default function HomeTab({
       isMounted = false;
       clearInterval(syncInterval);
     };
-  }, [currentAccountNumber, chartRange, bridgeStatus?.closed_trades_count]);
+  }, [hasConnection, isConnected, currentAccountNumber, chartRange, bridgeStatus?.closed_trades_count]);
 
   return (
     <div className="home-tab-container animate-fade-in">

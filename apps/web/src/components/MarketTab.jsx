@@ -23,21 +23,22 @@ const getSymbolName = (sym) => {
   return sym;
 };
 
-export default function MarketTab({ bridgeStatus }) {
+export default function MarketTab({ bridgeStatus, hasConnection = false }) {
   const [quotes, setQuotes] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState('XAUUSD');
   const [activeTf, setActiveTf] = useState('M15');
   const [loading, setLoading] = useState(false);
 
   const fetchQuotes = async () => {
+    if (!hasConnection) return;
     try {
       setLoading(true);
       const data = await api.getMarketQuotes();
       if (Array.isArray(data) && data.length > 0) {
         setQuotes(data);
       }
-    } catch (err) {
-      console.error('Failed to load market quotes:', err);
+    } catch {
+      // Ignore transient error when bridge offline or conflict
     } finally {
       setLoading(false);
     }
@@ -47,10 +48,10 @@ export default function MarketTab({ bridgeStatus }) {
     // If bridgeStatus already has quotes from telemetry, use them
     if (bridgeStatus?.market_quotes && bridgeStatus.market_quotes.length > 0) {
       setQuotes(bridgeStatus.market_quotes);
-    } else {
+    } else if (hasConnection && bridgeStatus?.is_connected) {
       fetchQuotes();
     }
-  }, [bridgeStatus]);
+  }, [bridgeStatus, hasConnection]);
 
   const activeQuote = quotes.find((q) => q.symbol === selectedSymbol) || quotes[0] || {
     symbol: selectedSymbol,

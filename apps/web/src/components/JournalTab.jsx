@@ -35,7 +35,13 @@ const formatCurrency = (val) => {
   return `${prefix}$${Math.abs(val).toFixed(2)}`;
 };
 
-export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI, bridgeStatus }) {
+export default function JournalTab({
+  activeTab,
+  closedTradesCount,
+  onNavigateAI,
+  bridgeStatus,
+  hasConnection = false
+}) {
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
@@ -68,6 +74,11 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
     : (initialDeposit > 0 && allTimePnl !== null ? (allTimePnl / initialDeposit) * 100 : null);
 
   const fetchHistory = async (isManual = false) => {
+    if (!hasConnection && !isConnected) {
+      setLoading(false);
+      if (isManual) setRefreshing(false);
+      return;
+    }
     if (isManual) setRefreshing(true);
     try {
       const data = await api.getTradeHistory();
@@ -75,8 +86,8 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setHistoryData(data);
       }
-    } catch (err) {
-      console.error('Failed to load trade history:', err);
+    } catch {
+      // Ignore transient error
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -86,7 +97,7 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
   const statsSource = filter === 'EA' ? 'ea' : filter === 'Manual' ? 'manual' : 'all';
 
   const fetchStats = async () => {
-    if (period === 'MONTH') {
+    if (period === 'MONTH' || (!hasConnection && !isConnected)) {
       setStatsLoading(false);
       return;
     }
@@ -96,8 +107,8 @@ export default function JournalTab({ activeTab, closedTradesCount, onNavigateAI,
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setStats(data);
       }
-    } catch (err) {
-      console.error('Failed to load journal statistics:', err);
+    } catch {
+      // Ignore transient error
     } finally {
       setStatsLoading(false);
     }
