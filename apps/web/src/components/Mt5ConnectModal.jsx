@@ -19,6 +19,10 @@ import {
 import { api, downloadPreset } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 
+const TOKEN_NOTE =
+  'Token ditampilkan satu kali saja. Salin sekarang dan tempelkan ke input InpBridgeToken di MT5. ' +
+  'Server hanya menyimpan hash-nya, jadi token tidak bisa ditampilkan ulang.';
+
 export default function Mt5ConnectModal({
   isOpen,
   onClose,
@@ -412,7 +416,7 @@ export default function Mt5ConnectModal({
               </button>
             </div>
             <span style={{ fontSize: '10px', color: revealedToken ? '#ffd28a' : '#8899a6' }}>
-              {TOKEN_NOTE}
+              {t('modal_token_note', TOKEN_NOTE)}
             </span>
           </div>
 

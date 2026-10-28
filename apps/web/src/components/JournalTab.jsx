@@ -28,6 +28,11 @@ const PERIOD_LABELS = {
   MONTH: 'pilihan bulan'
 };
 
+const getCurrentYearMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 const formatCurrency = (val) => {
@@ -51,12 +56,7 @@ export default function JournalTab({
   const [selectedDate, setSelectedDate] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState('1M');
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  });
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentYearMonth);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState(false);
@@ -77,8 +77,8 @@ export default function JournalTab({
     ? bridgeStatus.all_time_pnl_percent
     : (initialDeposit > 0 && allTimePnl !== null ? (allTimePnl / initialDeposit) * 100 : null);
 
-  const isStatsLoading = statsLoading || (period === 'MONTH' ? isHistoryLoading : (!stats && !statsError && (hasConnection || isConnected)));
   const isHistoryLoading = loading || (!historyData && !historyError && (hasConnection || isConnected));
+  const isStatsLoading = statsLoading || (period === 'MONTH' ? isHistoryLoading : (!stats && !statsError && (hasConnection || isConnected)));
 
   const fetchHistory = useCallback(async (isManual = false) => {
     if (!hasConnection && !isConnected) {
@@ -208,9 +208,7 @@ export default function JournalTab({
   const monthInputRef = useRef(null);
 
   const isCurrentOrFutureMonth = useMemo(() => {
-    const now = new Date();
-    const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return (selectedMonth || '') >= currentYM;
+    return (selectedMonth || '') >= getCurrentYearMonth();
   }, [selectedMonth]);
 
   const handleMonthDisplayClick = (e) => {
@@ -626,13 +624,12 @@ export default function JournalTab({
                 ref={monthInputRef}
                 type="month"
                 value={selectedMonth}
-                max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                max={getCurrentYearMonth()}
                 aria-label={lang === 'en' ? 'Select month' : 'Pilih bulan'}
                 onChange={(e) => {
                   if (e.target.value) {
-                    const now = new Date();
-                    const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                    const targetVal = e.target.value > currentYM ? currentYM : e.target.value;
+                    const maxYM = getCurrentYearMonth();
+                    const targetVal = e.target.value > maxYM ? maxYM : e.target.value;
                     setSelectedMonth(targetVal);
                     setSelectedDate(null);
                   }

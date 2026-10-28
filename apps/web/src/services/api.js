@@ -95,7 +95,7 @@ const parseError = async (res, fallback) => {
 const authFetch = async (url, options = {}) => {
   const headers = {
     ...getAuthHeaders(),
-    ...(options.headers || {})
+    ...options.headers
   };
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {

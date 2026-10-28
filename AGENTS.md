@@ -18,10 +18,10 @@ Repository path: `C:\Users\pendi\Repository\pipstride`
   - Auth: JWT (`pyjwt`), password hashing (`bcrypt`)
   - Live State / Cache: Redis 7 (`redis` 8.1.0)
 - **Infrastructure (`infra`)**:
-  - Docker Compose (`infra/docker-compose.yml`)
+  - Docker Compose (`infra/docker-compose.yml`, `infra/docker-compose.prod.yml`)
   - PostgreSQL 16 (port `55432` mapped to host)
   - Redis 7 (port `6379` mapped to host)
-  - Nginx / Caddy reverse proxy
+  - Caddy reverse proxy (`infra/Caddyfile`)
 - **Sensor (`mt5-ea`)**:
   - MQL5 telemetry reader (`PipstrideMonitor.mq5`)
   - Strictly read-only sensor (zero trading, zero execution capability)

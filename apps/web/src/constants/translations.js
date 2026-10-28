@@ -85,6 +85,7 @@ export const translations = {
     modal_step_3: '3. Input Bridge Token & Host Environment:',
     modal_step_3_desc: 'In EA Inputs tab, paste your Bridge Token and choose Host Environment (Auto, Local, or VPS), then click OK.',
     modal_download_ea: 'Download PipstrideMonitor.mq5',
+    modal_token_note: 'Token is displayed only once. Copy it now and paste it into InpBridgeToken in MT5. Server only stores its hash.',
     modal_close: 'Close',
 
     // Profile
@@ -187,6 +188,7 @@ export const translations = {
     modal_step_3: '3. Masukkan Bridge Token & Host Environment:',
     modal_step_3_desc: 'Di tab Inputs EA, tempelkan Bridge Token dan pilih Host Environment (Auto, Local, atau VPS), lalu klik OK.',
     modal_download_ea: 'Unduh PipstrideMonitor.mq5',
+    modal_token_note: 'Token ditampilkan satu kali saja. Salin sekarang dan tempelkan ke input InpBridgeToken di MT5. Server hanya menyimpan hash-nya, jadi token tidak bisa ditampilkan ulang.',
     modal_close: 'Tutup',
 
     // Profile
