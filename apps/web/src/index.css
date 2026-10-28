@@ -143,6 +143,7 @@ body {
 }
 
 .header-profile-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -156,6 +157,28 @@ body {
   transition: all 0.15s ease;
   flex-shrink: 0;
   padding: 0;
+}
+
+.header-profile-status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid #080f14;
+  box-sizing: content-box;
+  display: none;
+}
+
+.header-profile-status-dot.online {
+  background: var(--g);
+  box-shadow: 0 0 6px rgba(69, 224, 173, 0.6);
+}
+
+.header-profile-status-dot.offline {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(255, 99, 132, 0.4);
 }
 
 .header-profile-btn:hover {
@@ -243,6 +266,65 @@ body {
   height: 1px;
   background: var(--line);
   margin: 4px 0;
+}
+
+.header-profile-dropdown-mt5 {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  margin: 2px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.header-profile-dropdown-mt5:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.header-profile-dropdown-mt5-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-profile-dropdown-mt5-status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.header-profile-dropdown-mt5.connected .header-profile-dropdown-mt5-status {
+  color: var(--g);
+}
+
+.header-profile-dropdown-mt5.disconnected .header-profile-dropdown-mt5-status {
+  color: var(--red);
+}
+
+.header-profile-dropdown-mt5-details {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.header-profile-dropdown-lang {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  margin: 2px 0;
+}
+
+.header-profile-dropdown-lang-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .header-profile-dropdown-item {
@@ -980,6 +1062,18 @@ main.app-main {
   .brand-text small {
     display: none;
   }
+
+  .tradegear-header .status-pill {
+    display: none !important;
+  }
+
+  .header-profile-status-dot {
+    display: block;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
   
   .banner h2 {
     font-size: 19px;
@@ -1009,6 +1103,22 @@ main.app-main {
 
 /* Narrow Mobile (< 400px): Ultra-safe text clipping avoidance */
 @media (max-width: 400px) {
+  .tradegear-header {
+    padding: 8px 12px;
+  }
+
+  .header-right {
+    gap: 6px;
+  }
+
+  .header-right > .header-lang-switcher {
+    display: none;
+  }
+
+  .header-profile-dropdown-lang {
+    display: flex;
+  }
+
   .header-new-trade-text {
     display: none;
   }
@@ -1211,5 +1321,26 @@ main.app-main {
   height: 100%;
   opacity: 0;
   cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: transparent;
+}
+
+.journal-month-input-overlay::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.journal-stepper-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 

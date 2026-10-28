@@ -9,6 +9,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 import JournalAnalytics from './JournalAnalytics';
 
 const PERIODS = [
@@ -42,6 +43,7 @@ export default function JournalTab({
   bridgeStatus,
   hasConnection = false
 }) {
+  const { lang } = useLanguage();
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All');
@@ -203,14 +205,39 @@ export default function JournalTab({
     fetchStats(true);
   };
 
+  const monthInputRef = useRef(null);
+
+  const isCurrentOrFutureMonth = useMemo(() => {
+    const now = new Date();
+    const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return (selectedMonth || '') >= currentYM;
+  }, [selectedMonth]);
+
+  const handleMonthDisplayClick = (e) => {
+    if (e?.target === monthInputRef.current) return;
+    const input = monthInputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // Fallback below
+      }
+    }
+    input.focus();
+    input.click();
+  };
+
   const { selectedYear, selectedMonthIndex, daysInMonth, monthName } = useMemo(() => {
     const parts = (selectedMonth || '').split('-');
     const year = parseInt(parts[0], 10) || CURRENT_YEAR;
     const monthIdx = (parseInt(parts[1], 10) || 1) - 1;
     const days = new Date(year, monthIdx + 1, 0).getDate();
-    const name = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(year, monthIdx, 1));
+    const locale = lang === 'en' ? 'en-US' : 'id-ID';
+    const name = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, monthIdx, 1));
     return { selectedYear: year, selectedMonthIndex: monthIdx, daysInMonth: days, monthName: name };
-  }, [selectedMonth]);
+  }, [selectedMonth, lang]);
 
   const handlePrevMonth = () => {
     let y = selectedYear;
@@ -225,6 +252,8 @@ export default function JournalTab({
   };
 
   const handleNextMonth = () => {
+    if (isCurrentOrFutureMonth) return;
+
     let y = selectedYear;
     let m = selectedMonthIndex + 1;
     if (m > 11) {
@@ -580,21 +609,31 @@ export default function JournalTab({
               type="button"
               className="journal-stepper-btn"
               onClick={handlePrevMonth}
-              title="Bulan sebelumnya"
+              title={lang === 'en' ? 'Previous month' : 'Bulan sebelumnya'}
               id="journal-prev-month-btn"
             >
               <ChevronLeft size={15} />
             </button>
 
-            <div className="journal-month-display" title="Klik untuk pilih bulan spesifik">
+            <div
+              className="journal-month-display"
+              onClick={handleMonthDisplayClick}
+              title={lang === 'en' ? 'Click to select month' : 'Klik untuk pilih bulan spesifik'}
+            >
               <Calendar size={13} style={{ color: 'var(--g)' }} />
               <span style={{ textTransform: 'capitalize' }}>{monthName}</span>
               <input
+                ref={monthInputRef}
                 type="month"
                 value={selectedMonth}
+                max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                aria-label={lang === 'en' ? 'Select month' : 'Pilih bulan'}
                 onChange={(e) => {
                   if (e.target.value) {
-                    setSelectedMonth(e.target.value);
+                    const now = new Date();
+                    const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                    const targetVal = e.target.value > currentYM ? currentYM : e.target.value;
+                    setSelectedMonth(targetVal);
                     setSelectedDate(null);
                   }
                 }}
@@ -607,7 +646,8 @@ export default function JournalTab({
               type="button"
               className="journal-stepper-btn"
               onClick={handleNextMonth}
-              title="Bulan berikutnya"
+              disabled={isCurrentOrFutureMonth}
+              title={lang === 'en' ? 'Next month' : 'Bulan berikutnya'}
               id="journal-next-month-btn"
             >
               <ChevronRight size={15} />

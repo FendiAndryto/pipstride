@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Monitor, User, Wallet, LogOut, Laptop, Server } from 'lucide-react';
+import { ChevronDown, Monitor, User, Wallet, LogOut, Laptop, Server, Globe } from 'lucide-react';
 import { NAV_TABS } from '../constants/nav';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -191,6 +191,10 @@ export default function PipstrideHeader({
             aria-expanded={isProfileMenuOpen}
           >
             <User size={15} />
+            <span
+              className={`header-profile-status-dot ${isConnected ? 'online' : 'offline'}`}
+              aria-label={isConnected ? 'MT5 Online' : 'MT5 Offline'}
+            />
           </button>
 
           {isProfileMenuOpen && (
@@ -204,6 +208,74 @@ export default function PipstrideHeader({
                   <div className="header-profile-dropdown-sub">
                     {user?.email || (activeConn?.account_number ? `MT5 #${activeConn.account_number}` : (user?.role === 'admin' ? 'Administrator' : 'Trader Account'))}
                   </div>
+                </div>
+              </div>
+
+              <div className="header-profile-dropdown-divider" />
+
+              {/* MT5 Telemetry Status in Profile Dropdown */}
+              <div
+                className={`header-profile-dropdown-mt5 ${isConnected ? 'connected' : 'disconnected'}`}
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  if (onOpenMt5Modal) onOpenMt5Modal();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsProfileMenuOpen(false);
+                    if (onOpenMt5Modal) onOpenMt5Modal();
+                  }
+                }}
+                title={t('modal_title', 'Buka modal koneksi MT5')}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="header-profile-dropdown-mt5-row">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className={`pulse-dot ${isConnected ? 'online' : 'offline'}`} />
+                    <span className="header-profile-dropdown-mt5-status">
+                      {isConnected ? 'MT5 LIVE' : 'MT5 OFFLINE'}
+                    </span>
+                  </div>
+                  {isConnected && (
+                    <span className={`host-badge ${hostType === 'vps' ? 'vps' : 'local'}`}>
+                      {hostType === 'vps' ? <Server size={10} /> : <Laptop size={10} />}
+                      <span>{hostType === 'vps' ? t('host_vps', 'VPS') : t('host_local', 'LOCAL')}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="header-profile-dropdown-mt5-details">
+                  <span>{activeConn?.account_number ? `#${activeConn.account_number}` : t('no_account', 'Belum terhubung')}</span>
+                  {latency !== null && latency !== undefined && isConnected && (
+                    <span> · {latency}s</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile-only language switcher inside dropdown */}
+              <div className="header-profile-dropdown-lang">
+                <span className="header-profile-dropdown-lang-label">
+                  <Globe size={13} />
+                  <span>{t('language', 'Bahasa')}</span>
+                </span>
+                <div className="header-lang-switcher">
+                  <button
+                    type="button"
+                    className={`header-lang-btn ${lang === 'en' ? 'active' : ''}`}
+                    onClick={() => setLang('en')}
+                    title="English"
+                  >
+                    EN
+                  </button>
+                  <button
+                    type="button"
+                    className={`header-lang-btn ${lang === 'id' ? 'active' : ''}`}
+                    onClick={() => setLang('id')}
+                    title="Bahasa Indonesia"
+                  >
+                    ID
+                  </button>
                 </div>
               </div>
 
