@@ -38,7 +38,8 @@ pipstride/
 │       └── src/
 │           ├── assets/        # Logos & images
 │           ├── components/    # UI views (Header, BottomNav, Dashboard, JournalTab, etc.)
-│           ├── constants/     # Navigation items, period definitions
+│           ├── constants/     # Navigation items, period definitions, translations
+│           ├── context/       # LanguageContext (EN/ID i18n state)
 │           └── services/      # Frontend API client (services/api.js)
 ├── services/
 │   └── api/                   # FastAPI backend service
@@ -84,9 +85,17 @@ Run from project root:
 
 4. **Backend Test Suite**:
    ```bash
-   # Requires virtualenv with requirements-dev.txt or inside container
-   docker exec pipstride_api python -m pytest
+   # Production container (pipstride_api) does NOT contain pytest, tests/, or scripts/.
+   # Run via ephemeral container with mounted directory:
+   docker run --rm -v "${PWD}/services/api:/app" -w /app python:3.12-slim sh -c "pip install -q -r requirements-dev.txt && pytest"
    ```
+   *Verified: 58 passed, 1 warning in ~19s.*
+
+5. **Backend Readiness Check**:
+   ```bash
+   curl.exe -s http://localhost:8089/ready
+   ```
+   *Verified: Returns `{"database":"ok","redis":"ok","status":"ready"}`.*
 
 ---
 
@@ -109,6 +118,7 @@ Run from project root:
 
 ## Gotchas
 
-- Host Python environment is 3.14 without project dependencies; run backend commands via Docker or inside a dedicated Python 3.12 venv.
+- Production container (`pipstride_api`) excludes `pytest`, `tests/`, and `scripts/`. Do not run test commands via `docker exec pipstride_api python -m pytest`.
+- Host Python environment is 3.14 without project dependencies; run backend commands via ephemeral Docker container or inside a dedicated Python 3.12 venv.
 - In PowerShell, `curl` is aliased to `Invoke-WebRequest`. Use `curl.exe` when testing API endpoints via CLI.
 - Database runs on port `55432` on the host to avoid collisions with default local PostgreSQL instances (`5432`).

@@ -86,7 +86,7 @@ def _send_verification_email(request: Request, background: BackgroundTasks, user
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user account",
 )
-async def register(
+def register(
     req: RegisterRequest,
     request: Request,
     background: BackgroundTasks,
@@ -124,7 +124,7 @@ async def register(
     status_code=status.HTTP_200_OK,
     summary="User login with credentials to receive JWT bearer token",
 )
-async def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
     username = credentials.username.strip()
     rate_key = f"{_client_ip(request)}:{username.lower()}"
 
@@ -154,7 +154,7 @@ async def login(credentials: LoginRequest, request: Request, db: Session = Depen
     status_code=status.HTTP_202_ACCEPTED,
     summary="Request a password reset link (response never reveals whether the email exists)",
 )
-async def forgot_password(
+def forgot_password(
     req: ForgotPasswordRequest,
     request: Request,
     background: BackgroundTasks,
@@ -203,7 +203,7 @@ async def forgot_password(
     status_code=status.HTTP_200_OK,
     summary="Set a new password using a single-use reset token",
 )
-async def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     # Validate before consuming so a weak password does not burn the link.
     try:
         validate_password_complexity(req.new_password)
@@ -230,7 +230,7 @@ async def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db
     status_code=status.HTTP_200_OK,
     summary="Confirm an email address using a single-use verification token",
 )
-async def verify_email(req: VerifyEmailRequest, db: Session = Depends(get_db)):
+def verify_email(req: VerifyEmailRequest, db: Session = Depends(get_db)):
     user = auth_token_service.consume(db, req.token, PURPOSE_VERIFY)
     if user is None:
         raise HTTPException(
@@ -256,7 +256,7 @@ async def verify_email(req: VerifyEmailRequest, db: Session = Depends(get_db)):
     status_code=status.HTTP_200_OK,
     summary="Attach or change the account email; sends a verification link",
 )
-async def set_email(
+def set_email(
     req: SetEmailRequest,
     request: Request,
     background: BackgroundTasks,
@@ -285,7 +285,7 @@ async def set_email(
     status_code=status.HTTP_200_OK,
     summary="Change password for current user and revoke old sessions",
 )
-async def change_password(
+def change_password(
     req: ChangePasswordRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -313,7 +313,7 @@ async def change_password(
     status_code=status.HTTP_200_OK,
     summary="Get current authenticated user profile",
 )
-async def get_me(user: User = Depends(get_current_user)):
+def get_me(user: User = Depends(get_current_user)):
     return _user_response(user)
 
 
@@ -322,6 +322,6 @@ async def get_me(user: User = Depends(get_current_user)):
     status_code=status.HTTP_200_OK,
     summary="Client session logout and server-side token revocation",
 )
-async def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     user_service.increment_token_version(db, user)
     return {"status": "ok", "message": "Logged out successfully and session revoked"}

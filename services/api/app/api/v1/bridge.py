@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_active_connection, get_current_user
+from app.core.deps import get_active_connection
 from app.core.rate_limit import consume
 from app.core.tokens import hash_token
 from app.db.base import get_db
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/bridge", tags=["Bridge"])
     status_code=status.HTTP_200_OK,
     summary="Receive periodic telemetry from the read-only MT5 monitor",
 )
-async def receive_heartbeat(
+def receive_heartbeat(
     payload: HeartbeatPayload,
     response: Response,
     x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
@@ -64,7 +64,7 @@ async def receive_heartbeat(
     response_model=BridgeStatusResponse,
     summary="Current bridge connectivity and latest metrics for the active connection",
 )
-async def get_bridge_status(
+def get_bridge_status(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
@@ -72,17 +72,17 @@ async def get_bridge_status(
 
 
 @router.get("/positions", response_model=List[PositionItem])
-async def get_positions(connection: Mt5Connection = Depends(get_active_connection)):
+def get_positions(connection: Mt5Connection = Depends(get_active_connection)):
     return bridge_service.get_positions(connection)
 
 
 @router.get("/market", response_model=List[MarketQuoteItem])
-async def get_market_quotes(connection: Mt5Connection = Depends(get_active_connection)):
+def get_market_quotes(connection: Mt5Connection = Depends(get_active_connection)):
     return bridge_service.get_market_quotes(connection)
 
 
 @router.get("/history", response_model=TradeHistoryResponse)
-async def get_trade_history(
+def get_trade_history(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
@@ -90,7 +90,7 @@ async def get_trade_history(
 
 
 @router.post("/history/reset")
-async def reset_trade_history(
+def reset_trade_history(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
@@ -98,7 +98,7 @@ async def reset_trade_history(
 
 
 @router.get("/equity-curve")
-async def get_equity_curve(
+def get_equity_curve(
     range: str = "1M",
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
@@ -107,7 +107,7 @@ async def get_equity_curve(
 
 
 @router.get("/initial-deposit", response_model=InitialDepositResponse)
-async def get_initial_deposit(
+def get_initial_deposit(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
@@ -115,7 +115,7 @@ async def get_initial_deposit(
 
 
 @router.post("/initial-deposit", response_model=InitialDepositResponse)
-async def set_initial_deposit(
+def set_initial_deposit(
     req: InitialDepositRequest,
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
@@ -124,7 +124,7 @@ async def set_initial_deposit(
 
 
 @router.get("/risk", response_model=RiskWatchdogStatusResponse, tags=["Risk Watchdog"])
-async def get_risk_watchdog(
+def get_risk_watchdog(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):

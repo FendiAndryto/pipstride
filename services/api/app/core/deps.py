@@ -21,7 +21,7 @@ def _unauthorized(detail: str) -> HTTPException:
     )
 
 
-async def get_current_user(
+def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     db: Session = Depends(get_db),
 ) -> User:
@@ -47,7 +47,7 @@ async def get_current_user(
     return user
 
 
-async def get_active_connection(
+def get_active_connection(
     x_connection_id: Optional[str] = Header(None, alias="X-Connection-Id"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

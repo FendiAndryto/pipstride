@@ -48,7 +48,7 @@ def _preset(connection, token: str, request: Request) -> dict:
     response_model=List[ConnectionResponse],
     summary="List MT5 connections owned by the current user",
 )
-async def list_connections(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_connections(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return [_project(c) for c in connection_service.list_connections(db, user.id)]
 
 
@@ -58,7 +58,7 @@ async def list_connections(user: User = Depends(get_current_user), db: Session =
     status_code=status.HTTP_201_CREATED,
     summary="Create a new MT5 connection; returns its token and preset once",
 )
-async def create_connection(
+def create_connection(
     request: Request,
     label: str = "Akun MT5",
     user: User = Depends(get_current_user),
@@ -81,7 +81,7 @@ async def create_connection(
     response_model=ConnectionCreatedResponse,
     summary="Rotate a connection token, clear its binding, and rebuild the preset",
 )
-async def rotate_token(
+def rotate_token(
     connection_id: str,
     request: Request,
     user: User = Depends(get_current_user),
@@ -104,7 +104,7 @@ async def rotate_token(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke a connection; its token stops working immediately",
 )
-async def revoke_connection(
+def revoke_connection(
     connection_id: str,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

@@ -115,7 +115,7 @@ async def health():
 
 
 @app.get("/ready", tags=["Root"])
-async def ready():
+def ready():
     """Readiness probe verifying database and cache connectivity."""
     status_code = status.HTTP_200_OK
     report = {
