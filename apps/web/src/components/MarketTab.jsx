@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, BarChart2, Eye, Compass, RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -23,51 +23,64 @@ const getSymbolName = (sym) => {
   return sym;
 };
 
+const FALLBACK_QUOTE = {
+  symbol: 'XAUUSD',
+  bid: 0,
+  ask: 0,
+  spread: 0,
+  digits: 2,
+  daily_change_pct: 0,
+  high: 0,
+  low: 0
+};
+
 export default function MarketTab({ bridgeStatus, hasConnection = false }) {
-  const [quotes, setQuotes] = useState([]);
+  const [fetchedQuotes, setFetchedQuotes] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState('XAUUSD');
   const [activeTf, setActiveTf] = useState('M15');
   const [loading, setLoading] = useState(false);
 
-  const fetchQuotes = async () => {
+  const quotes = (bridgeStatus?.market_quotes && bridgeStatus.market_quotes.length > 0)
+    ? bridgeStatus.market_quotes
+    : fetchedQuotes;
+
+  const fetchQuotes = useCallback(async () => {
     if (!hasConnection) return;
     try {
       setLoading(true);
       const data = await api.getMarketQuotes();
       if (Array.isArray(data) && data.length > 0) {
-        setQuotes(data);
+        setFetchedQuotes(data);
       }
     } catch {
       // Ignore transient error when bridge offline or conflict
     } finally {
       setLoading(false);
     }
-  };
+  }, [hasConnection]);
 
   useEffect(() => {
-    // If bridgeStatus already has quotes from telemetry, use them
-    if (bridgeStatus?.market_quotes && bridgeStatus.market_quotes.length > 0) {
-      setQuotes(bridgeStatus.market_quotes);
-    } else if (hasConnection && bridgeStatus?.is_connected) {
-      fetchQuotes();
+    if (!bridgeStatus?.market_quotes?.length && hasConnection && bridgeStatus?.is_connected) {
+      let active = true;
+      api.getMarketQuotes().then((data) => {
+        if (active && Array.isArray(data) && data.length > 0) {
+          setFetchedQuotes(data);
+        }
+      }).catch(() => {});
+      return () => {
+        active = false;
+      };
     }
-  }, [bridgeStatus, hasConnection]);
+  }, [bridgeStatus?.market_quotes?.length, bridgeStatus?.is_connected, hasConnection]);
 
-  const activeQuote = quotes.find((q) => q.symbol === selectedSymbol) || quotes[0] || {
-    symbol: selectedSymbol,
-    bid: 0,
-    ask: 0,
-    spread: 0,
-    digits: 2,
-    daily_change_pct: 0,
-    high: 0,
-    low: 0
-  };
+  const activeQuote = useMemo(() => {
+    return quotes.find((q) => q.symbol === selectedSymbol) || quotes[0] || { ...FALLBACK_QUOTE, symbol: selectedSymbol };
+  }, [quotes, selectedSymbol]);
 
   const isPositive = activeQuote.daily_change_pct >= 0;
 
   // Calculate dynamic timeframe metrics based on selected activeTf (M5, M15, H1, H4)
-  const tfMetrics = React.useMemo(() => {
+  const tfMetrics = useMemo(() => {
     const rawCandlesM5 = bridgeStatus?.metrics?.candles_m5 || [];
     const rawCandlesM15 = bridgeStatus?.metrics?.candles || [];
     const chartSym = (bridgeStatus?.metrics?.chart_symbol || '').toUpperCase().replace(/M$/, '');

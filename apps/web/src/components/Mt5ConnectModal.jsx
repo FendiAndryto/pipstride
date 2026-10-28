@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   CheckCircle2,
@@ -42,15 +42,14 @@ export default function Mt5ConnectModal({
   const [error, setError] = useState('');
   const [newLabel, setNewLabel] = useState('');
 
-  useEffect(() => {
-    if (!isOpen) {
-      setRevealedToken('');
-      setPresetFile(null);
-      setError('');
-      setNewLabel('');
-      setCopiedToken(false);
-    }
-  }, [isOpen]);
+  const handleClose = () => {
+    setRevealedToken('');
+    setPresetFile(null);
+    setError('');
+    setNewLabel('');
+    setCopiedToken(false);
+    if (onClose) onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -142,7 +141,7 @@ export default function Mt5ConnectModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="btn-modal-close"
             id="close-mt5-connect-modal-btn"
             title={t('modal_close', 'Tutup Modal')}
@@ -591,7 +590,7 @@ export default function Mt5ConnectModal({
           <button
             type="button"
             className="btn"
-            onClick={onClose}
+            onClick={handleClose}
             id="close-mt5-modal-action-btn"
           >
             <span>Tutup</span>

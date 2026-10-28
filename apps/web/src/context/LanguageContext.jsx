@@ -51,6 +51,7 @@ export function LanguageProvider({ children }) {
   );
 }
 
+// oxlint-disable-next-line react/only-export-components
 export function useLanguage() {
   return useContext(LanguageContext);
 }

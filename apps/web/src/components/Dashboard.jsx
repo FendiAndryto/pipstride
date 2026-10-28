@@ -13,6 +13,18 @@ import {
   setActiveConnectionId as persistActiveConnectionId
 } from '../services/api';
 
+function applyConnections(list, setConnections, setActiveConnectionId) {
+  const safeList = Array.isArray(list) ? list : [];
+  setConnections(safeList);
+  const stored = getActiveConnectionId();
+  const stillValid = stored && safeList.some((c) => c.id === stored);
+  if (!stillValid) {
+    const fallback = safeList[0]?.id || null;
+    persistActiveConnectionId(fallback);
+    setActiveConnectionId(fallback);
+  }
+}
+
 export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const [activeTab, setActiveTab] = useState('home');
   const [bridgeStatus, setBridgeStatus] = useState(null);
@@ -31,16 +43,8 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const loadConnections = useCallback(async () => {
     try {
       const list = await api.getConnections();
-      setConnections(list);
+      applyConnections(list, setConnections, setActiveConnectionId);
       setConnectionsLoaded(true);
-
-      const stored = getActiveConnectionId();
-      const stillValid = stored && list.some((c) => c.id === stored);
-      if (!stillValid) {
-        const fallback = list[0]?.id || null;
-        persistActiveConnectionId(fallback);
-        setActiveConnectionId(fallback);
-      }
       return list;
     } catch {
       setConnectionsLoaded(true);
@@ -73,8 +77,20 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   }, [activeConnectionId]);
 
   useEffect(() => {
-    loadConnections();
-  }, [loadConnections]);
+    let active = true;
+    api.getConnections()
+      .then((list) => {
+        if (!active) return;
+        applyConnections(list, setConnections, setActiveConnectionId);
+        setConnectionsLoaded(true);
+      })
+      .catch(() => {
+        if (active) setConnectionsLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

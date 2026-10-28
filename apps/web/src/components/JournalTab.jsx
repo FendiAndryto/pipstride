@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   BookOpen,
   Calendar,
@@ -43,7 +43,7 @@ export default function JournalTab({
   hasConnection = false
 }) {
   const [historyData, setHistoryData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
@@ -56,7 +56,9 @@ export default function JournalTab({
     return `${y}-${m}`;
   });
   const [stats, setStats] = useState(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
 
   const activeAccountNumber = bridgeStatus?.metrics?.account_number || null;
   const activeServer = bridgeStatus?.metrics?.server || null;
@@ -73,7 +75,10 @@ export default function JournalTab({
     ? bridgeStatus.all_time_pnl_percent
     : (initialDeposit > 0 && allTimePnl !== null ? (allTimePnl / initialDeposit) * 100 : null);
 
-  const fetchHistory = async (isManual = false) => {
+  const isStatsLoading = statsLoading || (period === 'MONTH' ? isHistoryLoading : (!stats && !statsError && (hasConnection || isConnected)));
+  const isHistoryLoading = loading || (!historyData && !historyError && (hasConnection || isConnected));
+
+  const fetchHistory = useCallback(async (isManual = false) => {
     if (!hasConnection && !isConnected) {
       setLoading(false);
       if (isManual) setRefreshing(false);
@@ -85,84 +90,117 @@ export default function JournalTab({
       // Ensure incoming history belongs to currently connected MT5 account
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setHistoryData(data);
+        setHistoryError(false);
       }
     } catch {
-      // Ignore transient error
+      setHistoryError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [hasConnection, isConnected, activeAccountNumber]);
 
   const statsSource = filter === 'EA' ? 'ea' : filter === 'Manual' ? 'manual' : 'all';
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async (isManual = false) => {
     if (period === 'MONTH' || (!hasConnection && !isConnected)) {
       setStatsLoading(false);
       return;
     }
+    if (isManual) setStatsLoading(true);
     try {
       const data = await api.getJournalStats(period, statsSource);
       // Same guard as history: never show stats from another MT5 account.
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setStats(data);
+        setStatsError(false);
       }
     } catch {
-      // Ignore transient error
+      setStatsError(true);
     } finally {
       setStatsLoading(false);
     }
-  };
+  }, [period, statsSource, hasConnection, isConnected, activeAccountNumber]);
 
   // 100% Automatic Sync: Immediately wipe previous account history when switching MT5 account
   useEffect(() => {
     if (activeAccountNumber && prevAccountRef.current && prevAccountRef.current !== activeAccountNumber) {
       setHistoryData(null);
       setStats(null);
-      setLoading(true);
-      setStatsLoading(true);
-      fetchHistory();
-      fetchStats();
+      setStatsError(false);
+      setHistoryError(false);
     }
     prevAccountRef.current = activeAccountNumber;
   }, [activeAccountNumber]);
 
-  // Stats follow the selected period, source filter, and incoming trade count.
+  // Reactive fetch stats when period or source filter changes, trades update, or tab becomes active
   useEffect(() => {
     if (activeTab === 'journal' || !activeTab) {
-      setStatsLoading(true);
-      fetchStats();
+      if (period !== 'MONTH' && (hasConnection || isConnected)) {
+        let active = true;
+        api.getJournalStats(period, statsSource)
+          .then((data) => {
+            if (active && (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber)) {
+              setStats(data);
+              setStatsError(false);
+            }
+          })
+          .catch(() => {
+            if (active) setStatsError(true);
+          })
+          .finally(() => {
+            if (active) setStatsLoading(false);
+          });
+        return () => {
+          active = false;
+        };
+      }
     }
-  }, [activeTab, period, statsSource, closedTradesCount, activeAccountNumber]);
+  }, [activeTab, period, statsSource, closedTradesCount, activeAccountNumber, hasConnection, isConnected]);
 
-  // Journal aggregates are heavier than the trade list, so refresh them slower.
-  useEffect(() => {
-    if (activeTab !== 'journal') return;
-    const timer = setInterval(() => {
-      fetchStats();
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [activeTab, period, statsSource, activeAccountNumber]);
-
-  // Immediate reactive fetch when Journal tab becomes active or closed trades change
+  // Reactive fetch trade history when tab becomes active, account changes, or closed trade count updates
   useEffect(() => {
     if (activeTab === 'journal' || !activeTab) {
-      fetchHistory();
+      if (hasConnection || isConnected) {
+        let active = true;
+        api.getTradeHistory()
+          .then((data) => {
+            if (active && (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber)) {
+              setHistoryData(data);
+              setHistoryError(false);
+            }
+          })
+          .catch(() => {
+            if (active) setHistoryError(true);
+          })
+          .finally(() => {
+            if (active) setLoading(false);
+          });
+        return () => {
+          active = false;
+        };
+      }
     }
-  }, [activeTab, closedTradesCount]);
+  }, [activeTab, closedTradesCount, activeAccountNumber, hasConnection, isConnected]);
 
-  // Periodic real-time background sync while actively viewing Journal tab
+  // Synchronized background sync while actively viewing Journal tab:
+  // History every 4s, heavier stats aggregates every 16s (every 4th tick)
   useEffect(() => {
     if (activeTab !== 'journal') return;
+    let ticks = 0;
     const timer = setInterval(() => {
-      fetchHistory();
+      ticks += 1;
+      void fetchHistory();
+      if (ticks % 4 === 0) {
+        void fetchStats();
+      }
     }, 4000);
     return () => clearInterval(timer);
-  }, [activeTab, activeAccountNumber]);
+  }, [activeTab, fetchHistory, fetchStats]);
 
   const handleRefresh = () => {
     fetchHistory(true);
-    fetchStats();
+    fetchStats(true);
   };
 
   const { selectedYear, selectedMonthIndex, daysInMonth, monthName } = useMemo(() => {
@@ -625,7 +663,7 @@ export default function JournalTab({
         </div>
       </div>
 
-      <JournalAnalytics stats={activeStats} loading={statsLoading} periodLabel={periodLabel} />
+      <JournalAnalytics stats={activeStats} loading={isStatsLoading} periodLabel={periodLabel} />
 
 
       {/* Filter Tabs */}
@@ -744,7 +782,7 @@ export default function JournalTab({
                   <td colSpan={8} style={{ padding: '36px 8px', textAlign: 'center', color: 'var(--muted)' }}>
                     <Layers size={28} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
                     <div style={{ fontWeight: 600, fontSize: '13px', color: '#c9d8dc' }}>
-                      {loading
+                      {isHistoryLoading
                         ? 'Memuat riwayat transaksi dari MT5...'
                         : activeAccountNumber
                         ? `Belum Ada Transaksi Tertutup di Akun #${activeAccountNumber}`
