@@ -14,8 +14,6 @@ import {
 } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 
-const BACKGROUND_POLL_INTERVAL = 15000;
-
 function applyConnections(list, setConnections, setActiveConnectionId) {
   const safeList = Array.isArray(list) ? list : [];
   setConnections(safeList);
@@ -116,20 +114,21 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
       timerRef.current = setInterval(runPoll, delay);
     };
 
-    // Foreground polls at pollInterval; backgrounded tabs back off to 15s.
+    // Foreground polls at pollInterval. While the document is hidden the interval
+    // is cleared entirely: MT5 telemetry is time-sensitive, so background traffic
+    // buys nothing and costs battery and mobile data. Becoming visible polls at once.
     const handleVisibility = () => {
       if (!isMounted) return;
       if (document.hidden) {
-        startInterval(BACKGROUND_POLL_INTERVAL);
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = null;
       } else {
         runPoll();
         startInterval(pollInterval);
       }
     };
 
-    if (document.hidden) {
-      startInterval(BACKGROUND_POLL_INTERVAL);
-    } else {
+    if (!document.hidden) {
       runPoll();
       startInterval(pollInterval);
     }

@@ -51,18 +51,18 @@ Reference: `docs/adr/0006-mobile-distribution-pwa-first.md`.
 - Therefore: add `worker-src 'self';` and `manifest-src 'self';` **only** as explicit hardening (removes reliance on fallback, survives a future tightening of `default-src`). Do not treat a missing `worker-src` as the cause if registration fails — diagnose elsewhere.
 
 ### 7. Poll visibility guard (`apps/web/src/components/Dashboard.jsx`)
-- Inside `runPoll` (currently `if (!isMounted) return; await fetchStatus();`), add:
-  - `if (document.hidden) return;` — skip the fetch when the tab is not visible.
-- In the interval effect, add adaptive backoff:
-  - Foreground: use `pollInterval` (default 1000ms) as today.
-  - Background: recompute interval to a backoff value (start at 15s; a constant 15–30s is acceptable, no exponential needed).
-  - On `visibilitychange` → visible: clear the backoff, fire one immediate `runPoll`, and resume the foreground interval.
+- Inside `runPoll`, add `if (document.hidden) return;` after the `isMounted` check. This is the guarantee: a queued interval callback that lands after the tab is hidden must not issue a request.
+- While the document is hidden, **no polling at all**: the interval is cleared on `visibilitychange` → hidden. There is deliberately no background timer. MT5 telemetry is time-sensitive, so a cached or stale figure presented as current would be worse than a gap, and a hidden mobile tab should not spend battery or data.
+- On `visibilitychange` → visible: fire one immediate `runPoll`, then restart the foreground interval at `pollInterval`. This closes the staleness gap in one round-trip without any background traffic.
 - Guard against overlap: do not start a new `runPoll` if a previous one is still in flight. Track an `inFlightRef`.
 - Apply the same `document.hidden` guard and overlap protection to the HomeTab and JournalTab polling intervals.
+- An earlier revision backed off to a 15s background interval. It was removed: with the `document.hidden` guard in place that interval could never produce a request, so it was unreachable code that contradicted the acceptance criterion below.
 
 ### 8. Idle logout (token exposure bound)
-- Add an idle timer that clears the JWT and redirects to login after 15 minutes of no user interaction and no successful poll response.
-- Reset the timer on: any pointer/keyboard event, any successful API response (poll counts).
+- Add an idle timer that clears the JWT and redirects to login after 15 minutes of no **user interaction**.
+- Reset the timer on: pointerdown, keydown, touchstart, wheel, and on the document becoming visible.
+- Do **not** reset on successful poll responses. A reset on every response would keep the timer alive for as long as the dashboard polls (every second), so the 15-minute limit could never fire — that contradicts the acceptance criterion below. The hook still returns a `reset()` callback for callers that want a narrower trigger.
+- Do **not** clear the active MT5 connection id on idle; it must survive re-login.
 - Do **not** move JWT storage from `localStorage` to `sessionStorage`. `sessionStorage` does not persist across PWA launches, which would force a login on every open — worse than the status quo.
 - Implementation lives in a small hook (e.g. `apps/web/src/hooks/useIdleLogout.js`) consumed by `App.jsx`.
 
@@ -73,7 +73,7 @@ Reference: `docs/adr/0006-mobile-distribution-pwa-first.md`.
 - Lighthouse "Installable" check passes for the production build.
 - Installing the PWA on Android Chrome produces a standalone app with the correct icon, theme color, and splash.
 - Installing via iOS Safari "Add to Home Screen" produces a standalone app with the apple-touch-icon and no Safari chrome.
-- After installing and backgrounding for >30 seconds, reopening does not show data older than the last foreground poll plus one backoff window (no silent staleness).
+- After installing and backgrounding for >30 seconds, reopening does not show data older than the last foreground poll plus one round-trip (an immediate poll fires on becoming visible; there is no background traffic to go stale).
 - `document.hidden === true` produces zero `/api/v1/bridge/*` requests from the dashboard poll.
 - In-flight overlap protection: no two concurrent `runPoll` calls for the same data source.
 - `sw.js` and `manifest.webmanifest` are served with `Cache-Control: no-cache` (verifiable via `curl -I`).
@@ -87,7 +87,7 @@ Reference: `docs/adr/0006-mobile-distribution-pwa-first.md`.
 - `apps/web/index.html` — manifest link, apple-touch-icon, apple-mobile-web-app meta tags.
 - `apps/web/nginx.conf` — `location = /sw.js { add_header Cache-Control "no-cache"; }` before the regex static-asset block; optional `location = /manifest.webmanifest`; optional explicit `worker-src 'self'; manifest-src 'self';` in CSP.
 - `apps/web/src/main.jsx` — service worker registration (prod only).
-- `apps/web/src/components/Dashboard.jsx` — visibility guard, adaptive backoff, in-flight guard.
+- `apps/web/src/components/Dashboard.jsx` — visibility guard, interval cleared while hidden, in-flight guard.
 - `apps/web/src/components/HomeTab.jsx` — same visibility/in-flight guards.
 - `apps/web/src/components/JournalTab.jsx` — same visibility/in-flight guards.
 - `apps/web/src/hooks/useIdleLogout.js` — new.
