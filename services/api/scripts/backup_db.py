@@ -317,7 +317,8 @@ def restore_database(
         if proc.stdin is None:
             raise RuntimeError("Failed to open psql stdin")
         shutil.copyfileobj(gz_in, proc.stdin)
-        proc.stdin.close()
+        # Leave stdin open: communicate() flushes and closes it itself, and doing
+        # that here makes communicate() raise ValueError on a closed file.
 
     _, stderr = proc.communicate()
     if proc.returncode != 0:
