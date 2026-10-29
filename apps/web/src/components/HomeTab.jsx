@@ -4,11 +4,11 @@ import {
   Activity,
   TrendingUp,
   TrendingDown,
-  Layers,
-  RefreshCw
+  Layers
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import RichText from './RichText';
 
 const formatCurrency = (val, currency = 'USD') => {
   if (val === null || val === undefined || isNaN(val)) return '$0.00';
@@ -24,16 +24,20 @@ export default function HomeTab({
   bridgeStatus,
   riskStatus,
   hasConnection = false,
-  onNavigateJournal,
-  onNavigateAI,
   onNavigateMarket,
-  onOpenConnect,
-  onRefresh
+  onOpenConnect
 }) {
   const { t } = useLanguage();
   const [chartRange, setChartRange] = useState('Month');
   const [equityCurveData, setEquityCurveData] = useState(null);
   const [historyData, setHistoryData] = useState(null);
+
+  // State value stays the API contract ('Day'|'Week'|'Month'); only the label is translated.
+  const rangeLabel = chartRange === 'Day'
+    ? t('home_range_day')
+    : chartRange === 'Week'
+      ? t('home_range_week')
+      : t('home_range_month');
 
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
@@ -118,44 +122,12 @@ export default function HomeTab({
 
   return (
     <div className="home-tab-container animate-fade-in">
-      {/* Heading & Real Account Pill */}
+      {/* Heading */}
       <div className="heading">
         <div>
-          <div className="eyebrow">MT5 LIVE COMMAND CENTER</div>
-          <h1>Good day, Trader.</h1>
-          <div className="sub">{t('home_banner_sub', 'Read-only telemetry and performance metrics from MetaTrader 5.')}</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              border: '1px solid var(--line)',
-              background: '#0d171d',
-              color: '#d4e0e1',
-              padding: '7px 12px',
-              borderRadius: '10px',
-              fontSize: '11px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-            id="home-account-badge"
-          >
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: isConnected ? '#45e0ad' : '#ff5b6b' }} />
-            <b style={{ color: '#fff' }}>{metrics.account_number ? `#${metrics.account_number}` : 'MT5 Standby'}</b>
-            <span style={{ color: 'var(--muted)', fontSize: '10px' }}>({metrics.server || 'Exness'})</span>
-          </div>
-          {onRefresh && (
-            <button
-              type="button"
-              className="btn alt"
-              onClick={onRefresh}
-              title="Refresh Telemetry"
-              style={{ padding: '7px 10px', fontSize: '11px' }}
-              id="home-refresh-btn"
-            >
-              <RefreshCw size={13} />
-            </button>
-          )}
+          <div className="eyebrow">{t('home_eyebrow')}</div>
+          <h1>{t('home_greeting')}</h1>
+          <div className="sub">{t('home_banner_sub')}</div>
         </div>
       </div>
 
@@ -175,57 +147,25 @@ export default function HomeTab({
           }}
         >
           <div>
-            <div style={{ fontWeight: 700, fontSize: '13px' }}>Belum ada akun MT5 terhubung</div>
+            <div style={{ fontWeight: 700, fontSize: '13px' }}>{t('home_no_account_title')}</div>
             <div className="sub" style={{ fontSize: '11.5px' }}>
-              Buat koneksi, salin token sekali, lalu tempelkan ke <code>InpBridgeToken</code> di EA.
+              <RichText text={t('home_no_account_desc')} />
             </div>
           </div>
           {onOpenConnect && (
             <button type="button" className="btn" onClick={onOpenConnect} id="home-connect-mt5-btn">
-              Hubungkan MT5
+              {t('home_connect_mt5')}
             </button>
           )}
         </div>
       )}
-
-      {/* Hero Edge Banner */}
-      <div className="banner" style={{ marginBottom: '16px' }}>
-        <div className="eyebrow">YOUR EDGE, IN ONE PLACE</div>
-        <h2>Trade smarter. Review deeper.</h2>
-        <p>
-          Pantau posisi aktif, pahami performa akun secara objektif, dan tinjau drawdown
-          dengan pemantauan risiko yang sepenuhnya read-only.
-        </p>
-        <div className="btns" style={{ marginTop: '14px' }}>
-          {onNavigateJournal && (
-            <button
-              type="button"
-              className="btn alt"
-              onClick={onNavigateJournal}
-              id="home-banner-journal-btn"
-            >
-              <span>Buka Jurnal</span>
-            </button>
-          )}
-          {onNavigateAI && (
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={onNavigateAI}
-              id="home-banner-ai-btn"
-            >
-              <span>Tanya AI Assistant ↗</span>
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* KPIs Grid */}
       <div className="grid kpis">
         {/* Total Balance Card with Initial Deposit & Settled P/L */}
         <div className="card" id="home-kpi-balance">
           <div className="cardhead">
-            <span className="label">Total Balance</span>
+            <span className="label">{t('home_kpi_balance')}</span>
             <span className="icon-box">
               <DollarSign size={16} />
             </span>
@@ -233,16 +173,16 @@ export default function HomeTab({
           <div className="metric">{formatCurrency(balance, currency)}</div>
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
             <div style={{ color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Saldo Awal (Benchmark):</span>
+              <span>{t('home_initial_balance')}</span>
               <span style={{ fontWeight: 600, color: '#e6f1f2' }}>
                 {formatCurrency(initialDeposit, currency)}
                 <small style={{ marginLeft: '4px', fontSize: '9px', color: isDepositOverridden ? 'var(--amber)' : 'var(--muted)' }}>
-                  {isDepositOverridden ? '(Manual)' : '(MT5)'}
+                  {isDepositOverridden ? t('home_manual') : t('home_from_mt5')}
                 </small>
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-              <span style={{ color: 'var(--muted)' }}>All-Time P/L:</span>
+              <span style={{ color: 'var(--muted)' }}>{t('home_all_time_pl')}</span>
               <span style={{ color: settledPnl >= 0 ? 'var(--g)' : 'var(--red)' }}>
                 {settledPnl >= 0 ? '+' : ''}{formatCurrency(settledPnl, currency)} ({settledPnlPercent >= 0 ? '+' : ''}{settledPnlPercent.toFixed(1)}%)
               </span>
@@ -253,7 +193,7 @@ export default function HomeTab({
         {/* Account Equity Card with Real-time P/L vs Deposit & Floating Risk */}
         <div className="card" id="home-kpi-equity">
           <div className="cardhead">
-            <span className="label">Account Equity</span>
+            <span className="label">{t('home_kpi_equity')}</span>
             <span className="icon-box">
               <Activity size={16} />
             </span>
@@ -261,13 +201,13 @@ export default function HomeTab({
           <div className="metric">{formatCurrency(equity, currency)}</div>
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-              <span style={{ color: 'var(--muted)' }}>Riil vs Saldo Awal:</span>
+              <span style={{ color: 'var(--muted)' }}>{t('home_realized_vs_initial')}</span>
               <span style={{ color: allTimePnl >= 0 ? 'var(--g)' : 'var(--red)' }}>
                 {allTimePnl >= 0 ? '+' : ''}{formatCurrency(allTimePnl, currency)} ({allTimePnlPercent >= 0 ? '+' : ''}{allTimePnlPercent.toFixed(1)}%)
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-              <span style={{ color: 'var(--muted)' }}>Floating Risk:</span>
+              <span style={{ color: 'var(--muted)' }}>{t('home_floating_risk')}</span>
               <span style={{ color: floatingPnl >= 0 ? 'var(--g)' : 'var(--red)', fontWeight: 600 }}>
                 {floatingPnl >= 0 ? '+' : ''}{formatCurrency(floatingPnl, currency)}
               </span>
@@ -278,7 +218,7 @@ export default function HomeTab({
         {/* Floating P/L */}
         <div className="card" id="home-kpi-today-pnl">
           <div className="cardhead">
-            <span className="label">Floating P/L</span>
+            <span className="label">{t('home_kpi_floating_pnl')}</span>
             <span className="icon-box">
               {floatingPnl >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
             </span>
@@ -287,24 +227,24 @@ export default function HomeTab({
             {floatingPnl >= 0 ? '+' : ''}{formatCurrency(floatingPnl, currency)}
           </div>
           <div className="delta">
-            {openPositionsCount > 0 ? `${openPositionsCount} active position(s)` : 'Zero active risk'}
+            {openPositionsCount > 0 ? t('home_active_position_count', { count: openPositionsCount }) : t('home_zero_risk')}
           </div>
         </div>
 
         {/* Open Positions */}
         <div className="card" id="home-kpi-positions">
           <div className="cardhead">
-            <span className="label">Active Positions</span>
+            <span className="label">{t('home_kpi_positions')}</span>
             <span className="icon-box">
               <Layers size={16} />
             </span>
           </div>
           <div className="metric">
             {openPositionsCount.toString().padStart(2, '0')}{' '}
-            <span className="sub" style={{ fontSize: '12px' }}>posisi</span>
+            <span className="sub" style={{ fontSize: '12px' }}>{t('home_position_unit')}</span>
           </div>
           <div className="delta" style={{ color: isConnected ? 'var(--g)' : 'var(--red)' }}>
-            {isConnected ? 'Bridge Synchronized' : 'Bridge Offline'}
+            {isConnected ? t('home_bridge_synced') : t('home_bridge_offline')}
           </div>
         </div>
       </div>
@@ -315,8 +255,8 @@ export default function HomeTab({
         <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div className="cardhead">
             <div>
-              <h3>Account Performance</h3>
-              <div className="tiny">Live MT5 Performance Curve ({chartRange})</div>
+              <h3>{t('home_performance_title')}</h3>
+              <div className="tiny">{t('home_performance_sub', { range: rangeLabel })}</div>
             </div>
             <div style={{ display: 'flex', gap: '3px', background: '#0a1419', padding: '3px', borderRadius: '8px', border: '1px solid var(--line)' }}>
               {['Day', 'Week', 'Month'].map((rng) => (
@@ -336,7 +276,7 @@ export default function HomeTab({
                   onClick={() => setChartRange(rng)}
                   id={`chart-filter-${rng.toLowerCase()}-btn`}
                 >
-                  {rng}
+                  {t(`home_range_${rng.toLowerCase()}`)}
                 </button>
               ))}
             </div>
@@ -398,10 +338,10 @@ export default function HomeTab({
                 </svg>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted)', fontSize: '9.5px', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
-                  <span>Awal {chartRange}: {formatCurrency(activeCurve?.starting_equity ?? balance, currency)}</span>
-                  <span>Equity Riil: {formatCurrency(equity, currency)}</span>
+                  <span>{t('home_curve_start', { range: rangeLabel })} {formatCurrency(activeCurve?.starting_equity ?? balance, currency)}</span>
+                  <span>{t('home_equity_real')} {formatCurrency(equity, currency)}</span>
                   <span style={{ fontWeight: 700, color: (activeCurve?.all_time_pnl ?? allTimePnl) >= 0 ? 'var(--g)' : 'var(--red)' }}>
-                    Net: {(activeCurve?.all_time_pnl ?? allTimePnl) >= 0 ? '+' : ''}{formatCurrency(activeCurve?.all_time_pnl ?? allTimePnl, currency)}
+                    {t('home_net')} {(activeCurve?.all_time_pnl ?? allTimePnl) >= 0 ? '+' : ''}{formatCurrency(activeCurve?.all_time_pnl ?? allTimePnl, currency)}
                   </span>
                 </div>
               </>
@@ -415,12 +355,12 @@ export default function HomeTab({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Layers size={16} style={{ color: 'var(--g)' }} />
               <div>
-                <h3 style={{ margin: 0, fontSize: '13px' }}>Active Trades</h3>
-                <div className="tiny">{positions.length} running on MT5</div>
+                <h3 style={{ margin: 0, fontSize: '13px' }}>{t('home_active_trades')}</h3>
+                <div className="tiny">{t('home_running_on_mt5', { count: positions.length })}</div>
               </div>
             </div>
             <span className="tag" style={{ fontSize: '9px', background: 'rgba(69, 224, 173, 0.1)', color: 'var(--g)' }}>
-              FULL-AUTO TELEMETRY
+              {t('home_full_auto')}
             </span>
           </div>
 
@@ -454,7 +394,7 @@ export default function HomeTab({
                         <div style={{ color: profit >= 0 ? 'var(--g)' : 'var(--red)', fontWeight: 800, fontSize: '12px' }}>
                           {profit >= 0 ? '+' : ''}{formatCurrency(profit, currency)}
                         </div>
-                        <small style={{ fontSize: '9px', color: 'var(--muted)' }}>Floating</small>
+                        <small style={{ fontSize: '9px', color: 'var(--muted)' }}>{t('home_floating')}</small>
                       </div>
                     </div>
                   </div>
@@ -462,8 +402,8 @@ export default function HomeTab({
               })
             ) : (
               <div style={{ padding: '36px 12px', textAlign: 'center', color: 'var(--muted)' }}>
-                <div style={{ fontSize: '12px', marginBottom: '8px' }}>Tidak ada posisi aktif yang sedang berjalan di terminal MT5.</div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Posisi yang Anda buka secara manual di MT5 akan muncul di sini secara otomatis.</div>
+                <div style={{ fontSize: '12px', marginBottom: '8px' }}>{t('home_no_positions_title')}</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{t('home_no_positions_desc')}</div>
               </div>
             )}
           </div>
@@ -475,8 +415,8 @@ export default function HomeTab({
         <div className="cardhead">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Activity size={16} style={{ color: 'var(--cyan)' }} />
-            <h3 style={{ margin: 0, fontSize: '13px' }}>Live Market Feed</h3>
-            <span className="tag blue" style={{ fontSize: '9px' }}>MT5 TELEMETRY</span>
+            <h3 style={{ margin: 0, fontSize: '13px' }}>{t('home_live_feed')}</h3>
+            <span className="tag blue" style={{ fontSize: '9px' }}>{t('home_mt5_telemetry')}</span>
           </div>
           {onNavigateMarket && (
             <button
@@ -486,7 +426,7 @@ export default function HomeTab({
               onClick={onNavigateMarket}
               id="home-open-market-btn"
             >
-              <span>Overview Semua Instrumen ({marketQuotes.length}) →</span>
+              <span>{t('home_overview_all', { count: marketQuotes.length })}</span>
             </button>
           )}
         </div>
@@ -505,7 +445,7 @@ export default function HomeTab({
                   <div className="coin" style={{ fontSize: '11px', width: '32px', height: '32px' }}>{icon}</div>
                   <div className="grow">
                     <div style={{ fontWeight: 700, fontSize: '12px' }}>{q.symbol}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--muted)' }}>Spread {q.spread} pts</div>
+                    <div style={{ fontSize: '10px', color: 'var(--muted)' }}>{t('home_spread_pts', { spread: q.spread })}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700, fontSize: '12px', fontFamily: 'monospace' }}>{priceStr}</div>
@@ -519,14 +459,14 @@ export default function HomeTab({
           </div>
         ) : (
           <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
-            {t('market_syncing', 'Sinkronisasi feed harga instrumen dari MT5...')}
+            {t('market_waiting_feed')}
           </div>
         )}
       </div>
 
       {/* Performance Snapshot */}
       <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        Performance Snapshot
+        {t('home_snapshot')}
       </div>
       {(() => {
         const isHistoryActive = Boolean(
@@ -543,11 +483,11 @@ export default function HomeTab({
                   ? `${activeHistory.win_rate.toFixed(1)}%`
                   : '0.0%'}
               </div>
-              <div className="label">Win Rate</div>
+              <div className="label">{t('home_win_rate')}</div>
               <div className="tiny">
                 {activeHistory && activeHistory.total_trades > 0
-                  ? `${activeHistory.total_trades} trades (${activeHistory.winning_trades}W / ${activeHistory.losing_trades}L)`
-                  : 'Belum ada trade'}
+                  ? t('home_trades_breakdown', { total: activeHistory.total_trades, wins: activeHistory.winning_trades, losses: activeHistory.losing_trades })
+                  : t('home_no_trades_yet')}
               </div>
             </div>
             <div className="card">
@@ -556,11 +496,11 @@ export default function HomeTab({
                   ? (activeHistory.profit_factor > 0 ? activeHistory.profit_factor.toFixed(2) : (activeHistory.gross_loss === 0 ? '∞' : '0.00'))
                   : '0.00'}
               </div>
-              <div className="label">Profit Factor</div>
+              <div className="label">{t('journal_profit_factor')}</div>
               <div className="tiny">
                 {activeHistory && activeHistory.total_trades > 0
-                  ? `Gross: +$${activeHistory.gross_profit?.toFixed(2) ?? '0.00'} / -$${activeHistory.gross_loss?.toFixed(2) ?? '0.00'}`
-                  : 'Gross PnL ratio'}
+                  ? `${t('home_gross')} +$${activeHistory.gross_profit?.toFixed(2) ?? '0.00'} / -$${activeHistory.gross_loss?.toFixed(2) ?? '0.00'}`
+                  : t('home_gross_ratio')}
               </div>
             </div>
             <div className="card">
@@ -574,9 +514,9 @@ export default function HomeTab({
                     <div className={`metric ${isNegative ? 'negative' : ''}`}>
                       {isNegative ? `−${ddPct.toFixed(2)}%` : '0.0%'}
                     </div>
-                    <div className="label">Daily Drawdown</div>
+                    <div className="label">{t('home_daily_dd')}</div>
                     <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
-                      Total drawdown harian akun: {ddPct.toFixed(2)}% (Monitoring Pasif)
+                      {t('home_daily_dd_desc', { pct: ddPct.toFixed(2) })}
                     </div>
                   </>
                 );

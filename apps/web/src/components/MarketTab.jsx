@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TrendingUp, BarChart2, Eye, Compass, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { TrendingUp, BarChart2, Compass } from 'lucide-react';
 import { api } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const getSymbolIcon = (sym) => {
   const s = sym.toUpperCase();
@@ -13,13 +14,13 @@ const getSymbolIcon = (sym) => {
   return s.slice(0, 2);
 };
 
-const getSymbolName = (sym) => {
+const getSymbolName = (sym, t) => {
   const s = sym.toUpperCase();
-  if (s === 'XAUUSD') return 'Gold / US Dollar';
-  if (s === 'EURUSD') return 'Euro / US Dollar';
-  if (s === 'GBPUSD') return 'Pound / US Dollar';
-  if (s === 'USDJPY') return 'US Dollar / Yen';
-  if (s === 'BTCUSD') return 'Bitcoin / US Dollar';
+  if (s === 'XAUUSD') return t('market_symbol_gold');
+  if (s === 'EURUSD') return t('market_symbol_euro');
+  if (s === 'GBPUSD') return t('market_symbol_pound');
+  if (s === 'USDJPY') return t('market_symbol_yen');
+  if (s === 'BTCUSD') return t('market_symbol_bitcoin');
   return sym;
 };
 
@@ -35,29 +36,14 @@ const FALLBACK_QUOTE = {
 };
 
 export default function MarketTab({ bridgeStatus, hasConnection = false }) {
+  const { t } = useLanguage();
   const [fetchedQuotes, setFetchedQuotes] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState('XAUUSD');
   const [activeTf, setActiveTf] = useState('M15');
-  const [loading, setLoading] = useState(false);
 
   const quotes = (bridgeStatus?.market_quotes && bridgeStatus.market_quotes.length > 0)
     ? bridgeStatus.market_quotes
     : fetchedQuotes;
-
-  const fetchQuotes = useCallback(async () => {
-    if (!hasConnection) return;
-    try {
-      setLoading(true);
-      const data = await api.getMarketQuotes();
-      if (Array.isArray(data) && data.length > 0) {
-        setFetchedQuotes(data);
-      }
-    } catch {
-      // Ignore transient error when bridge offline or conflict
-    } finally {
-      setLoading(false);
-    }
-  }, [hasConnection]);
 
   useEffect(() => {
     if (!bridgeStatus?.market_quotes?.length && hasConnection && bridgeStatus?.is_connected) {
@@ -99,7 +85,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
     let high = activeQuote.high;
     let trend = isPositive ? 'BULLISH' : 'BEARISH';
     let changePct = activeQuote.daily_change_pct;
-    let structureLabel = isPositive ? 'Bullish Expansion' : 'Bearish Distribution';
+    let structureLabel = isPositive ? t('market_struct_bullish_expansion') : t('market_struct_bearish_distribution');
     let avgRangePts = null;
 
     if (currentCandles.length > 0) {
@@ -128,11 +114,11 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
           const recentAvg = (closes[0] + closes[1] + closes[2]) / 3;
           const olderAvg = (closes[3] + closes[4] + closes[5]) / 3;
           if (recentAvg > olderAvg) {
-            structureLabel = 'Higher Highs (Upward Momentum)';
+            structureLabel = t('market_struct_higher_highs');
           } else if (recentAvg < olderAvg) {
-            structureLabel = 'Lower Lows (Downside Pressure)';
+            structureLabel = t('market_struct_lower_lows');
           } else {
-            structureLabel = 'Consolidation Range (Choppy)';
+            structureLabel = t('market_struct_consolidation');
           }
         }
       }
@@ -143,25 +129,27 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
         high = activeQuote.bid + (totalSpan * 0.20);
         low = Math.max(0, activeQuote.bid - (totalSpan * 0.15));
         changePct = activeQuote.daily_change_pct * 0.35;
-        structureLabel = changePct >= 0 ? 'M5 Micro Breakout' : 'M5 Micro Pullback';
+        structureLabel = changePct >= 0 ? t('market_struct_m5_breakout') : t('market_struct_m5_pullback');
       } else if (activeTf === 'M15') {
         high = activeQuote.bid + (totalSpan * 0.40);
         low = Math.max(0, activeQuote.bid - (totalSpan * 0.35));
         changePct = activeQuote.daily_change_pct * 0.60;
-        structureLabel = changePct >= 0 ? 'M15 Trend Continuation' : 'M15 Retracement Flow';
+        structureLabel = changePct >= 0 ? t('market_struct_m15_cont') : t('market_struct_m15_retrace');
       } else if (activeTf === 'H1') {
         high = activeQuote.bid + (totalSpan * 0.70);
         low = Math.max(0, activeQuote.bid - (totalSpan * 0.65));
         changePct = activeQuote.daily_change_pct * 0.85;
-        structureLabel = changePct >= 0 ? 'H1 Bullish Expansion' : 'H1 Bearish Trend';
+        structureLabel = changePct >= 0 ? t('market_struct_h1_bull') : t('market_struct_h1_bear');
       } else {
         high = activeQuote.high > 0 ? activeQuote.high : activeQuote.bid * 1.005;
         low = activeQuote.low > 0 ? activeQuote.low : activeQuote.bid * 0.995;
         changePct = activeQuote.daily_change_pct;
-        structureLabel = isPositive ? 'H4 Session Dominance' : 'H4 Daily Range Pressure';
+        structureLabel = isPositive ? t('market_struct_h4_session') : t('market_struct_h4_pressure');
       }
       trend = changePct >= 0 ? 'BULLISH' : 'BEARISH';
     }
+
+    const trendLabel = trend === 'BULLISH' ? t('market_trend_bullish') : t('market_trend_bearish');
 
     const pricePositionPct = high > low
       ? Math.max(2, Math.min(98, ((activeQuote.bid - low) / (high - low)) * 100))
@@ -172,37 +160,22 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
       high,
       low,
       trend,
+      trendLabel,
       changePct,
       structureLabel,
       pricePositionPct,
       rangeSpan: (high - low).toFixed(activeQuote.digits),
       avgRange: avgRangePts
     };
-  }, [activeTf, selectedSymbol, activeQuote, bridgeStatus, isPositive]);
+  }, [activeTf, selectedSymbol, activeQuote, bridgeStatus, isPositive, t]);
 
   return (
     <div className="market-tab-container animate-fade-in">
       <div className="heading">
         <div>
-          <div className="eyebrow">MT5 LIVE BROKER STREAM</div>
-          <h1>Market Overview</h1>
-          <div className="sub">Feed harga dan spread real-time langsung dari broker MetaTrader 5.</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            type="button"
-            className="btn alt"
-            onClick={fetchQuotes}
-            title="Refresh Live Feed"
-            id="market-refresh-btn"
-            style={{ padding: '7px 12px' }}
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <span className="status-pill connected">
-            <Eye size={12} />
-            <span>REAL-TIME MT5 QUOTES</span>
-          </span>
+          <div className="eyebrow">{t('market_eyebrow')}</div>
+          <h1>{t('market_title')}</h1>
+          <div className="sub">{t('market_sub')}</div>
         </div>
       </div>
 
@@ -212,9 +185,9 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
           <div className="cardhead">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <TrendingUp size={16} style={{ color: 'var(--g)' }} />
-              <h3>Watchlist Broker Feed</h3>
+              <h3>{t('market_watchlist')}</h3>
             </div>
-            <span className="tiny">{quotes.length} instruments</span>
+            <span className="tiny">{t('market_instruments', { count: quotes.length })}</span>
           </div>
 
           {quotes.length > 0 ? (
@@ -244,7 +217,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
                       {item.symbol}
                     </div>
                     <div className="rowsub">
-                      {getSymbolName(item.symbol)} · Spread {item.spread} pts
+                      {getSymbolName(item.symbol, t)} · {t('home_spread_pts', { spread: item.spread })}
                     </div>
                   </div>
                   <div className="end">
@@ -260,7 +233,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
             })
           ) : (
             <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--muted)' }}>
-              Menunggu feed quotes dari Bridge EA di MT5...
+              {t('market_waiting_feed')}
             </div>
           )}
         </div>
@@ -270,43 +243,43 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
           <div className="cardhead">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Compass size={16} style={{ color: 'var(--blue)' }} />
-              <h3>Live Technical Context</h3>
+              <h3>{t('market_technical_context')}</h3>
             </div>
             <span className="tag blue">{activeQuote.symbol}</span>
           </div>
 
           <div className="eyebrow" style={{ color: 'var(--blue)' }}>
-            {activeQuote.symbol} · REAL BROKER TELEMETRY
+            {activeQuote.symbol} · {t('market_real_telemetry')}
           </div>
           <h2 style={{ fontSize: '20px', margin: '8px 0', fontWeight: 800 }}>
             {activeQuote.bid > 0
               ? `${activeQuote.symbol.includes('XAU') || activeQuote.symbol.includes('BTC') ? '$' : ''}${activeQuote.bid.toFixed(activeQuote.digits)}`
-              : 'Menunggu harga...'}
+              : t('market_waiting_price')}
           </h2>
           <p className="sub" style={{ lineHeight: 1.5, marginBottom: '14px' }}>
             {isPositive
-              ? `Harga menunjukkan tren menguat harian (+${activeQuote.daily_change_pct.toFixed(2)}%). Spread live tercatat ${activeQuote.spread} poin.`
-              : `Harga berada dalam tekanan harian (${activeQuote.daily_change_pct.toFixed(2)}%). Spread live tercatat ${activeQuote.spread} poin.`}
+              ? t('market_up_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread })
+              : t('market_down_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread })}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--line)', paddingTop: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: 'var(--muted)' }}>Live Bid / Ask</span>
+              <span style={{ color: 'var(--muted)' }}>{t('market_live_bid_ask')}</span>
               <b style={{ fontFamily: 'monospace' }}>
                 {activeQuote.bid.toFixed(activeQuote.digits)} / {activeQuote.ask.toFixed(activeQuote.digits)}
               </b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: 'var(--muted)' }}>Rentang Sesi (Low – High)</span>
+              <span style={{ color: 'var(--muted)' }}>{t('market_session_range')}</span>
               <b style={{ fontFamily: 'monospace' }}>
                 {activeQuote.low > 0 ? activeQuote.low.toFixed(activeQuote.digits) : '—'} –{' '}
                 {activeQuote.high > 0 ? activeQuote.high.toFixed(activeQuote.digits) : '—'}
               </b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: 'var(--muted)' }}>Spread Broker</span>
+              <span style={{ color: 'var(--muted)' }}>{t('market_broker_spread')}</span>
               <b style={{ color: activeQuote.spread <= 35 ? 'var(--g)' : 'var(--amber)' }}>
-                {activeQuote.spread} points
+                {activeQuote.spread} {t('market_points')}
               </b>
             </div>
           </div>
@@ -317,18 +290,18 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
       <div className="section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <BarChart2 size={16} style={{ color: 'var(--g)' }} />
-          <span>Market Structure & Dynamics</span>
-          <span className="tiny">{activeQuote.symbol} · {tfMetrics.tf} View</span>
+          <span>{t('market_structure_title')}</span>
+          <span className="tiny">{t('market_view', { symbol: activeQuote.symbol, tf: tfMetrics.tf })}</span>
         </div>
         <span className={`tag ${tfMetrics.trend === 'BULLISH' ? 'green' : 'red'}`} style={{ fontSize: '10px', textTransform: 'uppercase' }}>
-          {tfMetrics.trend} ({tfMetrics.changePct >= 0 ? '+' : ''}{tfMetrics.changePct.toFixed(2)}%)
+          {tfMetrics.trendLabel} ({tfMetrics.changePct >= 0 ? '+' : ''}{tfMetrics.changePct.toFixed(2)}%)
         </span>
       </div>
 
       <div className="card" id="market-structure-card">
         <div className="cardhead">
           <div>
-            <h3>{activeQuote.symbol} · {tfMetrics.tf} Price Action Range</h3>
+            <h3>{t('market_price_action_range', { symbol: activeQuote.symbol, tf: tfMetrics.tf })}</h3>
             <div className="tiny">{tfMetrics.structureLabel}</div>
           </div>
           <div style={{ display: 'flex', gap: '4px', background: '#0a1419', padding: '3px', borderRadius: '8px', border: '1px solid var(--line)' }}>
@@ -359,9 +332,9 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
         {/* Dynamic Range Bar */}
         <div style={{ padding: '20px 10px 10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', color: 'var(--muted)', fontFamily: 'monospace' }}>
-            <span>Low ({tfMetrics.tf}): <strong style={{ color: '#ff6e7a' }}>{tfMetrics.low > 0 ? tfMetrics.low.toFixed(activeQuote.digits) : '—'}</strong></span>
-            <span style={{ color: 'var(--text)', fontWeight: 800 }}>Bid: {activeQuote.bid > 0 ? activeQuote.bid.toFixed(activeQuote.digits) : '—'}</span>
-            <span>High ({tfMetrics.tf}): <strong style={{ color: '#45e0ad' }}>{tfMetrics.high > 0 ? tfMetrics.high.toFixed(activeQuote.digits) : '—'}</strong></span>
+            <span>{t('market_low')} ({tfMetrics.tf}): <strong style={{ color: '#ff6e7a' }}>{tfMetrics.low > 0 ? tfMetrics.low.toFixed(activeQuote.digits) : '—'}</strong></span>
+            <span style={{ color: 'var(--text)', fontWeight: 800 }}>{t('market_bid')}: {activeQuote.bid > 0 ? activeQuote.bid.toFixed(activeQuote.digits) : '—'}</span>
+            <span>{t('market_high')} ({tfMetrics.tf}): <strong style={{ color: '#45e0ad' }}>{tfMetrics.high > 0 ? tfMetrics.high.toFixed(activeQuote.digits) : '—'}</strong></span>
           </div>
 
           {/* Progress bar representing price position within the timeframe high-low range */}
@@ -398,28 +371,28 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
           {/* Dynamic Structure Stats Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginTop: '16px' }}>
             <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>STRUCTURE BIAS</div>
+              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_structure_bias')}</div>
               <div style={{ fontSize: '12px', fontWeight: 700, color: tfMetrics.trend === 'BULLISH' ? '#45e0ad' : '#ff6e7a' }}>
-                {tfMetrics.trend}
+                {tfMetrics.trendLabel}
               </div>
             </div>
 
             <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{tfMetrics.tf} RANGE SPAN</div>
+              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_range_span', { tf: tfMetrics.tf })}</div>
               <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace' }}>
                 {tfMetrics.rangeSpan} pts
               </div>
             </div>
 
             <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>KEY SUPPORT</div>
+              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_key_support')}</div>
               <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: '#ff6e7a' }}>
                 {tfMetrics.low > 0 ? tfMetrics.low.toFixed(activeQuote.digits) : '—'}
               </div>
             </div>
 
             <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>KEY RESISTANCE</div>
+              <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_key_resistance')}</div>
               <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: '#45e0ad' }}>
                 {tfMetrics.high > 0 ? tfMetrics.high.toFixed(activeQuote.digits) : '—'}
               </div>
@@ -427,7 +400,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
           </div>
 
           <div className="tiny" style={{ color: 'var(--muted)', textAlign: 'center', marginTop: '12px' }}>
-            Data rentang {tfMetrics.tf} diperbarui secara dinamis langsung dari analisis candle & quote MT5.
+            {t('market_range_note', { tf: tfMetrics.tf })}
           </div>
         </div>
       </div>

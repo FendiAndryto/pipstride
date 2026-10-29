@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 export default function PipstrideBottomNav({ activeTab, onSelectTab }) {
   const { t } = useLanguage();
   return (
-    <nav className="bottom" id="mobile-bottom-nav" aria-label="Mobile Navigation">
+    <nav className="bottom" id="mobile-bottom-nav" aria-label={t('nav_mobile_aria')}>
       <div className="nav">
         {NAV_TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -18,7 +18,7 @@ export default function PipstrideBottomNav({ activeTab, onSelectTab }) {
               id={`mobile-nav-${tab.id}`}
             >
               <b>{tab.symbol}</b>
-              <span>{t(`nav_${tab.id}`, tab.label)}</span>
+              <span>{t(`nav_${tab.id}`)}</span>
             </button>
           );
         })}

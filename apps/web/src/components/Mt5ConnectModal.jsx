@@ -18,10 +18,7 @@ import {
 } from 'lucide-react';
 import { api, downloadPreset } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
-
-const TOKEN_NOTE =
-  'Token ditampilkan satu kali saja. Salin sekarang dan tempelkan ke input InpBridgeToken di MT5. ' +
-  'Server hanya menyimpan hash-nya, jadi token tidak bisa ditampilkan ulang.';
+import RichText from './RichText';
 
 export default function Mt5ConnectModal({
   isOpen,
@@ -90,7 +87,7 @@ export default function Mt5ConnectModal({
       if (onConnectionsChanged) await onConnectionsChanged();
       return result;
     } catch (err) {
-      setError(err.message || 'Terjadi kesalahan.');
+      setError(err.message || t('modal_error_generic'));
       return null;
     } finally {
       setIsBusy(false);
@@ -99,7 +96,7 @@ export default function Mt5ConnectModal({
 
   const handleCreate = () =>
     runAction(async () => {
-      const created = await api.createConnection(newLabel.trim() || 'Akun MT5');
+      const created = await api.createConnection(newLabel.trim() || t('modal_default_label'));
       setRevealedToken(created.token);
       setPresetFile(created.preset || null);
       setNewLabel('');
@@ -108,9 +105,7 @@ export default function Mt5ConnectModal({
     });
 
   const handleRotate = (connection) => {
-    if (!window.confirm(
-      `Rotasi token "${connection.label}"? Token lama langsung berhenti bekerja dan EA harus diperbarui.`
-    )) {
+    if (!window.confirm(t('modal_rotate_confirm', { label: connection.label }))) {
       return;
     }
     return runAction(async () => {
@@ -122,9 +117,7 @@ export default function Mt5ConnectModal({
   };
 
   const handleRevoke = (connection) => {
-    if (!window.confirm(
-      `Hapus koneksi "${connection.label}"? Token-nya langsung tidak berlaku dan data live dihentikan.`
-    )) {
+    if (!window.confirm(t('modal_delete_confirm', { label: connection.label }))) {
       return;
     }
     return runAction(() => api.revokeConnection(connection.id));
@@ -140,15 +133,15 @@ export default function Mt5ConnectModal({
               <Monitor size={22} style={{ color: '#45e0ad' }} />
             </div>
             <div>
-              <h3 className="mt5-modal-title">{t('modal_title', 'KONEKSI MT5 TELEMETRY MONITOR')}</h3>
-              <span className="mt5-modal-subtitle">{t('modal_subtitle', 'Pure Read-Only Telemetry (100% Aman & Bebas Risiko Eksekusi)')}</span>
+              <h3 className="mt5-modal-title">{t('modal_title')}</h3>
+              <span className="mt5-modal-subtitle">{t('modal_subtitle')}</span>
             </div>
           </div>
           <button
             onClick={handleClose}
             className="btn-modal-close"
             id="close-mt5-connect-modal-btn"
-            title={t('modal_close', 'Tutup Modal')}
+            title={t('modal_close')}
           >
             <X size={18} />
           </button>
@@ -165,8 +158,8 @@ export default function Mt5ConnectModal({
                 <AlertTriangle size={18} className="text-rose" />
               )}
               <span style={{ fontWeight: 700 }}>
-                {t('modal_status_title', 'Status Bridge')}:{' '}
-                {isConnected ? t('modal_status_connected', 'MT5 TERHUBUNG (ONLINE)') : t('modal_status_waiting', 'MENUNGGU KONEKSI MT5')}
+                {t('modal_status_title')}:{' '}
+                {isConnected ? t('modal_status_connected') : t('modal_status_waiting')}
               </span>
               {isConnected && (
                 <span
@@ -184,7 +177,7 @@ export default function Mt5ConnectModal({
                   }}
                 >
                   {hostType === 'vps' ? <Server size={11} /> : <Laptop size={11} />}
-                  <span>{hostType === 'vps' ? 'VPS' : 'LOCAL'}</span>
+                  <span>{hostType === 'vps' ? t('host_vps') : t('host_local')}</span>
                 </span>
               )}
             </div>
@@ -210,11 +203,10 @@ export default function Mt5ConnectModal({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#45e0ad', fontWeight: 700 }}>
               <ShieldCheck size={15} />
-              <span>Privat & Terisolasi Penuh:</span>
+              <span>{t('modal_private_title')}</span>
             </div>
             <div style={{ color: 'var(--text-main, #e2e8f0)', lineHeight: 1.4 }}>
-              Satu token hanya terikat ke satu akun MT5. Token pertama kali yang terhubung akan mengunci nomor akun
-              tersebut, sehingga token yang bocor tidak bisa dipakai untuk mengirim data akun lain.
+              <RichText text={t('modal_private_desc')} />
             </div>
           </div>
 
@@ -238,7 +230,7 @@ export default function Mt5ConnectModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
-                AKUN MT5 TERHUBUNG ({connections.length})
+                {t('modal_connected_accounts', { count: connections.length })}
               </span>
               <button
                 type="button"
@@ -248,19 +240,19 @@ export default function Mt5ConnectModal({
                 style={{ fontSize: '11px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
               >
                 <Plus size={13} />
-                <span>Tambah Akun</span>
+                <span>{t('modal_add_account')}</span>
               </button>
             </div>
 
             {!connectionsLoaded ? (
-              <span style={{ fontSize: '11px', color: '#8899a6' }}>Memuat koneksi...</span>
+              <span style={{ fontSize: '11px', color: '#8899a6' }}>{t('modal_loading_conn')}</span>
             ) : connections.length === 0 ? (
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="text"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
-                  placeholder="Nama akun, cth: Akun Utama"
+                  placeholder={t('modal_account_name_ph')}
                   maxLength={64}
                   style={{
                     flex: 1,
@@ -273,7 +265,7 @@ export default function Mt5ConnectModal({
                   }}
                 />
                 <button type="button" className="btn" onClick={handleCreate} disabled={isBusy}>
-                  Buat Token
+                  {t('modal_create_token')}
                 </button>
               </div>
             ) : (
@@ -296,7 +288,7 @@ export default function Mt5ConnectModal({
                       <button
                         type="button"
                         onClick={() => onSelectConnection && onSelectConnection(connection.id)}
-                        title="Jadikan akun aktif"
+                        title={t('modal_make_active')}
                         style={{
                           flex: 1,
                           textAlign: 'left',
@@ -308,11 +300,11 @@ export default function Mt5ConnectModal({
                         }}
                       >
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>
-                          {connection.label} {isActive ? '· aktif' : ''}
+                          {connection.label} {isActive ? `· ${t('modal_active')}` : ''}
                         </div>
                         <div style={{ fontSize: '10.5px', color: '#8899a6', fontFamily: 'monospace' }}>
-                          {connection.account_number ? `#${connection.account_number}` : 'belum terhubung'} ·{' '}
-                          {connection.broker_server || 'server -'} · {connection.token_prefix}…
+                          {connection.account_number ? `#${connection.account_number}` : t('modal_not_connected')} ·{' '}
+                          {connection.broker_server || t('modal_server_none')} · {connection.token_prefix}…
                         </div>
                       </button>
 
@@ -328,7 +320,7 @@ export default function Mt5ConnectModal({
                         className="btn alt"
                         onClick={() => handleRotate(connection)}
                         disabled={isBusy}
-                        title="Rotasi token"
+                        title={t('modal_rotate')}
                         style={{ padding: '5px 7px' }}
                       >
                         <RotateCw size={13} />
@@ -338,7 +330,7 @@ export default function Mt5ConnectModal({
                         className="btn alt"
                         onClick={() => handleRevoke(connection)}
                         disabled={isBusy}
-                        title="Hapus koneksi"
+                        title={t('modal_delete')}
                         style={{ padding: '5px 7px', color: '#ff8fa3' }}
                       >
                         <Trash2 size={13} />
@@ -352,7 +344,7 @@ export default function Mt5ConnectModal({
                     type="text"
                     value={newLabel}
                     onChange={(e) => setNewLabel(e.target.value)}
-                    placeholder="Nama akun baru"
+                    placeholder={t('modal_account_name_new')}
                     maxLength={64}
                     style={{
                       flex: 1,
@@ -371,7 +363,7 @@ export default function Mt5ConnectModal({
                     disabled={isBusy}
                     style={{ fontSize: '11px', whiteSpace: 'nowrap' }}
                   >
-                    Tambah
+                    {t('modal_add')}
                   </button>
                 </div>
               </div>
@@ -383,7 +375,7 @@ export default function Mt5ConnectModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <KeyRound size={13} style={{ color: '#45e0ad' }} />
               <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
-                Token Koneksi (Wajib Diinput ke EA):
+                {t('modal_token_label')}
               </span>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -391,7 +383,7 @@ export default function Mt5ConnectModal({
                 type="text"
                 readOnly
                 value={revealedToken || ''}
-                placeholder={connections.length ? 'Buat atau rotasi token untuk menampilkannya' : 'pst_live_...'}
+                placeholder={connections.length ? t('modal_token_ph_empty') : 'pst_live_...'}
                 style={{
                   flex: 1,
                   background: '#0a1419',
@@ -412,11 +404,11 @@ export default function Mt5ConnectModal({
                 style={{ fontSize: '11px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '5px' }}
               >
                 {copiedToken ? <Check size={14} style={{ color: '#45e0ad' }} /> : <Copy size={14} />}
-                <span>{copiedToken ? 'Tersalin' : 'Copy'}</span>
+                <span>{copiedToken ? t('common_copied') : t('common_copy')}</span>
               </button>
             </div>
             <span style={{ fontSize: '10px', color: revealedToken ? '#ffd28a' : '#8899a6' }}>
-              {t('modal_token_note', TOKEN_NOTE)}
+              {t('modal_token_note')}
             </span>
           </div>
 
@@ -435,7 +427,7 @@ export default function Mt5ConnectModal({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#45e0ad', fontWeight: 700, fontSize: '0.85rem' }}>
                 <Download size={16} />
-                <span>Download File EA MT5:</span>
+                <span>{t('modal_download_ea_title')}</span>
               </div>
               <span style={{ fontSize: '10px', color: '#8899a6', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '4px' }}>
                 MetaTrader 5
@@ -460,10 +452,10 @@ export default function Mt5ConnectModal({
                   fontWeight: 700
                 }}
                 id="btn-download-monitor-mq5"
-                title="Download PipstrideMonitor.mq5 untuk MT5"
+                title={t('modal_download_ea_tip')}
               >
                 <Download size={14} />
-                <span>Download PipstrideMonitor (.mq5)</span>
+                <span>{t('modal_download_ea')}</span>
               </a>
 
               <button
@@ -474,8 +466,8 @@ export default function Mt5ConnectModal({
                 id="btn-download-monitor-preset"
                 title={
                   presetFile
-                    ? 'Preset berisi URL backend dan token koneksi ini'
-                    : 'Preset dibuat saat token dibuat atau dirotasi'
+                    ? t('modal_preset_tip_ready')
+                    : t('modal_preset_tip_empty')
                 }
                 style={{
                   display: 'flex',
@@ -488,19 +480,18 @@ export default function Mt5ConnectModal({
                 }}
               >
                 <Download size={14} />
-                <span>Download Preset (.set)</span>
+                <span>{t('modal_preset')}</span>
               </button>
             </div>
             <span style={{ fontSize: '10px', color: '#8899a6', lineHeight: 1.4 }}>
-              Preset sudah terisi <code>InpBackendUrl</code>, <code>InpBridgeToken</code>, dan daftar simbol. Di MT5 buka
-              tab <em>Inputs</em> lalu klik <strong>Load</strong> untuk memuat file ini.
+              <RichText text={t('modal_preset_note')} />
             </span>
           </div>
 
           {/* Target Backend Endpoint */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
-              URL Target Backend untuk PipstrideMonitor:
+              {t('modal_backend_url')}
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
@@ -524,7 +515,7 @@ export default function Mt5ConnectModal({
                 onClick={handleCopyUrl}
                 style={{ fontSize: '11px', padding: '8px 12px' }}
               >
-                {copiedUrl ? <Check size={14} style={{ color: '#45e0ad' }} /> : 'Copy'}
+                {copiedUrl ? <Check size={14} style={{ color: '#45e0ad' }} /> : t('common_copy')}
               </button>
             </div>
           </div>
@@ -532,18 +523,15 @@ export default function Mt5ConnectModal({
           {/* 3 Steps */}
           <div className="mt5-steps-container">
             <h4 className="mt5-steps-title">
-              {t('modal_instruction_title', 'Cara Menghubungkan PipstrideMonitor di MetaTrader 5:')}
+              {t('modal_steps_title')}
             </h4>
 
             <div className="mt5-step-card">
               <div className="mt5-step-number">1</div>
               <div className="mt5-step-content">
-                <strong>Buat Token & Download EA</strong>
+                <strong>{t('modal_step1_title')}</strong>
                 <p>
-                  Klik <strong>Tambah Akun</strong> di atas lalu salin token yang muncul. Setelah itu klik tombol
-                  <strong> Download PipstrideMonitor</strong> dan <strong>Download Preset (.set)</strong>. Buka terminal
-                  MT5 Anda: menu <strong>File &gt; Open Data Folder</strong>, lalu masuk ke <strong>MQL5 &gt; Experts</strong>{' '}
-                  dan tempelkan file EA-nya. Simpan file <code>.set</code> di folder <strong>MQL5 &gt; Presets</strong>.
+                  <RichText text={t('modal_step1_body')} />
                 </p>
               </div>
             </div>
@@ -551,10 +539,9 @@ export default function Mt5ConnectModal({
             <div className="mt5-step-card">
               <div className="mt5-step-number">2</div>
               <div className="mt5-step-content">
-                <strong>Whitelist URL di MT5</strong>
+                <strong>{t('modal_step2_title')}</strong>
                 <p>
-                  Buka menu MT5: <strong>Tools &gt; Options &gt; Expert Advisors</strong>. Centang <strong>Allow WebRequest
-                  for listed URL</strong> dan tambahkan: <code>{bridgeUrl}</code>.
+                  <RichText text={t('modal_step2_body', { url: bridgeUrl })} />
                 </p>
               </div>
             </div>
@@ -562,20 +549,16 @@ export default function Mt5ConnectModal({
             <div className="mt5-step-card">
               <div className="mt5-step-number">3</div>
               <div className="mt5-step-content">
-                <strong>Pasang PipstrideMonitor pada Chart & Masukkan Token</strong>
+                <strong>{t('modal_step3_title')}</strong>
                 <p>
-                  Drag <code>PipstrideMonitor.mq5</code> (atau hasil compile <code>.ex5</code>) ke chart aktif. Pada tab
-                  <em> Inputs</em>, isi <code>InpBridgeToken</code> dengan token tadi dan sesuaikan <code>InpHostEnv</code> (Auto / Local / VPS). Pada tab <em>Common</em>, centang
-                  <strong> Allow Algo Trading</strong>. EA ini 100% Read-Only (telemetri) tanpa izin eksekusi order
-                  sehingga aman dipakai di PC lokal maupun VPS.
+                  <RichText text={t('modal_step3_body')} />
                 </p>
               </div>
             </div>
           </div>
 
           <p className="mt5-success-note">
-            Status di dashboard akan otomatis menyala <strong>CONNECTED (HIJAU)</strong> dan menampilkan saldo, posisi
-            aktif, dan riwayat secara langsung dan privat hanya untuk akun Anda.
+            <RichText text={t('modal_success_note')} />
           </p>
         </div>
 
@@ -589,7 +572,7 @@ export default function Mt5ConnectModal({
             id="refresh-mt5-status-btn"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            <span>{isRefreshing ? 'Memeriksa...' : 'Cek Status Sekarang'}</span>
+            <span>{isRefreshing ? t('modal_checking') : t('modal_check_status')}</span>
           </button>
           <button
             type="button"
@@ -597,7 +580,7 @@ export default function Mt5ConnectModal({
             onClick={handleClose}
             id="close-mt5-modal-action-btn"
           >
-            <span>Tutup</span>
+            <span>{t('modal_close')}</span>
           </button>
         </div>
       </div>

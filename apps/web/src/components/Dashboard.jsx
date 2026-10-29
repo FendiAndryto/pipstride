@@ -12,6 +12,7 @@ import {
   getActiveConnectionId,
   setActiveConnectionId as persistActiveConnectionId
 } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 function applyConnections(list, setConnections, setActiveConnectionId) {
   const safeList = Array.isArray(list) ? list : [];
@@ -26,6 +27,7 @@ function applyConnections(list, setConnections, setActiveConnectionId) {
 }
 
 export default function Dashboard({ user, onLogout, onRefreshUser }) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('home');
   const [bridgeStatus, setBridgeStatus] = useState(null);
   const [riskStatus, setRiskStatus] = useState(null);
@@ -127,12 +129,12 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
     try {
       const res = await api.sendTelegramTestAlert();
       if (res.delivered) {
-        setTelegramStatusMsg({ type: 'success', text: 'Telegram alert sent successfully!' });
+        setTelegramStatusMsg({ type: 'success', text: t('telegram_sent') });
       } else {
-        setTelegramStatusMsg({ type: 'warning', text: 'Telegram bot not configured or disabled.' });
+        setTelegramStatusMsg({ type: 'warning', text: t('telegram_not_configured') });
       }
     } catch (err) {
-      setTelegramStatusMsg({ type: 'error', text: err.message || 'Telegram test failed.' });
+      setTelegramStatusMsg({ type: 'error', text: err.message || t('telegram_failed') });
     } finally {
       setIsTestingTelegram(false);
     }
@@ -168,11 +170,8 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
             bridgeStatus={bridgeStatus}
             riskStatus={riskStatus}
             hasConnection={connections.length > 0}
-            onNavigateJournal={() => setActiveTab('journal')}
-            onNavigateAI={() => setActiveTab('ai')}
             onNavigateMarket={() => setActiveTab('market')}
             onOpenConnect={() => setIsMt5ModalOpen(true)}
-            onRefresh={fetchStatus}
           />
         </div>
 

@@ -1,41 +1,43 @@
 import React from 'react';
 import { Sparkles, PlaySquare, ArrowLeft, Clock, ShieldCheck, Cpu } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function ComingSoonTab({ type = 'ai', onBackToHome }) {
+  const { t } = useLanguage();
   const isAI = type === 'ai';
 
-  const title = isAI ? 'AI Trading Assistant' : 'Historical Replay & Strategy Backtest';
-  const eyebrow = isAI ? 'PERSONAL TRADING INTELLIGENCE' : 'SIMULATION & RISKLESS PRACTICE';
+  const title = isAI ? t('cs_ai_title') : t('cs_replay_title');
+  const eyebrow = isAI ? t('cs_ai_eyebrow') : t('cs_replay_eyebrow');
   const icon = isAI ? Sparkles : PlaySquare;
   const IconComponent = icon;
 
   const features = isAI
     ? [
         {
-          title: 'Automated Journal Diagnostics',
-          desc: 'Identifies behavioral patterns, revenge trading risks, and entry timing issues directly from your trade history.'
+          title: t('cs_ai_feat_1_title'),
+          desc: t('cs_ai_feat_1_desc')
         },
         {
-          title: 'Confluence Strategy Coach',
-          desc: 'Synthesizes market structure with your historical win rate to propose tailored risk-to-reward improvements.'
+          title: t('cs_ai_feat_2_title'),
+          desc: t('cs_ai_feat_2_desc')
         },
         {
-          title: 'Natural Language Querying',
-          desc: 'Ask questions like "How did my Gold EA perform during London sessions?" and get instant data insights.'
+          title: t('cs_ai_feat_3_title'),
+          desc: t('cs_ai_feat_3_desc')
         }
       ]
     : [
         {
-          title: 'Tick-by-Tick Market Replay',
-          desc: 'Replay past price movements candle-by-candle with configurable speed (1x to 8x) to practice manual execution.'
+          title: t('cs_replay_feat_1_title'),
+          desc: t('cs_replay_feat_1_desc')
         },
         {
-          title: 'Paper Trading Sandbox',
-          desc: 'Simulate BUY and SELL executions on historical data with zero risk to your live MT5 broker equity.'
+          title: t('cs_replay_feat_2_title'),
+          desc: t('cs_replay_feat_2_desc')
         },
         {
-          title: 'Strategy Parameter Stress Testing',
-          desc: 'Test your confluence rules and trailing stops against previous market regimes before going live.'
+          title: t('cs_replay_feat_3_title'),
+          desc: t('cs_replay_feat_3_desc')
         }
       ];
 
@@ -46,13 +48,11 @@ export default function ComingSoonTab({ type = 'ai', onBackToHome }) {
           <div className="eyebrow">{eyebrow}</div>
           <h1>{title}</h1>
           <div className="sub">
-            {isAI
-              ? 'Analisis jurnal pribadi, evaluasi disiplin trading, dan panduan pasar bertenaga AI.'
-              : 'Latihan entry manual dan pengujian parameter strategi tanpa risiko modal.'}
+            {isAI ? t('cs_ai_sub') : t('cs_replay_sub')}
           </div>
         </div>
         <span className="tag amber" style={{ fontSize: '10.5px', padding: '5px 10px' }}>
-          COMING SOON
+          {t('cs_tag')}
         </span>
       </div>
 
@@ -81,16 +81,15 @@ export default function ComingSoonTab({ type = 'ai', onBackToHome }) {
           </div>
           <div>
             <div className="eyebrow" style={{ color: isAI ? 'var(--blue)' : 'var(--amber)' }}>
-              FEATURE IN ACTIVE DEVELOPMENT
+              {t('cs_dev_eyebrow')}
             </div>
             <h2 style={{ fontSize: '19px', margin: '2px 0' }}>
-              {isAI ? 'Trade Smarter with AI Coaching' : 'Master Strategy Timing Without Real Losses'}
+              {isAI ? t('cs_ai_banner_title') : t('cs_replay_banner_title')}
             </h2>
           </div>
         </div>
         <p style={{ marginTop: '8px' }}>
-          Fitur ini sedang dalam tahap integrasi mendalam dengan backend Pipstride dan model telemetri MT5.
-          Sistem akan tersedia pada rilis mendatang untuk memaksimalkan performa trading Anda.
+          {t('cs_banner_body')}
         </p>
 
         <div className="btns" style={{ marginTop: '16px' }}>
@@ -102,14 +101,14 @@ export default function ComingSoonTab({ type = 'ai', onBackToHome }) {
               id={`coming-soon-back-${type}-btn`}
             >
               <ArrowLeft size={14} />
-              <span>Kembali ke Home</span>
+              <span>{t('cs_back_home')}</span>
             </button>
           )}
         </div>
       </div>
 
       <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px' }}>
-        Preview Kemampuan {isAI ? 'AI Assistant' : 'Replay & Backtest'}
+        {t('cs_preview_title', { name: isAI ? t('cs_preview_ai_name') : t('cs_preview_replay_name') })}
       </div>
 
       <div className="grid three">

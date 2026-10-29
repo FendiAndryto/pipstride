@@ -3,6 +3,7 @@ import LoginPage from './components/LoginPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import Dashboard from './components/Dashboard';
 import { api, getToken, clearToken } from './services/api';
+import { useLanguage } from './context/LanguageContext';
 import './App.css';
 
 const readParam = (name) =>
@@ -19,6 +20,9 @@ const stripQueryParam = (name) => {
 };
 
 export default function App() {
+  const { t } = useLanguage();
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpiredMsg, setSessionExpiredMsg] = useState('');
@@ -37,13 +41,13 @@ export default function App() {
           setNotice({
             type: 'success',
             text: data.email
-              ? `Email ${data.email} berhasil diverifikasi. Silakan masuk.`
-              : 'Email berhasil diverifikasi.'
+              ? tRef.current('app_verify_success_email', { email: data.email })
+              : tRef.current('app_verify_success')
           });
         } catch (err) {
           setNotice({
             type: 'error',
-            text: err.message || 'Tautan verifikasi tidak valid atau sudah kedaluwarsa.'
+            text: err.message || tRef.current('app_verify_failed')
           });
         }
         stripQueryParam('verify_email');
@@ -70,7 +74,7 @@ export default function App() {
 
     const handleSessionExpired = () => {
       setUser(null);
-      setSessionExpiredMsg('Sesi login telah berakhir. Silakan masuk kembali.');
+      setSessionExpiredMsg(tRef.current('app_session_expired'));
     };
 
     window.addEventListener('pipstride:session-expired', handleSessionExpired);
@@ -120,7 +124,7 @@ export default function App() {
         gap: '1rem'
       }}>
         <div className="pulse-dot online" style={{ width: '16px', height: '16px' }} />
-        <span style={{ fontSize: '0.9rem', letterSpacing: '0.05em' }}>MEMUAT PIPSTRIDE...</span>
+        <span style={{ fontSize: '0.9rem', letterSpacing: '0.05em' }}>{t('app_loading')}</span>
       </div>
     );
   }

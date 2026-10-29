@@ -14,8 +14,10 @@ import {
   Mail
 } from 'lucide-react';
 import { api, setToken } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice }) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register' | 'forgot'
   
   // Login form state
@@ -45,7 +47,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError('Mohon masukkan username dan password.');
+      setError(t('err_credentials_required'));
       return;
     }
 
@@ -59,7 +61,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
         onLoginSuccess(data);
       }
     } catch (err) {
-      setError(err.message || 'Otentikasi gagal. Periksa kembali username dan password Anda.');
+      setError(err.message || t('err_login_failed'));
     } finally {
       setLoading(false);
     }
@@ -73,32 +75,32 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
     const cp = regConfirmPassword.trim();
 
     if (!u || !p) {
-      setError('Mohon lengkapi username dan password.');
+      setError(t('err_register_required'));
       return;
     }
 
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      setError('Mohon masukkan alamat email yang valid.');
+      setError(t('err_email_invalid'));
       return;
     }
 
     if (u.length < 3) {
-      setError('Username minimal 3 karakter.');
+      setError(t('err_username_min'));
       return;
     }
 
     if (p.length < 8) {
-      setError('Password minimal 8 karakter.');
+      setError(t('err_password_min'));
       return;
     }
 
     if (!/[a-zA-Z]/.test(p) || !/[0-9]/.test(p)) {
-      setError('Password wajib kombinasi huruf dan angka.');
+      setError(t('err_password_alnum'));
       return;
     }
 
     if (p !== cp) {
-      setError('Konfirmasi password tidak cocok dengan password baru.');
+      setError(t('err_password_mismatch'));
       return;
     }
 
@@ -108,14 +110,14 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
 
     try {
       const data = await api.register(u, p, email, rememberMe);
-      setSuccessMsg('Akun berhasil dibuat! Cek email Anda untuk verifikasi. Mengalihkan ke dashboard...');
+      setSuccessMsg(t('auth_register_success'));
       setTimeout(() => {
         if (onLoginSuccess) {
           onLoginSuccess(data);
         }
       }, 700);
     } catch (err) {
-      setError(err.message || 'Registrasi gagal. Username atau email mungkin sudah digunakan.');
+      setError(err.message || t('err_register_failed'));
     } finally {
       setLoading(false);
     }
@@ -126,7 +128,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
     const email = forgotEmail.trim();
 
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      setError('Mohon masukkan alamat email yang valid.');
+      setError(t('err_email_invalid'));
       return;
     }
 
@@ -138,10 +140,10 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
       const data = await api.forgotPassword(email);
       setSuccessMsg(
         data?.message ||
-          'Jika email tersebut terdaftar, tautan reset password telah dikirim. Periksa inbox Anda.'
+          t('auth_forgot_sent')
       );
     } catch (err) {
-      setError(err.message || 'Gagal meminta tautan reset password. Coba lagi nanti.');
+      setError(err.message || t('err_forgot_failed'));
     } finally {
       setLoading(false);
     }
@@ -207,7 +209,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
             Pipstride
           </h1>
           <p className="sub" style={{ fontSize: '11.5px', color: 'var(--muted)' }}>
-            PURE READ-ONLY MT5 TELEMETRY & JOURNAL
+            {t('auth_brand_sub')}
           </p>
         </div>
 
@@ -245,7 +247,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
             }}
             id="tab-btn-signin"
           >
-            Masuk (Sign In)
+            {t('auth_tab_signin')}
           </button>
           <button
             type="button"
@@ -268,7 +270,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
             }}
             id="tab-btn-signup"
           >
-            Daftar Akun Baru
+            {t('auth_tab_signup')}
           </button>
         </div>
         )}
@@ -323,7 +325,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
           <form onSubmit={handleLoginSubmit} id="signin-form">
             <div style={{ marginBottom: '14px' }}>
               <label htmlFor="signin-username" className="label" style={{ display: 'block' }}>
-                Username
+                {t('auth_username')}
               </label>
               <div style={{ position: 'relative' }}>
                 <User
@@ -335,7 +337,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Masukkan username Anda"
+                  placeholder={t('auth_username_ph')}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -356,7 +358,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
             <div style={{ marginBottom: '14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="signin-password" className="label">
-                  Password
+                  {t('auth_password')}
                 </label>
                 <button
                   type="button"
@@ -377,7 +379,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   }}
                   id="forgot-password-link"
                 >
-                  Lupa password?
+                  {t('auth_forgot_link')}
                 </button>
               </div>
               <div style={{ position: 'relative' }}>
@@ -417,7 +419,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                     color: 'var(--muted)',
                     cursor: 'pointer'
                   }}
-                  title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                  title={showPassword ? t('auth_hide_password') : t('auth_show_password')}
                 >
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -443,10 +445,10 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   style={{ accentColor: 'var(--g)', cursor: 'pointer' }}
                   id="remember-me-checkbox"
                 />
-                <span>Ingat sesi saya (Remember Me)</span>
+                <span>{t('auth_remember')}</span>
               </label>
               <span className="tiny" style={{ color: 'var(--muted)' }}>
-                JWT Secure Session
+                {t('auth_jwt_note')}
               </span>
             </div>
 
@@ -458,10 +460,10 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               id="signin-submit-btn"
             >
               {loading ? (
-                <span>Memverifikasi...</span>
+                <span>{t('auth_signing_in')}</span>
               ) : (
                 <>
-                  <span>Masuk ke Pipstride</span>
+                  <span>{t('auth_signin_cta')}</span>
                   <ArrowRight size={15} />
                 </>
               )}
@@ -481,7 +483,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               }}
             >
               <span className="tiny" style={{ color: 'var(--muted)' }}>
-                Demo Cepat:
+                {t('auth_demo_quick')}
               </span>
               <div style={{ display: 'flex', gap: '6px' }}>
                 <button
@@ -492,7 +494,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   id="quick-demo-admin-btn"
                 >
                   <Sparkles size={11} />
-                  <span>Isi Demo Admin</span>
+                  <span>{t('auth_demo_fill')}</span>
                 </button>
                 {error && (
                   <button
@@ -500,9 +502,9 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                     className="btn ghost"
                     style={{ padding: '4px 8px', fontSize: '10px' }}
                     onClick={handleOfflineDevBypass}
-                    title="Bypass login jika server backend offline saat development"
+                    title={t('auth_dev_mode_tip')}
                   >
-                    <span>Masuk Mode Dev</span>
+                    <span>{t('auth_dev_mode')}</span>
                   </button>
                 )}
               </div>
@@ -513,7 +515,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
           <form onSubmit={handleRegisterSubmit} id="signup-form">
             <div style={{ marginBottom: '12px' }}>
               <label htmlFor="reg-username" className="label" style={{ display: 'block' }}>
-                Pilih Username
+                {t('auth_reg_username')}
               </label>
               <div style={{ position: 'relative' }}>
                 <UserPlus
@@ -525,7 +527,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   type="text"
                   value={regUsername}
                   onChange={(e) => setRegUsername(e.target.value)}
-                  placeholder="Username baru (min 3 huruf)"
+                  placeholder={t('auth_reg_username_ph')}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -545,7 +547,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
 
             <div style={{ marginBottom: '12px' }}>
               <label htmlFor="reg-email" className="label" style={{ display: 'block' }}>
-                Email
+                {t('auth_email')}
               </label>
               <div style={{ position: 'relative' }}>
                 <Mail
@@ -557,7 +559,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   type="email"
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="nama@email.com"
+                  placeholder={t('auth_email_ph')}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -574,13 +576,13 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
               </div>
               <div className="tiny" style={{ color: 'var(--muted)', marginTop: '5px' }}>
-                Dipakai untuk reset password dan verifikasi akun.
+                {t('auth_reg_email_hint')}
               </div>
             </div>
 
             <div style={{ marginBottom: '12px' }}>
               <label htmlFor="reg-password" className="label" style={{ display: 'block' }}>
-                Password
+                {t('auth_password')}
               </label>
               <div style={{ position: 'relative' }}>
                 <Lock
@@ -592,7 +594,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   type={showRegPassword ? 'text' : 'password'}
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Minimal 8 karakter (huruf & angka)"
+                  placeholder={t('auth_reg_password_ph')}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -627,7 +629,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
 
             <div style={{ marginBottom: '12px' }}>
               <label htmlFor="reg-confirm-password" className="label" style={{ display: 'block' }}>
-                Konfirmasi Password
+                {t('auth_confirm_password')}
               </label>
               <div style={{ position: 'relative' }}>
                 <Lock
@@ -639,7 +641,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   type={showRegPassword ? 'text' : 'password'}
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
-                  placeholder="Ulangi password di atas"
+                  placeholder={t('auth_confirm_ph')}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -665,11 +667,11 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               id="signup-submit-btn"
             >
               {loading ? (
-                <span>Mendaftarkan...</span>
+                <span>{t('auth_registering')}</span>
               ) : (
                 <>
                   <ShieldCheck size={15} />
-                  <span>Buat Akun & Masuk Sekarang</span>
+                  <span>{t('auth_register_cta')}</span>
                 </>
               )}
             </button>
@@ -679,7 +681,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
           <form onSubmit={handleForgotSubmit} id="forgot-password-form">
             <div style={{ marginBottom: '14px' }}>
               <label htmlFor="forgot-email" className="label" style={{ display: 'block' }}>
-                Email Akun
+                {t('auth_forgot_email_label')}
               </label>
               <div style={{ position: 'relative' }}>
                 <Mail
@@ -691,7 +693,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   type="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="nama@email.com"
+                  placeholder={t('auth_email_ph')}
                   disabled={loading}
                   style={{
                     width: '100%',
@@ -708,7 +710,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
               </div>
               <div className="tiny" style={{ color: 'var(--muted)', marginTop: '5px' }}>
-                Kami akan mengirim tautan satu kali pakai jika alamat tersebut terdaftar.
+                {t('auth_forgot_hint')}
               </div>
             </div>
 
@@ -720,11 +722,11 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               id="forgot-submit-btn"
             >
               {loading ? (
-                <span>Mengirim...</span>
+                <span>{t('auth_forgot_sending')}</span>
               ) : (
                 <>
                   <Mail size={15} />
-                  <span>Kirim Tautan Reset</span>
+                  <span>{t('auth_forgot_cta')}</span>
                 </>
               )}
             </button>
@@ -741,7 +743,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               id="forgot-back-btn"
             >
               <ArrowLeft size={14} />
-              <span>Kembali ke halaman masuk</span>
+              <span>{t('auth_back_to_signin')}</span>
             </button>
           </form>
         )}

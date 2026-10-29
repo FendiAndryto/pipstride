@@ -3,7 +3,6 @@ import {
   BookOpen,
   Calendar,
   ArrowUpRight,
-  RefreshCw,
   Layers,
   ChevronLeft,
   ChevronRight
@@ -13,19 +12,19 @@ import { useLanguage } from '../context/LanguageContext';
 import JournalAnalytics from './JournalAnalytics';
 
 const PERIODS = [
-  { value: '1M', label: '30 Hari' },
-  { value: '3M', label: '90 Hari' },
-  { value: '1Y', label: '1 Tahun' },
-  { value: 'ALL', label: 'Semua' },
-  { value: 'MONTH', label: 'Per Bulan' }
+  { value: '1M', label: 'journal_period_1m' },
+  { value: '3M', label: 'journal_period_3m' },
+  { value: '1Y', label: 'journal_period_1y' },
+  { value: 'ALL', label: 'journal_period_all' },
+  { value: 'MONTH', label: 'journal_period_month' }
 ];
 
 const PERIOD_LABELS = {
-  '1M': '30 hari terakhir',
-  '3M': '90 hari terakhir',
-  '1Y': '1 tahun terakhir',
-  ALL: 'semua waktu',
-  MONTH: 'pilihan bulan'
+  '1M': 'journal_period_label_1m',
+  '3M': 'journal_period_label_3m',
+  '1Y': 'journal_period_label_1y',
+  ALL: 'journal_period_label_all',
+  MONTH: 'journal_period_label_month'
 };
 
 const getCurrentYearMonth = () => {
@@ -44,17 +43,15 @@ const formatCurrency = (val) => {
 export default function JournalTab({
   activeTab,
   closedTradesCount,
-  onNavigateAI,
   bridgeStatus,
   hasConnection = false
 }) {
-  const { lang } = useLanguage();
+  const { t, locale } = useLanguage();
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState('1M');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentYearMonth);
   const [stats, setStats] = useState(null);
@@ -63,7 +60,6 @@ export default function JournalTab({
   const [historyError, setHistoryError] = useState(false);
 
   const activeAccountNumber = bridgeStatus?.metrics?.account_number || null;
-  const activeServer = bridgeStatus?.metrics?.server || null;
   const isConnected = bridgeStatus?.is_connected ?? false;
   const prevAccountRef = useRef(activeAccountNumber);
 
@@ -80,13 +76,11 @@ export default function JournalTab({
   const isHistoryLoading = loading || (!historyData && !historyError && (hasConnection || isConnected));
   const isStatsLoading = statsLoading || (period === 'MONTH' ? isHistoryLoading : (!stats && !statsError && (hasConnection || isConnected)));
 
-  const fetchHistory = useCallback(async (isManual = false) => {
+  const fetchHistory = useCallback(async () => {
     if (!hasConnection && !isConnected) {
       setLoading(false);
-      if (isManual) setRefreshing(false);
       return;
     }
-    if (isManual) setRefreshing(true);
     try {
       const data = await api.getTradeHistory();
       // Ensure incoming history belongs to currently connected MT5 account
@@ -98,7 +92,6 @@ export default function JournalTab({
       setHistoryError(true);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [hasConnection, isConnected, activeAccountNumber]);
 
@@ -200,11 +193,6 @@ export default function JournalTab({
     return () => clearInterval(timer);
   }, [activeTab, fetchHistory, fetchStats]);
 
-  const handleRefresh = () => {
-    fetchHistory(true);
-    fetchStats(true);
-  };
-
   const monthInputRef = useRef(null);
 
   const isCurrentOrFutureMonth = useMemo(() => {
@@ -232,10 +220,9 @@ export default function JournalTab({
     const year = parseInt(parts[0], 10) || CURRENT_YEAR;
     const monthIdx = (parseInt(parts[1], 10) || 1) - 1;
     const days = new Date(year, monthIdx + 1, 0).getDate();
-    const locale = lang === 'en' ? 'en-US' : 'id-ID';
     const name = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, monthIdx, 1));
     return { selectedYear: year, selectedMonthIndex: monthIdx, daysInMonth: days, monthName: name };
-  }, [selectedMonth, lang]);
+  }, [selectedMonth, locale]);
 
   const handlePrevMonth = () => {
     let y = selectedYear;
@@ -419,7 +406,7 @@ export default function JournalTab({
   const totalTrades = totals?.trades ?? (period === 'MONTH' ? 0 : (historyData?.total_trades ?? 0));
   const winningTrades = totals?.wins ?? (period === 'MONTH' ? 0 : (historyData?.winning_trades ?? 0));
   const losingTrades = totals?.losses ?? (period === 'MONTH' ? 0 : (historyData?.losing_trades ?? 0));
-  const periodLabel = period === 'MONTH' ? `Bulan ${monthName}` : PERIOD_LABELS[period];
+  const periodLabel = period === 'MONTH' ? t('journal_month_prefix', { month: monthName }) : t(PERIOD_LABELS[period]);
 
   const filteredTrades = trades.filter((t) => {
     const isEa = t.magic > 0;
@@ -444,7 +431,7 @@ export default function JournalTab({
 
   const handleExportCSV = () => {
     if (trades.length === 0) {
-      alert('Belum ada riwayat transaksi MT5 untuk diekspor.');
+      alert(t('journal_export_empty'));
       return;
     }
 
@@ -475,92 +462,13 @@ export default function JournalTab({
     <div className="journal-tab-container animate-fade-in">
       <div className="heading">
         <div>
-          <div className="eyebrow">MT5 REAL TRADING JOURNAL</div>
-          <h1>Trading Journal</h1>
-          <div className="sub" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span>Riwayat transaksi objektif tersinkronisasi langsung dari akun MetaTrader 5.</span>
-            {activeAccountNumber ? (
-              <span
-                style={{
-                  background: isConnected ? 'rgba(7, 188, 12, 0.12)' : 'rgba(235, 87, 87, 0.12)',
-                  color: isConnected ? 'var(--g)' : 'var(--red)',
-                  border: `1px solid ${isConnected ? 'rgba(7, 188, 12, 0.3)' : 'rgba(235, 87, 87, 0.3)'}`,
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}
-                id="journal-active-account-badge"
-              >
-                <span
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    background: isConnected ? 'var(--g)' : 'var(--red)',
-                    display: 'inline-block'
-                  }}
-                />
-                Akun #{activeAccountNumber} {activeServer ? `(${activeServer})` : ''}
-              </span>
-            ) : (
-              <span
-                style={{
-                  background: 'rgba(255, 184, 0, 0.12)',
-                  color: '#ffb800',
-                  border: '1px solid rgba(255, 184, 0, 0.3)',
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 600
-                }}
-                id="journal-standby-badge"
-              >
-                MT5 Standby (Belum Terhubung)
-              </span>
-            )}
+          <div className="eyebrow">{t('journal_eyebrow')}</div>
+          <h1>{t('journal_title')}</h1>
+          <div className="sub">
+            {t('journal_sub')}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 10px',
-              borderRadius: '8px',
-              background: '#0a1419',
-              border: '1px solid var(--line)',
-              fontSize: '11px',
-              color: 'var(--muted)'
-            }}
-            id="journal-autosync-indicator"
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: isConnected ? '#45e0ad' : '#ff5b6b',
-                boxShadow: isConnected ? '0 0 8px #45e0ad' : 'none'
-              }}
-            />
-            <span style={{ color: '#c9d8dc', fontWeight: 600 }}>Otomatis Sinkron</span>
-          </div>
-          <button
-            type="button"
-            className="btn alt"
-            onClick={handleRefresh}
-            title="Refresh dan Sinkronkan Riwayat MT5"
-            id="journal-refresh-btn"
-            style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            <span className="desktop-only-inline">Refresh</span>
-          </button>
           <button
             type="button"
             className="btn"
@@ -569,14 +477,14 @@ export default function JournalTab({
             style={{ padding: '8px 14px' }}
           >
             <ArrowUpRight size={14} />
-            <span>Export CSV</span>
+            <span>{t('journal_export')}</span>
           </button>
         </div>
       </div>
 
       {/* Segmented Period Filter Bar with Month Stepper */}
       <div className="journal-period-bar">
-        <div className="journal-period-segmented" role="tablist" aria-label="Filter Periode Jurnal">
+        <div className="journal-period-segmented" role="tablist" aria-label={t('journal_filter_aria')}>
           {PERIODS.map((option) => {
             const isActive = period === option.value;
             return (
@@ -595,7 +503,7 @@ export default function JournalTab({
                 id={`journal-period-${option.value.toLowerCase()}`}
               >
                 {option.value === 'MONTH' && <Calendar size={12} />}
-                <span>{option.label}</span>
+                <span>{t(option.label)}</span>
               </button>
             );
           })}
@@ -607,7 +515,7 @@ export default function JournalTab({
               type="button"
               className="journal-stepper-btn"
               onClick={handlePrevMonth}
-              title={lang === 'en' ? 'Previous month' : 'Bulan sebelumnya'}
+              title={t('journal_prev_month')}
               id="journal-prev-month-btn"
             >
               <ChevronLeft size={15} />
@@ -616,7 +524,7 @@ export default function JournalTab({
             <div
               className="journal-month-display"
               onClick={handleMonthDisplayClick}
-              title={lang === 'en' ? 'Click to select month' : 'Klik untuk pilih bulan spesifik'}
+              title={t('journal_pick_month')}
             >
               <Calendar size={13} style={{ color: 'var(--g)' }} />
               <span style={{ textTransform: 'capitalize' }}>{monthName}</span>
@@ -625,7 +533,7 @@ export default function JournalTab({
                 type="month"
                 value={selectedMonth}
                 max={getCurrentYearMonth()}
-                aria-label={lang === 'en' ? 'Select month' : 'Pilih bulan'}
+                aria-label={t('journal_select_month')}
                 onChange={(e) => {
                   if (e.target.value) {
                     const maxYM = getCurrentYearMonth();
@@ -644,7 +552,7 @@ export default function JournalTab({
               className="journal-stepper-btn"
               onClick={handleNextMonth}
               disabled={isCurrentOrFutureMonth}
-              title={lang === 'en' ? 'Next month' : 'Bulan berikutnya'}
+              title={t('journal_next_month')}
               id="journal-next-month-btn"
             >
               <ChevronRight size={15} />
@@ -659,7 +567,7 @@ export default function JournalTab({
           <div className={`metric ${netPnl >= 0 ? 'positive' : 'negative'}`}>
             {formatCurrency(netPnl)}
           </div>
-          <div className="label">Realized Closed P/L</div>
+          <div className="label">{t('journal_realized_pnl')}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
             {periodLabel}
           </div>
@@ -669,15 +577,15 @@ export default function JournalTab({
             {allTimePnl !== null ? `${allTimePnl >= 0 ? '+' : '−'}$${Math.abs(allTimePnl).toFixed(2)}` : formatCurrency(netPnl)}
           </div>
           <div className="label">
-            All-Time Growth {allTimePnlPercent !== null ? `(${allTimePnlPercent >= 0 ? '+' : ''}${allTimePnlPercent.toFixed(1)}%)` : ''}
+            {t('journal_all_time_growth')} {allTimePnlPercent !== null ? `(${allTimePnlPercent >= 0 ? '+' : ''}${allTimePnlPercent.toFixed(1)}%)` : ''}
           </div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
-            {initialDeposit ? `Saldo Awal: $${initialDeposit.toFixed(2)} ${isDepositOverridden ? '(Manual)' : '(MT5)'}` : 'Baseline saldo MT5'}
+            {initialDeposit ? t('journal_initial_balance_short', { amount: `$${initialDeposit.toFixed(2)}`, source: isDepositOverridden ? '(Manual)' : '(MT5)' }) : t('journal_baseline')}
           </div>
         </div>
         <div className="card" id="journal-kpi-win-rate">
           <div className="metric">{winRate.toFixed(1)}%</div>
-          <div className="label">Win Rate ({winningTrades}W / {losingTrades}L)</div>
+          <div className="label">{t('journal_win_rate_detail', { wins: winningTrades, losses: losingTrades })}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
             {periodLabel}
           </div>
@@ -686,14 +594,14 @@ export default function JournalTab({
           <div className="metric">
             {profitFactor === null || profitFactor === undefined ? '∞' : Number(profitFactor).toFixed(2)}
           </div>
-          <div className="label">Profit Factor</div>
+          <div className="label">{t('journal_profit_factor')}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
-            {profitFactor === null ? 'tanpa trade loss' : periodLabel}
+            {profitFactor === null ? t('journal_no_loss_trades') : periodLabel}
           </div>
         </div>
         <div className="card" id="journal-kpi-total-trades">
           <div className="metric">{totalTrades}</div>
-          <div className="label">Total Closed Deals</div>
+          <div className="label">{t('journal_total_deals')}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
             {periodLabel}
           </div>
@@ -713,7 +621,7 @@ export default function JournalTab({
             style={{ fontSize: '11px', padding: '7px 14px' }}
             onClick={() => setFilter(f)}
           >
-            {f === 'All' ? 'Semua Transaksi' : f === 'EA' ? 'Robot / EA' : 'Manual Trader'}
+            {f === 'All' ? t('journal_filter_all') : f === 'EA' ? t('journal_filter_ea') : t('journal_filter_manual')}
           </button>
         ))}
       </div>
@@ -724,7 +632,7 @@ export default function JournalTab({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari simbol, ticket, atau sumber (cth: XAUUSD, EA, #12345)..."
+          placeholder={t('journal_search_ph')}
           style={{
             width: '100%',
             background: '#0b151b',
@@ -744,31 +652,31 @@ export default function JournalTab({
         <div className="cardhead">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <BookOpen size={16} style={{ color: 'var(--g)' }} />
-            <h3>Riwayat Transaksi Real MT5</h3>
+            <h3>{t('journal_history_title')}</h3>
           </div>
-          <span className="tiny">{filteredTrades.length} records</span>
+          <span className="tiny">{t('journal_records', { count: filteredTrades.length })}</span>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--line)', textAlign: 'left' }}>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>TICKET</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>INSTRUMEN</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>ARAH</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>LOT</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>HARGA EXIT</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>SUMBER</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>WAKTU TUTUP</th>
-                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px', textAlign: 'right' }}>REALIZED P/L</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_ticket')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_symbol')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_direction')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_lot')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_exit')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_source')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_close_time')}</th>
+                <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px', textAlign: 'right' }}>{t('journal_th_realized')}</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTrades.map((t) => {
-                const isEa = t.magic > 0;
+              {filteredTrades.map((tradeItem) => {
+                const isEa = tradeItem.magic > 0;
                 const source = isEa ? 'EA' : 'Manual';
-                const closeDateStr = t.close_time
-                  ? new Date(t.close_time * 1000).toLocaleString('id-ID', {
+                const closeDateStr = tradeItem.close_time
+                  ? new Date(tradeItem.close_time * 1000).toLocaleString(locale, {
                       month: 'short',
                       day: 'numeric',
                       hour: '2-digit',
@@ -777,21 +685,21 @@ export default function JournalTab({
                   : '—';
 
                 return (
-                  <tr key={t.ticket} style={{ borderBottom: '1px solid #1c2b33' }}>
+                  <tr key={tradeItem.ticket} style={{ borderBottom: '1px solid #1c2b33' }}>
                     <td style={{ padding: '12px 8px', color: 'var(--muted)', fontSize: '11px', fontFamily: 'monospace' }}>
-                      #{t.ticket}
+                      #{tradeItem.ticket}
                     </td>
-                    <td style={{ padding: '12px 8px', fontWeight: 800 }}>{t.symbol}</td>
+                    <td style={{ padding: '12px 8px', fontWeight: 800 }}>{tradeItem.symbol}</td>
                     <td style={{ padding: '12px 8px' }}>
-                      <span className={`tag ${t.type === 'SELL' ? 'red' : ''}`}>
-                        {t.type}
+                      <span className={`tag ${tradeItem.type === 'SELL' ? 'red' : ''}`}>
+                        {tradeItem.type}
                       </span>
                     </td>
                     <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>
-                      {t.volume.toFixed(2)}
+                      {tradeItem.volume.toFixed(2)}
                     </td>
                     <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>
-                      {t.close_price.toFixed(t.symbol.includes('JPY') ? 3 : t.symbol.includes('XAU') ? 2 : 5)}
+                      {tradeItem.close_price.toFixed(tradeItem.symbol.includes('JPY') ? 3 : tradeItem.symbol.includes('XAU') ? 2 : 5)}
                     </td>
                     <td style={{ padding: '12px 8px' }}>
                       <span className={`tag ${isEa ? 'blue' : ''}`}>
@@ -806,10 +714,10 @@ export default function JournalTab({
                         padding: '12px 8px',
                         textAlign: 'right',
                         fontWeight: 800,
-                        color: t.profit >= 0 ? 'var(--g)' : 'var(--red)'
+                        color: tradeItem.profit >= 0 ? 'var(--g)' : 'var(--red)'
                       }}
                     >
-                      {t.profit >= 0 ? '+' : '−'}${Math.abs(t.profit).toFixed(2)}
+                      {tradeItem.profit >= 0 ? '+' : '−'}${Math.abs(tradeItem.profit).toFixed(2)}
                     </td>
                   </tr>
                 );
@@ -820,15 +728,15 @@ export default function JournalTab({
                     <Layers size={28} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
                     <div style={{ fontWeight: 600, fontSize: '13px', color: '#c9d8dc' }}>
                       {isHistoryLoading
-                        ? 'Memuat riwayat transaksi dari MT5...'
+                        ? t('journal_loading_history')
                         : activeAccountNumber
-                        ? `Belum Ada Transaksi Tertutup di Akun #${activeAccountNumber}`
-                        : 'Belum Ada Transaksi Tertutup'}
+                        ? t('journal_empty_account', { account: activeAccountNumber })
+                        : t('journal_empty')}
                     </div>
                     <div style={{ fontSize: '11px', marginTop: '4px' }}>
                       {activeAccountNumber
-                        ? `Akun MT5 #${activeAccountNumber} aktif terhubung. Transaksi deals tertutup dari akun ini akan otomatis tercatat di sini.`
-                        : 'Transaksi yang dieksekusi dan ditutup pada MetaTrader 5 akan otomatis tersinkronisasi di sini secara real-time.'}
+                        ? t('journal_empty_desc_account', { account: activeAccountNumber })
+                        : t('journal_empty_desc')}
                     </div>
                   </td>
                 </tr>
@@ -841,15 +749,15 @@ export default function JournalTab({
       {/* Real Trading Calendar */}
       <div className="section" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
         <Calendar size={16} style={{ color: 'var(--g)' }} />
-        <span>Trading Calendar</span>
+        <span>{t('journal_calendar')}</span>
         <span className="tiny" style={{ textTransform: 'capitalize' }}>{monthName}</span>
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '6px' }}>
-          {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((day, idx) => (
+          {['journal_weekday_mon', 'journal_weekday_tue', 'journal_weekday_wed', 'journal_weekday_thu', 'journal_weekday_fri', 'journal_weekday_sat', 'journal_weekday_sun'].map((day, idx) => (
             <div key={idx} className="tiny" style={{ textAlign: 'center', padding: '4px', fontWeight: 700 }}>
-              {day}
+              {t(day)}
             </div>
           ))}
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
@@ -867,46 +775,41 @@ export default function JournalTab({
                 style={{
                   border: selectedDate === d ? '1px solid var(--g)' : '1px solid #23373f',
                   borderRadius: '8px',
-                  padding: '7px 2px',
+                  padding: '6px 2px',
                   background: bg,
                   color: color,
                   fontSize: '9.5px',
                   cursor: 'pointer',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  minWidth: 0,
+                  overflow: 'hidden'
                 }}
               >
-                {d}
-                <br />
-                {hasTrades ? (dayPnl >= 0 ? `+$${dayPnl.toFixed(0)}` : `−$${Math.abs(dayPnl).toFixed(0)}`) : '·'}
+                <span>{d}</span>
+                <span
+                  style={{
+                    display: 'block',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontSize: '8.5px',
+                    fontWeight: hasTrades ? 700 : 400
+                  }}
+                >
+                  {hasTrades ? (dayPnl >= 0 ? `+$${dayPnl.toFixed(0)}` : `−$${Math.abs(dayPnl).toFixed(0)}`) : '·'}
+                </span>
               </button>
             );
           })}
         </div>
         {selectedDate && (
           <div className="tiny" style={{ marginTop: '12px', color: 'var(--g)' }}>
-            Tanggal {selectedDate} {monthName}: Realized P/L {dailyPnlMap[selectedDate] !== undefined ? `$${dailyPnlMap[selectedDate].toFixed(2)}` : '$0.00 (tidak ada closed trade)'}.
+            {t('journal_day_detail', {
+              day: selectedDate,
+              month: monthName,
+              pnl: dailyPnlMap[selectedDate] !== undefined ? `$${dailyPnlMap[selectedDate].toFixed(2)}` : t('journal_no_closed_trade')
+            })}
           </div>
-        )}
-      </div>
-
-      {/* AI Pattern Review Card */}
-      <div className="card">
-        <div className="eyebrow">OBJECTIVE PERFORMANCE AUDIT</div>
-        <h3 style={{ margin: '8px 0', fontSize: '14px' }}>Real-time Risk & Discipline Tracking</h3>
-        <p className="sub" style={{ lineHeight: 1.5 }}>
-          Jurnal ini merefleksikan seluruh transaksi akun MT5 secara langsung tanpa interpolasi atau data buatan.
-          Gunakan metrik Win Rate dan Profit Factor untuk mengevaluasi konsistensi eksekusi sebelum meningkatkan ukuran lot.
-        </p>
-        {onNavigateAI && (
-          <button
-            type="button"
-            className="btn alt"
-            style={{ marginTop: '12px' }}
-            onClick={onNavigateAI}
-            id="journal-ai-coach-btn"
-          >
-            Review Strategi dengan AI Coach →
-          </button>
         )}
       </div>
     </div>

@@ -4,8 +4,8 @@ import { NAV_TABS } from '../constants/nav';
 import { useLanguage } from '../context/LanguageContext';
 
 function connectionLabel(connection, t) {
-  if (!connection) return t('no_account', 'Belum ada akun');
-  const account = connection.account_number ? `#${connection.account_number}` : t('unconnected', 'belum terhubung');
+  if (!connection) return t('no_account');
+  const account = connection.account_number ? `#${connection.account_number}` : t('unconnected');
   return `${connection.label} · ${account}`;
 }
 
@@ -28,7 +28,11 @@ export default function PipstrideHeader({
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target) &&
+        !event.target.closest('#header-mobile-account-chip')
+      ) {
         setIsProfileMenuOpen(false);
       }
     }
@@ -54,23 +58,23 @@ export default function PipstrideHeader({
       <div
         className="brand-group"
         onClick={() => onSelectTab('home')}
-        title="Pipstride — Home"
+        title={t('header_brand_home')}
       >
         <div className="brand-logo-box">
           <img
             src="/favicon.svg"
-            alt="Pipstride Logo"
+            alt={t('header_logo_alt')}
             className="brand-logo-img"
           />
         </div>
         <div className="brand-text">
           Pipstride
-          <small>JOURNAL • TELEMETRY • ANALYTICS</small>
+          <small>{t('header_brand_tagline')}</small>
         </div>
       </div>
 
       {/* Desktop Navigation Links */}
-      <nav className="nav-desktop" aria-label="Main Navigation">
+      <nav className="nav-desktop" aria-label={t('header_main_nav')}>
         {NAV_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -83,7 +87,7 @@ export default function PipstrideHeader({
               id={`nav-tab-${tab.id}`}
             >
               <Icon size={14} />
-              <span>{t(`nav_${tab.id}`, tab.label)}</span>
+              <span>{t(`nav_${tab.id}`)}</span>
             </button>
           );
         })}
@@ -93,7 +97,7 @@ export default function PipstrideHeader({
       <div className="header-right">
         {/* Account switcher: one token-bound connection per MT5 account */}
         {connections.length > 0 && (
-          <div className="connection-switcher" title={t('select_account', 'Pilih akun MT5')}>
+          <div className="connection-switcher" title={t('select_account')}>
             <Wallet size={14} />
             {connections.length === 1 ? (
               <span className="connection-switcher-static">
@@ -105,7 +109,7 @@ export default function PipstrideHeader({
                   id="header-connection-switcher"
                   value={activeConnectionId || ''}
                   onChange={(e) => onSelectConnection(e.target.value)}
-                  aria-label={t('select_account', 'Pilih akun MT5')}
+                  aria-label={t('select_account')}
                 >
                   {connections.map((connection) => (
                     <option key={connection.id} value={connection.id}>
@@ -119,6 +123,22 @@ export default function PipstrideHeader({
           </div>
         )}
 
+        {/* Mobile-only compact active account chip (<720px) */}
+        {activeConn?.account_number && (
+          <button
+            type="button"
+            className="header-mobile-account-chip"
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+            title={`MT5 #${activeConn.account_number}`}
+            id="header-mobile-account-chip"
+            aria-expanded={isProfileMenuOpen}
+            aria-label={t('header_toggle_profile')}
+          >
+            <Wallet size={11} />
+            <span>#{activeConn.account_number}</span>
+          </button>
+        )}
+
         {/* Live MT5 Terminal Web-GUI Button */}
         {onOpenMt5Modal && (
           <button
@@ -126,7 +146,7 @@ export default function PipstrideHeader({
             className="btn alt"
             onClick={onOpenMt5Modal}
             id="header-mt5-gui-btn"
-            title="Open MT5 Terminal Screen"
+            title={t('header_mt5_screen_tip')}
             style={{ padding: '7px 10px', fontSize: '11px' }}
           >
             <Monitor size={14} />
@@ -140,16 +160,16 @@ export default function PipstrideHeader({
           id="header-connection-status"
           title={
             isConnected
-              ? `MT5 is connected (${hostType === 'vps' ? 'VPS' : 'Local'})`
-              : 'MT5 Bridge is disconnected or offline'
+              ? t('header_status_connected_tip', { host: hostType === 'vps' ? t('host_vps') : t('host_local') })
+              : t('header_status_offline_tip')
           }
         >
           <span className={`pulse-dot ${isConnected ? 'online' : 'offline'}`} />
-          <span>{isConnected ? t('status_live', 'LIVE') : t('status_offline', 'OFFLINE')}</span>
+          <span>{isConnected ? t('status_live') : t('status_offline')}</span>
           {isConnected && (
             <span className={`host-badge ${hostType === 'vps' ? 'vps' : 'local'}`}>
               {hostType === 'vps' ? <Server size={10} /> : <Laptop size={10} />}
-              <span>{hostType === 'vps' ? t('host_vps', 'VPS') : t('host_local', 'LOCAL')}</span>
+              <span>{hostType === 'vps' ? t('host_vps') : t('host_local')}</span>
             </span>
           )}
           {latency !== null && latency !== undefined && isConnected && (
@@ -158,13 +178,13 @@ export default function PipstrideHeader({
         </div>
 
         {/* Language Switcher Toggle */}
-        <div className="header-lang-switcher" role="group" aria-label="Switch Language">
+        <div className="header-lang-switcher" role="group" aria-label={t('header_switch_language')}>
           <button
             type="button"
             className={`header-lang-btn ${lang === 'en' ? 'active' : ''}`}
             onClick={() => setLang('en')}
             id="header-lang-en-btn"
-            title="English"
+            title={t('header_lang_en')}
           >
             EN
           </button>
@@ -173,7 +193,7 @@ export default function PipstrideHeader({
             className={`header-lang-btn ${lang === 'id' ? 'active' : ''}`}
             onClick={() => setLang('id')}
             id="header-lang-id-btn"
-            title="Bahasa Indonesia"
+            title={t('header_lang_id')}
           >
             ID
           </button>
@@ -186,14 +206,14 @@ export default function PipstrideHeader({
             className={`header-profile-btn ${activeTab === 'profile' || isProfileMenuOpen ? 'active' : ''}`}
             onClick={() => setIsProfileMenuOpen((prev) => !prev)}
             id="header-profile-btn"
-            title="Menu Akun & Sesi"
-            aria-label="Menu Akun"
+            title={t('header_profile_menu')}
+            aria-label={t('header_profile_label')}
             aria-expanded={isProfileMenuOpen}
           >
             <User size={15} />
             <span
               className={`header-profile-status-dot ${isConnected ? 'online' : 'offline'}`}
-              aria-label={isConnected ? 'MT5 Online' : 'MT5 Offline'}
+              aria-label={isConnected ? t('header_mt5_live') : t('header_mt5_offline')}
             />
           </button>
 
@@ -204,14 +224,40 @@ export default function PipstrideHeader({
                   {user?.username ? user.username.slice(0, 2).toUpperCase() : 'PS'}
                 </div>
                 <div className="header-profile-dropdown-meta">
-                  <div className="header-profile-dropdown-name">{user?.username || 'Trader'}</div>
+                  <div className="header-profile-dropdown-name">{user?.username || t('header_trader_fallback')}</div>
                   <div className="header-profile-dropdown-sub">
-                    {user?.email || (activeConn?.account_number ? `MT5 #${activeConn.account_number}` : (user?.role === 'admin' ? 'Administrator' : 'Trader Account'))}
+                    {user?.email || (activeConn?.account_number ? `MT5 #${activeConn.account_number}` : (user?.role === 'admin' ? t('header_role_admin') : t('header_role_trader')))}
                   </div>
                 </div>
               </div>
 
               <div className="header-profile-dropdown-divider" />
+
+              {/* Mobile Account Switcher (when multiple connections exist) */}
+              {connections.length > 1 && (
+                <div className="header-profile-dropdown-account-switcher" id="header-profile-account-switcher">
+                  <div className="header-profile-dropdown-account-label">
+                    <Wallet size={12} />
+                    <span>{t('select_account')}</span>
+                  </div>
+                  <select
+                    value={activeConnectionId || ''}
+                    onChange={(e) => {
+                      onSelectConnection(e.target.value);
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="header-profile-dropdown-select"
+                    aria-label={t('select_account')}
+                    id="header-profile-account-select"
+                  >
+                    {connections.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {connectionLabel(c, t)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* MT5 Telemetry Status in Profile Dropdown */}
               <div
@@ -227,7 +273,7 @@ export default function PipstrideHeader({
                     if (onOpenMt5Modal) onOpenMt5Modal();
                   }
                 }}
-                title={t('modal_title', 'Buka modal koneksi MT5')}
+                title={t('header_open_modal_tip')}
                 role="button"
                 tabIndex={0}
               >
@@ -235,18 +281,18 @@ export default function PipstrideHeader({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className={`pulse-dot ${isConnected ? 'online' : 'offline'}`} />
                     <span className="header-profile-dropdown-mt5-status">
-                      {isConnected ? 'MT5 LIVE' : 'MT5 OFFLINE'}
+                      {isConnected ? t('header_mt5_live') : t('header_mt5_offline')}
                     </span>
                   </div>
                   {isConnected && (
                     <span className={`host-badge ${hostType === 'vps' ? 'vps' : 'local'}`}>
                       {hostType === 'vps' ? <Server size={10} /> : <Laptop size={10} />}
-                      <span>{hostType === 'vps' ? t('host_vps', 'VPS') : t('host_local', 'LOCAL')}</span>
+                      <span>{hostType === 'vps' ? t('host_vps') : t('host_local')}</span>
                     </span>
                   )}
                 </div>
                 <div className="header-profile-dropdown-mt5-details">
-                  <span>{activeConn?.account_number ? `#${activeConn.account_number}` : t('no_account', 'Belum terhubung')}</span>
+                  <span>{activeConn?.account_number ? `#${activeConn.account_number}` : t('no_account')}</span>
                   {latency !== null && latency !== undefined && isConnected && (
                     <span> · {latency}s</span>
                   )}
@@ -257,14 +303,14 @@ export default function PipstrideHeader({
               <div className="header-profile-dropdown-lang">
                 <span className="header-profile-dropdown-lang-label">
                   <Globe size={13} />
-                  <span>{t('language', 'Bahasa')}</span>
+                  <span>{t('header_language')}</span>
                 </span>
                 <div className="header-lang-switcher">
                   <button
                     type="button"
                     className={`header-lang-btn ${lang === 'en' ? 'active' : ''}`}
                     onClick={() => setLang('en')}
-                    title="English"
+                    title={t('header_lang_en')}
                   >
                     EN
                   </button>
@@ -272,7 +318,7 @@ export default function PipstrideHeader({
                     type="button"
                     className={`header-lang-btn ${lang === 'id' ? 'active' : ''}`}
                     onClick={() => setLang('id')}
-                    title="Bahasa Indonesia"
+                    title={t('header_lang_id')}
                   >
                     ID
                   </button>
@@ -291,7 +337,7 @@ export default function PipstrideHeader({
                 id="header-menu-profile-btn"
               >
                 <User size={14} />
-                <span>{t('menu_profile', 'Profil & Pengaturan')}</span>
+                <span>{t('menu_profile')}</span>
               </button>
 
               <div className="header-profile-dropdown-divider" />
@@ -306,7 +352,7 @@ export default function PipstrideHeader({
                 id="header-menu-logout-btn"
               >
                 <LogOut size={14} />
-                <span>{t('menu_logout', 'Keluar')}</span>
+                <span>{t('menu_logout')}</span>
               </button>
             </div>
           )}

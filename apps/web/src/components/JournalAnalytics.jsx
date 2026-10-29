@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, BarChart3, Gauge, TrendingDown, TrendingUp } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const money = (value) => {
   const numeric = Number(value) || 0;
@@ -9,11 +10,11 @@ const money = (value) => {
 const ratio = (value, suffix = '') =>
   value === null || value === undefined ? '∞' : `${value.toFixed(2)}${suffix}`;
 
-const holdTime = (minutes) => {
+const holdTime = (minutes, t) => {
   if (minutes === null || minutes === undefined) return '—';
-  if (minutes < 60) return `${Math.round(minutes)} m`;
-  if (minutes < 1440) return `${(minutes / 60).toFixed(1)} j`;
-  return `${(minutes / 1440).toFixed(1)} d`;
+  if (minutes < 60) return `${Math.round(minutes)} ${t('ja_minutes')}`;
+  if (minutes < 1440) return `${(minutes / 60).toFixed(1)} ${t('ja_hours')}`;
+  return `${(minutes / 1440).toFixed(1)} ${t('ja_days')}`;
 };
 
 function MetricTile({ label, value, tone, hint, id }) {
@@ -32,6 +33,7 @@ function MetricTile({ label, value, tone, hint, id }) {
 }
 
 function BucketBars({ title, subtitle, buckets, icon: Icon }) {
+  const { t } = useLanguage();
   if (!buckets.length) {
     return null;
   }
@@ -84,7 +86,7 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
                 </span>
               </div>
               <span className="tiny" style={{ fontSize: '9px', color: 'var(--muted)', marginLeft: '42px' }}>
-                {bucket.trades} trade · {bucket.win_rate.toFixed(0)}% win · PF {ratio(bucket.profit_factor)}
+                {t('ja_bucket_detail', { count: bucket.trades, win: bucket.win_rate.toFixed(0), pf: ratio(bucket.profit_factor) })}
               </span>
             </div>
           );
@@ -95,13 +97,14 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
 }
 
 export default function JournalAnalytics({ stats, loading, periodLabel }) {
+  const { t } = useLanguage();
   const totals = stats?.totals;
   const hasTrades = Boolean(totals && totals.trades > 0);
 
   if (loading && !stats) {
     return (
       <div className="card tiny" style={{ padding: '18px', textAlign: 'center' }}>
-        Menghitung statistik jurnal...
+        {t('ja_calculating')}
       </div>
     );
   }
@@ -111,11 +114,10 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
       <div className="card" style={{ padding: '18px 20px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <BarChart3 size={16} style={{ color: 'var(--g)' }} />
-          <span style={{ fontSize: '13px', fontWeight: 700 }}>Belum ada data untuk dianalisis</span>
+          <span style={{ fontSize: '13px', fontWeight: 700 }}>{t('ja_no_data')}</span>
         </div>
         <p className="sub" style={{ fontSize: '11.5px', lineHeight: 1.5, margin: 0 }}>
-          Statistik dihitung dari transaksi tertutup pada periode {periodLabel}. Pilih periode yang lebih panjang atau
-          tunggu transaksi berikutnya tersinkron dari MT5.
+          {t('ja_no_data_desc', { period: periodLabel })}
         </p>
       </div>
     );
@@ -128,74 +130,74 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
       <div className="grid-cards-responsive-2col four-cols-desktop">
         <MetricTile
           id="journal-metric-expectancy"
-          label="Expectancy / Trade"
+          label={t('ja_expectancy')}
           value={money(totals.expectancy)}
           tone={totals.expectancy >= 0 ? 'positive' : 'negative'}
-          hint={`${totals.trades} trade · ${periodLabel}`}
+          hint={t('ja_trades_period', { count: totals.trades, period: periodLabel })}
         />
         <MetricTile
           id="journal-metric-avg-win"
-          label="Rata-rata Win"
+          label={t('ja_avg_win')}
           value={money(totals.avg_win)}
           tone="positive"
-          hint={`${totals.wins} trade menang`}
+          hint={t('ja_trades_won', { count: totals.wins })}
         />
         <MetricTile
           id="journal-metric-avg-loss"
-          label="Rata-rata Loss"
+          label={t('ja_avg_loss')}
           value={money(totals.avg_loss)}
           tone="negative"
-          hint={`${totals.losses} trade kalah`}
+          hint={t('ja_trades_lost', { count: totals.losses })}
         />
         <MetricTile
           id="journal-metric-payoff"
-          label="Payoff Ratio"
+          label={t('ja_payoff')}
           value={ratio(totals.payoff_ratio)}
-          hint="Avg win ÷ |avg loss|"
+          hint={t('ja_payoff_hint')}
         />
         <MetricTile
           id="journal-metric-streak-win"
-          label="Win Streak Terpanjang"
+          label={t('ja_win_streak')}
           value={`${totals.max_win_streak ?? 0}x`}
           tone="positive"
-          hint={`Loss streak ${totals.max_loss_streak ?? 0}x`}
+          hint={t('ja_loss_streak', { count: totals.max_loss_streak ?? 0 })}
         />
         <MetricTile
           id="journal-metric-hold"
-          label="Rata-rata Holding"
-          value={holdTime(totals.avg_hold_minutes)}
-          hint={`Volume ${Number(totals.total_volume ?? 0).toFixed(2)} lot`}
+          label={t('ja_avg_hold')}
+          value={holdTime(totals.avg_hold_minutes, t)}
+          hint={t('ja_volume', { vol: Number(totals.total_volume ?? 0).toFixed(2) })}
         />
         <MetricTile
           id="journal-metric-best"
-          label="Best Trade"
+          label={t('ja_best_trade')}
           value={money(totals.best_trade ?? 0)}
           tone="positive"
         />
         <MetricTile
           id="journal-metric-worst"
-          label="Worst Trade"
+          label={t('ja_worst_trade')}
           value={money(totals.worst_trade ?? 0)}
           tone="negative"
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '16px' }}>
         <div className="card" style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
             <Gauge size={14} style={{ color: 'var(--g)' }} />
-            <span style={{ fontSize: '12px', fontWeight: 700 }}>Performa per Simbol</span>
+            <span style={{ fontSize: '12px', fontWeight: 700 }}>{t('ja_by_symbol')}</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--line)', textAlign: 'left' }}>
-                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>SIMBOL</th>
-                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>TRADE</th>
-                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>WIN</th>
-                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>PF</th>
+                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>{t('ja_th_symbol')}</th>
+                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>{t('ja_th_trades')}</th>
+                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>{t('ja_th_win')}</th>
+                  <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px' }}>{t('ja_th_pf')}</th>
                   <th style={{ padding: '7px 6px', color: 'var(--muted)', fontSize: '9.5px', textAlign: 'right' }}>
-                    NET P/L
+                    {t('ja_th_net')}
                   </th>
                 </tr>
               </thead>
@@ -227,7 +229,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
         <div className="card" style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
             <Activity size={14} style={{ color: 'var(--g)' }} />
-            <span style={{ fontSize: '12px', fontWeight: 700 }}>Long vs Short</span>
+            <span style={{ fontSize: '12px', fontWeight: 700 }}>{t('ja_long_short')}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {(stats.by_direction || []).map((bucket) => {
@@ -249,7 +251,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
                       ) : (
                         <TrendingUp size={13} style={{ color: 'var(--g)' }} />
                       )}
-                      {bucket.key === 'SELL' ? 'Short (SELL)' : 'Long (BUY)'}
+                      {bucket.key === 'SELL' ? t('ja_short') : t('ja_long')}
                     </span>
                     <span
                       style={{
@@ -263,37 +265,37 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
                     </span>
                   </div>
                   <div className="tiny" style={{ marginTop: '3px', color: 'var(--muted)' }}>
-                    {bucket.trades} trade · win {(bucket.win_rate ?? 0).toFixed(1)}% · PF {ratio(bucket.profit_factor)}
+                    {t('ja_trade_win_pf', { count: bucket.trades, win: (bucket.win_rate ?? 0).toFixed(1), pf: ratio(bucket.profit_factor) })}
                   </div>
                 </div>
               );
             })}
             {(stats.by_direction || []).length === 0 ? (
-              <span className="tiny">Belum ada data arah trade.</span>
+              <span className="tiny">{t('ja_no_direction')}</span>
             ) : null}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '16px' }}>
         <BucketBars
-          title="Performa per Hari"
-          subtitle="waktu server broker"
+          title={t('ja_by_weekday')}
+          subtitle={t('ja_broker_time')}
           buckets={stats.by_weekday || []}
           icon={BarChart3}
         />
         <BucketBars
-          title="Performa per Jam"
-          subtitle="waktu server broker"
+          title={t('ja_by_hour')}
+          subtitle={t('ja_broker_time')}
           buckets={stats.by_hour || []}
           icon={BarChart3}
         />
       </div>
 
       <div className="tiny" style={{ color: 'var(--muted)', fontSize: '10px' }}>
-        Semua metrik dihitung dari transaksi tertutup yang tersimpan (bukan estimasi). Net P/L periode:{' '}
-        <span style={{ color: netTone === 'positive' ? 'var(--g)' : 'var(--red)' }}>{money(totals.net_profit)}</span> dari{' '}
-        {totals.trades} trade, {totals.breakeven} breakeven.
+        {t('ja_footnote')}{' '}
+        <span style={{ color: netTone === 'positive' ? 'var(--g)' : 'var(--red)' }}>{money(totals.net_profit)}</span>{' '}
+        {t('ja_footnote_rest', { count: totals.trades, breakeven: totals.breakeven })}
       </div>
     </div>
   );

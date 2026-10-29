@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Lock } from 'lucide-react';
 import { api } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const inputStyle = {
   width: '100%',
@@ -18,6 +19,7 @@ const inputStyle = {
  * The token is single use; on success every existing session is revoked.
  */
 export default function ResetPasswordPage({ token, onDone, onCancel }) {
+  const { t } = useLanguage();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,22 +27,22 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
-  const successMessage = 'Password berhasil diperbarui. Silakan masuk dengan password baru Anda.';
+  const successMessage = t('reset_success');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     if (password.length < 8) {
-      setError('Password minimal 8 karakter.');
+      setError(t('err_password_min'));
       return;
     }
     if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-      setError('Password wajib kombinasi huruf dan angka.');
+      setError(t('err_password_alnum'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Konfirmasi password tidak cocok.');
+      setError(t('err_confirm_mismatch'));
       return;
     }
 
@@ -49,7 +51,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
       await api.resetPassword(token, password);
       setDone(true);
     } catch (err) {
-      setError(err.message || 'Tautan reset tidak valid atau sudah kedaluwarsa.');
+      setError(err.message || t('err_reset_link'));
     } finally {
       setLoading(false);
     }
@@ -96,12 +98,12 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
             <img src="/favicon.svg" alt="Pipstride" style={{ width: '30px', height: '30px' }} />
           </div>
           <h1 style={{ fontSize: '22px', fontWeight: 850, letterSpacing: '-0.5px', margin: '4px 0' }}>
-            {done ? 'Password Diperbarui' : 'Atur Password Baru'}
+            {done ? t('reset_title_done') : t('reset_title_form')}
           </h1>
           <p className="sub" style={{ fontSize: '11.5px', color: 'var(--muted)' }}>
             {done
-              ? 'Seluruh sesi lama sudah dicabut'
-              : 'Tautan ini hanya berlaku sekali dan memiliki masa kedaluwarsa'}
+              ? t('reset_sub_done')
+              : t('reset_sub_form')}
           </p>
         </div>
 
@@ -132,7 +134,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
               id="reset-password-done-btn"
             >
               <ArrowLeft size={15} />
-              <span>Kembali ke Halaman Masuk</span>
+              <span>{t('reset_back')}</span>
             </button>
           </>
         ) : (
@@ -161,7 +163,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
             <form onSubmit={handleSubmit} id="reset-password-form">
               <div style={{ marginBottom: '14px' }}>
                 <label htmlFor="reset-password" className="label" style={{ display: 'block' }}>
-                  Password Baru
+                  {t('reset_new_password')}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <Lock
@@ -173,7 +175,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimal 8 karakter (huruf & angka)"
+                    placeholder={t('reset_new_password_ph')}
                     disabled={loading}
                     style={inputStyle}
                     autoComplete="new-password"
@@ -191,7 +193,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
                       color: 'var(--muted)',
                       cursor: 'pointer'
                     }}
-                    title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                    title={showPassword ? t('auth_hide_password') : t('auth_show_password')}
                   >
                     {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
@@ -200,7 +202,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
 
               <div style={{ marginBottom: '18px' }}>
                 <label htmlFor="reset-password-confirm" className="label" style={{ display: 'block' }}>
-                  Ulangi Password Baru
+                  {t('reset_repeat')}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <Lock
@@ -212,7 +214,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
                     type={showPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Ketik ulang password baru"
+                    placeholder={t('reset_repeat_ph')}
                     disabled={loading}
                     style={{ ...inputStyle, paddingRight: '12px' }}
                     autoComplete="new-password"
@@ -229,7 +231,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
                 id="reset-password-submit-btn"
               >
                 <KeyRound size={15} />
-                <span>{loading ? 'Menyimpan...' : 'Simpan Password Baru'}</span>
+                <span>{loading ? t('reset_saving') : t('reset_save')}</span>
               </button>
             </form>
 
@@ -240,7 +242,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
               style={{ width: '100%', marginTop: '12px', padding: '9px', fontSize: '11.5px' }}
             >
               <ArrowLeft size={14} />
-              <span>Batal dan kembali ke halaman masuk</span>
+              <span>{t('reset_cancel')}</span>
             </button>
           </>
         )}
