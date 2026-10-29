@@ -22,7 +22,7 @@ export default function PipstrideHeader({
   user,
   onLogout
 }) {
-  const { lang, setLang, t } = useLanguage();
+  const { lang, setLang, toggleLang, t } = useLanguage();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
 
@@ -176,6 +176,19 @@ export default function PipstrideHeader({
             <span style={{ opacity: 0.75, fontSize: '9px' }}>{latency}s</span>
           )}
         </div>
+
+        {/* Mobile-only compact language toggle: one tap switches language */}
+        <button
+          type="button"
+          className="header-lang-toggle"
+          onClick={toggleLang}
+          id="header-lang-toggle-btn"
+          title={t('header_switch_language')}
+          aria-label={`${t('header_switch_language')} (${lang.toUpperCase()})`}
+        >
+          <Globe size={13} />
+          <span>{lang.toUpperCase()}</span>
+        </button>
 
         {/* Language Switcher Toggle */}
         <div className="header-lang-switcher" role="group" aria-label={t('header_switch_language')}>

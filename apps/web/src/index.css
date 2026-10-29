@@ -71,7 +71,7 @@ body {
 .app-shell {
   max-width: 1140px;
   margin: auto;
-  padding-bottom: 84px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -405,9 +405,64 @@ body {
   opacity: 0.6;
 }
 
+.header-mobile-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: #0d171d;
+  color: #d4e0e1;
+  padding: 5px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.header-mobile-account-chip:hover {
+  background: #14232c;
+  color: var(--g);
+  border-color: rgba(69, 224, 173, 0.4);
+}
+
+.header-profile-dropdown-account-switcher {
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.header-profile-dropdown-account-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.header-profile-dropdown-select {
+  width: 100%;
+  background: #091217;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  padding: 5px 8px;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
 @media (min-width: 720px) {
   .connection-switcher {
     display: inline-flex;
+  }
+  .header-mobile-account-chip {
+    display: none;
   }
 }
 
@@ -472,6 +527,30 @@ body {
   border-radius: 99px;
   padding: 2px;
   gap: 2px;
+}
+
+/* Mobile-only compact language toggle (replaces EN/ID pill + MT5 button below 640px) */
+.header-lang-toggle {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background: #091014;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 5px 9px;
+  color: var(--g);
+  font-size: 10px;
+  font-weight: 800;
+  font-family: inherit;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.header-lang-toggle:hover {
+  border-color: rgba(69, 224, 173, 0.3);
 }
 
 .header-lang-btn {
@@ -578,6 +657,7 @@ main.app-main {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
@@ -1067,6 +1147,16 @@ main.app-main {
     display: none !important;
   }
 
+  /* Mobile: hide full EN/ID pill + MT5 button, show compact globe toggle instead */
+  .header-lang-switcher,
+  #header-mt5-gui-btn {
+    display: none !important;
+  }
+
+  .header-lang-toggle {
+    display: inline-flex;
+  }
+
   .header-profile-status-dot {
     display: block;
   }
@@ -1109,14 +1199,6 @@ main.app-main {
 
   .header-right {
     gap: 6px;
-  }
-
-  .header-right > .header-lang-switcher {
-    display: none;
-  }
-
-  .header-profile-dropdown-lang {
-    display: flex;
   }
 
   .header-new-trade-text {
