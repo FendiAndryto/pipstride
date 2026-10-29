@@ -14,6 +14,8 @@ import {
 } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 
+const BACKGROUND_POLL_INTERVAL = 15000;
+
 function applyConnections(list, setConnections, setActiveConnectionId) {
   const safeList = Array.isArray(list) ? list : [];
   setConnections(safeList);
@@ -41,6 +43,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
   const [telegramStatusMsg, setTelegramStatusMsg] = useState(null);
   const timerRef = useRef(null);
+  const inFlightRef = useRef(false);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -98,14 +101,43 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
     let isMounted = true;
     const runPoll = async () => {
       if (!isMounted) return;
-      await fetchStatus();
+      if (document.hidden) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        await fetchStatus();
+      } finally {
+        inFlightRef.current = false;
+      }
     };
 
-    runPoll();
-    timerRef.current = setInterval(runPoll, pollInterval);
+    const startInterval = (delay) => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(runPoll, delay);
+    };
+
+    // Foreground polls at pollInterval; backgrounded tabs back off to 15s.
+    const handleVisibility = () => {
+      if (!isMounted) return;
+      if (document.hidden) {
+        startInterval(BACKGROUND_POLL_INTERVAL);
+      } else {
+        runPoll();
+        startInterval(pollInterval);
+      }
+    };
+
+    if (document.hidden) {
+      startInterval(BACKGROUND_POLL_INTERVAL);
+    } else {
+      runPoll();
+      startInterval(pollInterval);
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       isMounted = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [fetchStatus, pollInterval]);

@@ -11,3 +11,13 @@ createRoot(document.getElementById('root')).render(
     </LanguageProvider>
   </StrictMode>,
 )
+
+// PWA: register the app-shell service worker on production builds only.
+// Dev keeps vite's HMR untouched, and a stale worker would fight it.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.warn('Service worker registration failed:', error)
+    })
+  })
+}

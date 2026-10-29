@@ -62,6 +62,8 @@ export default function JournalTab({
   const activeAccountNumber = bridgeStatus?.metrics?.account_number || null;
   const isConnected = bridgeStatus?.is_connected ?? false;
   const prevAccountRef = useRef(activeAccountNumber);
+  const historyInFlightRef = useRef(false);
+  const statsInFlightRef = useRef(false);
 
   const initialDeposit = bridgeStatus?.initial_deposit ?? bridgeStatus?.metrics?.initial_deposit ?? null;
   const isDepositOverridden = bridgeStatus?.is_deposit_overridden ?? false;
@@ -81,6 +83,8 @@ export default function JournalTab({
       setLoading(false);
       return;
     }
+    if (document.hidden || historyInFlightRef.current) return;
+    historyInFlightRef.current = true;
     try {
       const data = await api.getTradeHistory();
       // Ensure incoming history belongs to currently connected MT5 account
@@ -92,6 +96,7 @@ export default function JournalTab({
       setHistoryError(true);
     } finally {
       setLoading(false);
+      historyInFlightRef.current = false;
     }
   }, [hasConnection, isConnected, activeAccountNumber]);
 
@@ -102,6 +107,8 @@ export default function JournalTab({
       setStatsLoading(false);
       return;
     }
+    if (document.hidden || statsInFlightRef.current) return;
+    statsInFlightRef.current = true;
     if (isManual) setStatsLoading(true);
     try {
       const data = await api.getJournalStats(period, statsSource);
@@ -114,6 +121,7 @@ export default function JournalTab({
       setStatsError(true);
     } finally {
       setStatsLoading(false);
+      statsInFlightRef.current = false;
     }
   }, [period, statsSource, hasConnection, isConnected, activeAccountNumber]);
 

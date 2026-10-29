@@ -3,6 +3,7 @@ import LoginPage from './components/LoginPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import Dashboard from './components/Dashboard';
 import { api, getToken, clearToken } from './services/api';
+import { useIdleLogout } from './hooks/useIdleLogout';
 import { useLanguage } from './context/LanguageContext';
 import './App.css';
 
@@ -80,6 +81,17 @@ export default function App() {
     window.addEventListener('pipstride:session-expired', handleSessionExpired);
     return () => window.removeEventListener('pipstride:session-expired', handleSessionExpired);
   }, []);
+
+  // Idle logout: drop the JWT after 15 min without interaction, but keep the
+  // selected MT5 connection so the user does not lose their account on re-login.
+  useIdleLogout({
+    onIdle: () => {
+      if (!user) return;
+      clearToken();
+      setUser(null);
+      setSessionExpiredMsg(tRef.current('app_session_expired'));
+    }
+  });
 
   const handleLoginSuccess = async (authData) => {
     setSessionExpiredMsg('');

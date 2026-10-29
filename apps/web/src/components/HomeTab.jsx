@@ -53,6 +53,7 @@ export default function HomeTab({
   // Active account number tracking for instant automatic synchronization
   const currentAccountNumber = metrics.account_number || null;
   const prevAccountNumberRef = useRef(currentAccountNumber);
+  const fetchInFlightRef = useRef(false);
 
   // Initial Balance Benchmark & All-Time Performance Calculations
   const initialDeposit = bridgeStatus?.initial_deposit ?? metrics.initial_deposit ?? balance;
@@ -85,6 +86,8 @@ export default function HomeTab({
 
     let isMounted = true;
     const fetchData = async () => {
+      if (document.hidden || fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
       try {
         const [curve, history] = await Promise.all([
           api.getEquityCurve(chartRange).catch(() => null),
@@ -104,6 +107,8 @@ export default function HomeTab({
         }
       } catch {
         // Ignore transient error
+      } finally {
+        fetchInFlightRef.current = false;
       }
     };
 
