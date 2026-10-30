@@ -21,7 +21,7 @@ class TelegramToggleRequest(BaseModel):
     status_code=status.HTTP_200_OK,
     summary="Get Telegram notification configuration and connectivity status"
 )
-async def get_telegram_status():
+async def get_telegram_status(current_user=Depends(get_current_user)):
     return telegram_service.get_status()
 
 

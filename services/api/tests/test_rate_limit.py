@@ -60,7 +60,8 @@ def test_heartbeat_rate_limit_returns_retry_after(client, account, monkeypatch):
     assert int(blocked.headers["Retry-After"]) > 0
 
 
-def test_heartbeat_rejects_negative_balance(client, account):
+def test_heartbeat_accepts_negative_balance(client, account):
+    """MT5 accounts can go negative (margin call, swap charges). Heartbeat must be accepted, not 422."""
     created = client.post(
         "/api/v1/connections", params={"label": "Bounds"}, headers=account["headers"]
     ).json()
@@ -70,10 +71,11 @@ def test_heartbeat_rejects_negative_balance(client, account):
         json=bad,
         headers={"X-Bridge-Token": created["token"]},
     )
-    assert res.status_code == 422
+    assert res.status_code == 200
 
 
-def test_heartbeat_rejects_negative_equity(client, account):
+def test_heartbeat_accepts_negative_equity(client, account):
+    """Equity can go negative in extreme drawdown. Heartbeat must be accepted, not 422."""
     created = client.post(
         "/api/v1/connections", params={"label": "BoundsEq"}, headers=account["headers"]
     ).json()
@@ -83,7 +85,7 @@ def test_heartbeat_rejects_negative_equity(client, account):
         json=bad,
         headers={"X-Bridge-Token": created["token"]},
     )
-    assert res.status_code == 422
+    assert res.status_code == 200
 
 
 def test_heartbeat_rejects_oversized_candles():

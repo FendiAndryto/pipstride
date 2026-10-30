@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from typing import Any, Optional
 
@@ -22,17 +23,23 @@ TTL_SECONDS = 120
 
 
 class _MemoryBackend:
-    """Bounded process-local cache used when Redis is not configured."""
+    """Bounded process-local cache used when Redis is not configured.
+
+    Thread-safe: all mutations of ``self._store`` are guarded by a lock so that
+    concurrent heartbeats under the default threadpool cannot corrupt state.
+    """
 
     MAX_ENTRIES = 512
 
     def __init__(self) -> None:
         self._store: dict[str, tuple[float, str]] = {}
+        self._lock = threading.Lock()
 
     def set(self, key: str, value: str, ttl: int) -> None:
-        if len(self._store) >= self.MAX_ENTRIES:
-            self._prune(force=True)
-        self._store[key] = (time.time() + ttl, value)
+        with self._lock:
+            if len(self._store) >= self.MAX_ENTRIES:
+                self._prune(force=True)
+            self._store[key] = (time.time() + ttl, value)
 
     def _prune(self, force: bool = False) -> None:
         now = time.time()
@@ -46,17 +53,19 @@ class _MemoryBackend:
                 self._store.pop(key, None)
 
     def get(self, key: str) -> Optional[str]:
-        entry = self._store.get(key)
-        if not entry:
-            return None
-        expires_at, value = entry
-        if expires_at < time.time():
-            self._store.pop(key, None)
-            return None
-        return value
+        with self._lock:
+            entry = self._store.get(key)
+            if not entry:
+                return None
+            expires_at, value = entry
+            if expires_at < time.time():
+                self._store.pop(key, None)
+                return None
+            return value
 
     def delete(self, key: str) -> None:
-        self._store.pop(key, None)
+        with self._lock:
+            self._store.pop(key, None)
 
 
 class _RedisBackend:

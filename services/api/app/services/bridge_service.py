@@ -39,7 +39,7 @@ def _now() -> datetime:
 
 
 def _to_dt(ts: Optional[int]) -> Optional[datetime]:
-    if not ts:
+    if ts is None:
         return None
     return datetime.fromtimestamp(int(ts), tz=timezone.utc)
 
@@ -99,11 +99,13 @@ class BridgeService:
         self._persist_snapshot(db, connection, payload)
         self._persist_trades(db, connection, payload)
 
+        payload_data = payload.model_dump(mode="json")
+        payload_data.pop("bridge_token", None)
         live_state.save_live_payload(
             connection.id,
             {
                 "captured_at": int(time.time()),
-                "payload": payload.model_dump(mode="json"),
+                "payload": payload_data,
             },
         )
 
@@ -282,7 +284,7 @@ class BridgeService:
             trades=trades,
             net_pnl=net_pnl,
             win_rate=round((wins / total) * 100.0, 2) if total else 0.0,
-            profit_factor=round(gross_profit / abs(gross_loss), 2) if gross_loss else 0.0,
+            profit_factor=round(gross_profit / abs(gross_loss), 2) if gross_loss else None,
             total_trades=total,
             winning_trades=wins,
             losing_trades=losses,
