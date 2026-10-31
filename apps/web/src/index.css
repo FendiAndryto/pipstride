@@ -136,6 +136,12 @@ body {
   margin-top: 3px;
 }
 
+@media (max-width: 1120px) {
+  .brand-text small {
+    display: none;
+  }
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -311,7 +317,7 @@ body {
 }
 
 .header-profile-dropdown-lang {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
@@ -466,7 +472,117 @@ body {
   }
 }
 
-/* Status Badge */
+/* Unified MT5 Connection & Account Badge (Desktop) */
+.header-connection-badge {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 99px;
+  background: #0d171d;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+@media (min-width: 720px) {
+  .header-connection-badge {
+    display: inline-flex;
+  }
+}
+
+.header-connection-badge.connected {
+  border-color: rgba(69, 224, 173, 0.35);
+  background: rgba(69, 224, 173, 0.08);
+}
+
+.header-connection-badge.disconnected {
+  border-color: rgba(255, 113, 128, 0.35);
+  background: rgba(255, 113, 128, 0.08);
+}
+
+.header-connection-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.header-connection-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-connection-select-wrap select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  outline: none;
+  max-width: 170px;
+  padding-right: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-connection-select-wrap select option {
+  background: #0d171d;
+  color: var(--text);
+}
+
+.header-connection-caret {
+  position: absolute;
+  right: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.header-connection-latency {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  opacity: 0.85;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Header Action Buttons (MT5 Web-GUI, etc) */
+.header-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: #0d171d;
+  border: 1px solid var(--line);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.header-action-btn:hover {
+  background: #14232c;
+  border-color: rgba(69, 224, 173, 0.4);
+  color: #fff;
+}
+
+/* Status Badge (backwards-compatibility & profile dropdown use) */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -494,7 +610,7 @@ body {
   color: var(--red);
 }
 
-.status-pill .host-badge {
+.host-badge {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -506,13 +622,13 @@ body {
   letter-spacing: 0.5px;
 }
 
-.status-pill.connected .host-badge.vps {
+.host-badge.vps {
   background: rgba(96, 165, 250, 0.18);
   color: #60a5fa;
   border: 1px solid rgba(96, 165, 250, 0.35);
 }
 
-.status-pill.connected .host-badge.local {
+.host-badge.local {
   background: rgba(69, 224, 173, 0.15);
   color: #45e0ad;
   border: 1px solid rgba(69, 224, 173, 0.3);
@@ -529,28 +645,30 @@ body {
   gap: 2px;
 }
 
-/* Mobile-only compact language toggle (replaces EN/ID pill + MT5 button below 640px) */
+/* Compact Language Toggle (Header) */
 .header-lang-toggle {
-  display: none;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: #091014;
-  border: 1px solid var(--line);
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 9px;
   border-radius: 99px;
-  padding: 5px 9px;
+  background: #0d171d;
+  border: 1px solid var(--line);
   color: var(--g);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
   font-family: inherit;
   letter-spacing: 0.5px;
-  line-height: 1.1;
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .header-lang-toggle:hover {
-  border-color: rgba(69, 224, 173, 0.3);
+  background: #14232c;
+  border-color: rgba(69, 224, 173, 0.4);
 }
 
 .header-lang-btn {
@@ -593,10 +711,12 @@ body {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
-  padding: 8px 14px;
+  padding: 7px 12px;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-desktop-tab:hover {
@@ -1143,7 +1263,8 @@ main.app-main {
     display: none;
   }
 
-  .tradegear-header .status-pill {
+  .tradegear-header .status-pill,
+  .tradegear-header .header-connection-badge {
     display: none !important;
   }
 

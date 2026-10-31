@@ -95,16 +95,24 @@ export default function PipstrideHeader({
 
       {/* Header Right Actions */}
       <div className="header-right">
-        {/* Account switcher: one token-bound connection per MT5 account */}
-        {connections.length > 0 && (
-          <div className="connection-switcher" title={t('select_account')}>
-            <Wallet size={14} />
-            {connections.length === 1 ? (
-              <span className="connection-switcher-static">
+        {/* Unified MT5 Connection & Account Badge (Desktop/Tablet >= 720px) */}
+        <div
+          className={`header-connection-badge ${isConnected ? 'connected' : 'disconnected'}`}
+          id="header-connection-status"
+          title={
+            isConnected
+              ? t('header_status_connected_tip', { host: hostType === 'vps' ? t('host_vps') : t('host_local') })
+              : t('header_status_offline_tip')
+          }
+        >
+          <span className={`pulse-dot ${isConnected ? 'online' : 'offline'}`} />
+          {connections.length > 0 ? (
+            connections.length === 1 ? (
+              <span className="header-connection-label">
                 {connectionLabel(connections[0], t)}
               </span>
             ) : (
-              <>
+              <div className="header-connection-select-wrap">
                 <select
                   id="header-connection-switcher"
                   value={activeConnectionId || ''}
@@ -117,11 +125,26 @@ export default function PipstrideHeader({
                     </option>
                   ))}
                 </select>
-                <ChevronDown size={13} className="connection-switcher-caret" />
-              </>
-            )}
-          </div>
-        )}
+                <ChevronDown size={12} className="header-connection-caret" />
+              </div>
+            )
+          ) : (
+            <span className="header-connection-label">
+              {isConnected ? t('status_live') : t('status_offline')}
+            </span>
+          )}
+
+          {isConnected && (
+            <span className={`host-badge ${hostType === 'vps' ? 'vps' : 'local'}`}>
+              {hostType === 'vps' ? <Server size={9} /> : <Laptop size={9} />}
+              <span>{hostType === 'vps' ? t('host_vps') : t('host_local')}</span>
+            </span>
+          )}
+
+          {latency !== null && latency !== undefined && isConnected && (
+            <span className="header-connection-latency">{latency}s</span>
+          )}
+        </div>
 
         {/* Mobile-only compact active account chip (<720px) */}
         {activeConn?.account_number && (
@@ -143,41 +166,18 @@ export default function PipstrideHeader({
         {onOpenMt5Modal && (
           <button
             type="button"
-            className="btn alt"
+            className="header-action-btn"
             onClick={onOpenMt5Modal}
             id="header-mt5-gui-btn"
             title={t('header_mt5_screen_tip')}
-            style={{ padding: '7px 10px', fontSize: '11px' }}
+            aria-label={t('header_mt5_screen_tip')}
           >
             <Monitor size={14} />
             <span className="desktop-only-inline">MT5</span>
           </button>
         )}
 
-        {/* MT5 Connection Telemetry Status Pill with Host Indicator */}
-        <div
-          className={`status-pill ${isConnected ? 'connected' : 'disconnected'}`}
-          id="header-connection-status"
-          title={
-            isConnected
-              ? t('header_status_connected_tip', { host: hostType === 'vps' ? t('host_vps') : t('host_local') })
-              : t('header_status_offline_tip')
-          }
-        >
-          <span className={`pulse-dot ${isConnected ? 'online' : 'offline'}`} />
-          <span>{isConnected ? t('status_live') : t('status_offline')}</span>
-          {isConnected && (
-            <span className={`host-badge ${hostType === 'vps' ? 'vps' : 'local'}`}>
-              {hostType === 'vps' ? <Server size={10} /> : <Laptop size={10} />}
-              <span>{hostType === 'vps' ? t('host_vps') : t('host_local')}</span>
-            </span>
-          )}
-          {latency !== null && latency !== undefined && isConnected && (
-            <span style={{ opacity: 0.75, fontSize: '9px' }}>{latency}s</span>
-          )}
-        </div>
-
-        {/* Mobile-only compact language toggle: one tap switches language */}
+        {/* Compact Language Toggle */}
         <button
           type="button"
           className="header-lang-toggle"
@@ -189,28 +189,6 @@ export default function PipstrideHeader({
           <Globe size={13} />
           <span>{lang.toUpperCase()}</span>
         </button>
-
-        {/* Language Switcher Toggle */}
-        <div className="header-lang-switcher" role="group" aria-label={t('header_switch_language')}>
-          <button
-            type="button"
-            className={`header-lang-btn ${lang === 'en' ? 'active' : ''}`}
-            onClick={() => setLang('en')}
-            id="header-lang-en-btn"
-            title={t('header_lang_en')}
-          >
-            EN
-          </button>
-          <button
-            type="button"
-            className={`header-lang-btn ${lang === 'id' ? 'active' : ''}`}
-            onClick={() => setLang('id')}
-            id="header-lang-id-btn"
-            title={t('header_lang_id')}
-          >
-            ID
-          </button>
-        </div>
 
         {/* Profile Avatar & Popover Dropdown Menu */}
         <div className="header-profile-menu-container" ref={profileMenuRef}>
