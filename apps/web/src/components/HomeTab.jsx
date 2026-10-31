@@ -39,6 +39,14 @@ export default function HomeTab({
       ? t('home_range_week')
       : t('home_range_month');
 
+  const handleRangeChange = (rng) => {
+    setChartRange(rng);
+    // Instant fetch for the selected range without waiting for polling tick
+    api.getEquityCurve(rng).then((curve) => {
+      if (curve) setEquityCurveData(curve);
+    }).catch(() => {});
+  };
+
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
   const currency = metrics.currency || 'USD';
@@ -278,7 +286,7 @@ export default function HomeTab({
                     borderRadius: '6px',
                     cursor: 'pointer'
                   }}
-                  onClick={() => setChartRange(rng)}
+                  onClick={() => handleRangeChange(rng)}
                   id={`chart-filter-${rng.toLowerCase()}-btn`}
                 >
                   {t(`home_range_${rng.toLowerCase()}`)}
@@ -293,7 +301,7 @@ export default function HomeTab({
               (!currentAccountNumber || !equityCurveData.account_number || equityCurveData.account_number === currentAccountNumber)
             );
             const activeCurve = isCurveActive ? equityCurveData : null;
-            const startVal = activeCurve?.initial_deposit ?? initialDeposit;
+            const startVal = activeCurve?.starting_equity ?? activeCurve?.initial_deposit ?? initialDeposit;
             const currentVal = activeCurve?.current_equity ?? equity;
             const netVal = currentVal - startVal;
             const isNetPositive = netVal >= 0;

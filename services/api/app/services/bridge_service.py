@@ -297,34 +297,68 @@ class BridgeService:
     def get_equity_curve(
         self, db: Session, connection: Mt5Connection, time_range: str = "1M"
     ) -> EquityCurveResponse:
-        days = {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "1Y": 365}.get(time_range.upper(), 30)
-        since = _now() - timedelta(days=days)
+        range_norm = (time_range or "").strip().upper()
+        if range_norm in ("DAY", "1D", "D", "TODAY"):
+            period_label = "Day"
+            days: Optional[int] = 1
+        elif range_norm in ("WEEK", "1W", "W"):
+            period_label = "Week"
+            days = 7
+        elif range_norm in ("MONTH", "1M", "M"):
+            period_label = "Month"
+            days = 30
+        elif range_norm in ("3M", "QUARTER"):
+            period_label = "3M"
+            days = 90
+        elif range_norm in ("1Y", "YEAR"):
+            period_label = "1Y"
+            days = 365
+        elif range_norm in ("ALL", "MAX"):
+            period_label = "ALL"
+            days = None
+        else:
+            period_label = "Month"
+            days = 30
+
+        now = _now()
+        since = now - timedelta(days=days) if days is not None else None
 
         deposit = self.get_effective_initial_deposit(db, connection)
         if not deposit or deposit <= 0:
             deposit = 500.0
 
-        # Fetch closed trades for this connection
-        trades = list(
+        # Fetch closed trades for this connection ordered chronologically
+        all_trades = list(
             db.scalars(
                 select(Trade)
                 .where(Trade.connection_id == connection.id)
-                .order_by(Trade.closed_at)
+                .order_by(Trade.closed_at.asc().nulls_last(), Trade.id.asc())
             )
         )
 
-        running_equity = deposit
+        prior_trades = [t for t in all_trades if since and t.closed_at and t.closed_at < since]
+        period_trades = [t for t in all_trades if not since or (t.closed_at and t.closed_at >= since)]
+
+        # Baseline equity at the beginning of the selected window
+        period_start_equity = round(deposit + sum((t.profit or 0.0) for t in prior_trades), 2)
+        running_equity = period_start_equity
+
         points: List[EquityPointItem] = []
 
-        if trades:
-            first_trade_time = trades[0].closed_at or since
-            start_ts = int((first_trade_time - timedelta(minutes=5)).timestamp())
-            points.append(EquityPointItem(timestamp=start_ts, equity=deposit, balance=deposit))
+        if since:
+            period_start_ts = int(since.timestamp())
+        elif period_trades and period_trades[0].closed_at:
+            period_start_ts = int((period_trades[0].closed_at - timedelta(minutes=5)).timestamp())
+        else:
+            period_start_ts = int((now - timedelta(days=1)).timestamp())
 
-            for t in trades:
-                running_equity = round(running_equity + (t.profit or 0.0), 2)
-                t_time = _ts(t.closed_at) or start_ts
-                points.append(EquityPointItem(timestamp=t_time, equity=running_equity, balance=running_equity))
+        # Baseline starting point
+        points.append(EquityPointItem(timestamp=period_start_ts, equity=period_start_equity, balance=period_start_equity))
+
+        for t in period_trades:
+            running_equity = round(running_equity + (t.profit or 0.0), 2)
+            t_time = _ts(t.closed_at) or period_start_ts
+            points.append(EquityPointItem(timestamp=t_time, equity=running_equity, balance=running_equity))
 
         # Append latest live equity point
         live = self._live(connection)
@@ -334,22 +368,22 @@ class BridgeService:
             live_eq = float(p.get("equity", running_equity))
             live_bal = float(p.get("balance", running_equity))
             current_equity = live_eq
-            points.append(EquityPointItem(timestamp=_ts(_now()) or 0, equity=live_eq, balance=live_bal))
-        elif not points:
-            points.append(EquityPointItem(timestamp=_ts(_now() - timedelta(days=1)) or 0, equity=deposit, balance=deposit))
-            points.append(EquityPointItem(timestamp=_ts(_now()) or 0, equity=deposit, balance=deposit))
+            points.append(EquityPointItem(timestamp=_ts(now) or int(now.timestamp()), equity=live_eq, balance=live_bal))
+        elif len(points) == 1:
+            points.append(EquityPointItem(timestamp=_ts(now) or int(now.timestamp()), equity=running_equity, balance=running_equity))
 
-        starting_equity = points[0].equity if points else deposit
-        current_equity = points[-1].equity if points else deposit
+        starting_equity = points[0].equity if points else period_start_equity
+        current_equity = points[-1].equity if points else period_start_equity
         peak = max((p.equity for p in points), default=current_equity)
 
         return EquityCurveResponse(
+            period=period_label,
             starting_equity=starting_equity,
             initial_deposit=deposit,
             current_equity=current_equity,
             peak_equity=peak,
-            all_time_pnl=round(current_equity - deposit, 2),
-            roi_percent=round(((current_equity - deposit) / deposit) * 100.0, 2) if deposit > 0 else 0.0,
+            all_time_pnl=round(current_equity - starting_equity, 2),
+            roi_percent=round(((current_equity - starting_equity) / starting_equity) * 100.0, 2) if starting_equity > 0 else 0.0,
             account_number=connection.account_number,
             server=connection.broker_server,
             points=points,

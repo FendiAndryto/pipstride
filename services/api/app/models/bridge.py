@@ -68,6 +68,7 @@ class EquityPointItem(BaseModel):
 
 
 class EquityCurveResponse(BaseModel):
+    period: Optional[str] = "Month"
     starting_equity: float = 0.0
     initial_deposit: Optional[float] = None
     current_equity: float = 0.0

@@ -12,6 +12,7 @@ from app.db.base import get_db
 from app.db.models import Mt5Connection, User
 from app.models.bridge import (
     BridgeStatusResponse,
+    EquityCurveResponse,
     HeartbeatPayload,
     HeartbeatResponse,
     InitialDepositRequest,
@@ -97,7 +98,7 @@ def reset_trade_history(
     return bridge_service.reset_journal(db, connection)
 
 
-@router.get("/equity-curve")
+@router.get("/equity-curve", response_model=EquityCurveResponse)
 def get_equity_curve(
     range: str = "1M",
     connection: Mt5Connection = Depends(get_active_connection),
