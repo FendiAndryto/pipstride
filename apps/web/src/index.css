@@ -1426,3 +1426,83 @@ main.app-main {
   pointer-events: none;
 }
 
+.journal-symbol-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0 4px;
+}
+
+.journal-symbol-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.journal-symbol-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  padding-left: 2px;
+}
+
+.journal-symbol-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.journal-symbol-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  background: #091014;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.journal-symbol-chip:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.journal-symbol-chip.active {
+  background: rgba(69, 224, 173, 0.14);
+  color: var(--g);
+  border-color: rgba(69, 224, 173, 0.4);
+  box-shadow: 0 0 10px rgba(69, 224, 173, 0.12);
+  font-weight: 700;
+}
+
+.journal-symbol-count {
+  font-family: monospace;
+  font-size: 9.5px;
+  opacity: 0.75;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.journal-symbol-chip.active .journal-symbol-count {
+  background: rgba(69, 224, 173, 0.2);
+  opacity: 1;
+}
+

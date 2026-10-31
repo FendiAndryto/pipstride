@@ -50,6 +50,7 @@ export default function JournalTab({
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All');
+  const [selectedSymbol, setSelectedSymbol] = useState('ALL');
   const [search, setSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [period, setPeriod] = useState('1M');
@@ -111,7 +112,7 @@ export default function JournalTab({
     statsInFlightRef.current = true;
     if (isManual) setStatsLoading(true);
     try {
-      const data = await api.getJournalStats(period, statsSource);
+      const data = await api.getJournalStats(period, statsSource, selectedSymbol);
       // Same guard as history: never show stats from another MT5 account.
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setStats(data);
@@ -123,25 +124,26 @@ export default function JournalTab({
       setStatsLoading(false);
       statsInFlightRef.current = false;
     }
-  }, [period, statsSource, hasConnection, isConnected, activeAccountNumber]);
+  }, [period, statsSource, selectedSymbol, hasConnection, isConnected, activeAccountNumber]);
 
   // 100% Automatic Sync: Immediately wipe previous account history when switching MT5 account
   useEffect(() => {
     if (activeAccountNumber && prevAccountRef.current && prevAccountRef.current !== activeAccountNumber) {
       setHistoryData(null);
       setStats(null);
+      setSelectedSymbol('ALL');
       setStatsError(false);
       setHistoryError(false);
     }
     prevAccountRef.current = activeAccountNumber;
   }, [activeAccountNumber]);
 
-  // Reactive fetch stats when period or source filter changes, trades update, or tab becomes active
+  // Reactive fetch stats when period, source, or symbol filter changes, trades update, or tab becomes active
   useEffect(() => {
     if (activeTab === 'journal' || !activeTab) {
       if (period !== 'MONTH' && (hasConnection || isConnected)) {
         let active = true;
-        api.getJournalStats(period, statsSource)
+        api.getJournalStats(period, statsSource, selectedSymbol)
           .then((data) => {
             if (active && (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber)) {
               setStats(data);
@@ -159,7 +161,7 @@ export default function JournalTab({
         };
       }
     }
-  }, [activeTab, period, statsSource, closedTradesCount, activeAccountNumber, hasConnection, isConnected]);
+  }, [activeTab, period, statsSource, selectedSymbol, closedTradesCount, activeAccountNumber, hasConnection, isConnected]);
 
   // Reactive fetch trade history when tab becomes active, account changes, or closed trade count updates
   useEffect(() => {
@@ -260,10 +262,33 @@ export default function JournalTab({
 
   const trades = useMemo(() => historyData?.trades || [], [historyData]);
 
+  const tradedSymbols = useMemo(() => {
+    const counts = {};
+    trades.forEach((t) => {
+      if (t.symbol) {
+        const s = t.symbol.toUpperCase();
+        counts[s] = (counts[s] || 0) + 1;
+      }
+    });
+    return Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  }, [trades]);
+
+  const symbolTrades = useMemo(() => {
+    if (selectedSymbol === 'ALL') return trades;
+    return trades.filter((t) => t.symbol?.toUpperCase() === selectedSymbol.toUpperCase());
+  }, [trades, selectedSymbol]);
+
+  const symbolFallbackPnl = useMemo(() => {
+    if (selectedSymbol === 'ALL') return historyData?.net_pnl ?? 0;
+    return symbolTrades.reduce((acc, t) => acc + (t.profit || 0), 0);
+  }, [selectedSymbol, symbolTrades, historyData]);
+
   const dailyPnlMap = useMemo(() => {
     const map = {};
     trades.forEach((t) => {
       if (t.close_time) {
+        const matchesSymbol = selectedSymbol === 'ALL' || t.symbol?.toUpperCase() === selectedSymbol.toUpperCase();
+        if (!matchesSymbol) return;
         const d = new Date(t.close_time * 1000);
         if (d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear) {
           const dayNum = d.getDate();
@@ -272,7 +297,7 @@ export default function JournalTab({
       }
     });
     return map;
-  }, [trades, selectedMonthIndex, selectedYear]);
+  }, [trades, selectedMonthIndex, selectedYear, selectedSymbol]);
 
   const monthTrades = useMemo(() => {
     return trades.filter((t) => {
@@ -282,9 +307,11 @@ export default function JournalTab({
       if (!inMonth) return false;
       const isEa = t.magic > 0;
       const source = isEa ? 'EA' : 'Manual';
-      return filter === 'All' || source === filter;
+      const matchesFilter = filter === 'All' || source === filter;
+      const matchesSymbol = selectedSymbol === 'ALL' || t.symbol?.toUpperCase() === selectedSymbol.toUpperCase();
+      return matchesFilter && matchesSymbol;
     });
-  }, [trades, selectedMonthIndex, selectedYear, filter]);
+  }, [trades, selectedMonthIndex, selectedYear, filter, selectedSymbol]);
 
   const monthStats = useMemo(() => {
     if (period !== 'MONTH') return null;
@@ -408,18 +435,20 @@ export default function JournalTab({
 
   const activeStats = period === 'MONTH' ? (monthStats || stats) : stats;
   const totals = activeStats?.totals;
-  const netPnl = totals?.net_profit ?? (period === 'MONTH' ? 0 : (historyData?.net_pnl ?? 0));
-  const winRate = totals?.win_rate ?? (period === 'MONTH' ? 0 : (historyData?.win_rate ?? 0));
-  const profitFactor = totals ? totals.profit_factor : (period === 'MONTH' ? null : historyData?.profit_factor);
-  const totalTrades = totals?.trades ?? (period === 'MONTH' ? 0 : (historyData?.total_trades ?? 0));
-  const winningTrades = totals?.wins ?? (period === 'MONTH' ? 0 : (historyData?.winning_trades ?? 0));
-  const losingTrades = totals?.losses ?? (period === 'MONTH' ? 0 : (historyData?.losing_trades ?? 0));
-  const periodLabel = period === 'MONTH' ? t('journal_month_prefix', { month: monthName }) : t(PERIOD_LABELS[period]);
+  const netPnl = totals?.net_profit ?? (period === 'MONTH' ? 0 : symbolFallbackPnl);
+  const winRate = totals?.win_rate ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.win_rate ?? 0) : 0));
+  const profitFactor = totals ? totals.profit_factor : (period === 'MONTH' ? null : (selectedSymbol === 'ALL' ? historyData?.profit_factor : null));
+  const totalTrades = totals?.trades ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.total_trades ?? 0) : symbolTrades.length));
+  const winningTrades = totals?.wins ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.winning_trades ?? 0) : 0));
+  const losingTrades = totals?.losses ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.losing_trades ?? 0) : 0));
+  const basePeriodLabel = period === 'MONTH' ? t('journal_month_prefix', { month: monthName }) : t(PERIOD_LABELS[period]);
+  const periodLabel = selectedSymbol === 'ALL' ? basePeriodLabel : `${selectedSymbol} • ${basePeriodLabel}`;
 
   const filteredTrades = trades.filter((t) => {
     const isEa = t.magic > 0;
     const source = isEa ? 'EA' : 'Manual';
     const matchesFilter = filter === 'All' || source === filter;
+    const matchesSymbol = selectedSymbol === 'ALL' || t.symbol?.toUpperCase() === selectedSymbol.toUpperCase();
     const matchesSearch =
       t.symbol.toLowerCase().includes(search.toLowerCase()) ||
       source.toLowerCase().includes(search.toLowerCase()) ||
@@ -434,17 +463,18 @@ export default function JournalTab({
         matchesMonth = false;
       }
     }
-    return matchesFilter && matchesSearch && matchesMonth;
+    return matchesFilter && matchesSymbol && matchesSearch && matchesMonth;
   });
 
   const handleExportCSV = () => {
-    if (trades.length === 0) {
+    const tradesToExport = filteredTrades.length > 0 ? filteredTrades : trades;
+    if (tradesToExport.length === 0) {
       alert(t('journal_export_empty'));
       return;
     }
 
     const headers = ['Ticket', 'Symbol', 'Type', 'Volume', 'Open Price', 'Close Price', 'Net PnL', 'Close Time', 'Magic'];
-    const rows = trades.map((t) => [
+    const rows = tradesToExport.map((t) => [
       t.ticket,
       t.symbol,
       t.type,
@@ -452,15 +482,19 @@ export default function JournalTab({
       t.open_price,
       t.close_price,
       t.profit,
-      new Date(t.close_time * 1000).toISOString(),
+      t.close_time ? new Date(t.close_time * 1000).toISOString() : '',
       t.magic
     ]);
+
+    const filename = selectedSymbol === 'ALL'
+      ? `MT5_Trade_Journal_${Date.now()}.csv`
+      : `MT5_Trade_Journal_${selectedSymbol}_${Date.now()}.csv`;
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `MT5_Trade_Journal_${Date.now()}.csv`);
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -569,6 +603,43 @@ export default function JournalTab({
         )}
       </div>
 
+      {/* Dynamic Traded Symbols Filter Bar */}
+      {tradedSymbols.length > 0 && (
+        <div className="journal-symbol-bar animate-fade-in" role="tablist" aria-label={t('journal_filter_symbol_aria')}>
+          <div className="journal-symbol-chips">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selectedSymbol === 'ALL'}
+              className={`journal-symbol-chip ${selectedSymbol === 'ALL' ? 'active' : ''}`}
+              onClick={() => setSelectedSymbol('ALL')}
+              id="journal-symbol-all"
+            >
+              <span>{t('journal_symbol_all')}</span>
+              <span className="journal-symbol-count">{trades.length}</span>
+            </button>
+            {tradedSymbols.map((sym) => {
+              const count = trades.filter((t) => t.symbol?.toUpperCase() === sym).length;
+              const isActive = selectedSymbol === sym;
+              return (
+                <button
+                  key={sym}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`journal-symbol-chip ${isActive ? 'active' : ''}`}
+                  onClick={() => setSelectedSymbol(sym)}
+                  id={`journal-symbol-${sym.toLowerCase()}`}
+                >
+                  <span>{sym}</span>
+                  <span className="journal-symbol-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Real KPIs Grid */}
       <div className="grid-cards-responsive-2col five-cols-desktop">
         <div className="card" id="journal-kpi-net-pnl">
@@ -586,6 +657,11 @@ export default function JournalTab({
           </div>
           <div className="label">
             {t('journal_all_time_growth')} {allTimePnlPercent !== null ? `(${allTimePnlPercent >= 0 ? '+' : ''}${allTimePnlPercent.toFixed(1)}%)` : ''}
+            {selectedSymbol !== 'ALL' && (
+              <span className="tiny" style={{ marginLeft: '4px', opacity: 0.8, color: 'var(--muted)' }}>
+                ({t('journal_account_total')})
+              </span>
+            )}
           </div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
             {initialDeposit ? t('journal_initial_balance_short', { amount: `$${initialDeposit.toFixed(2)}`, source: isDepositOverridden ? '(Manual)' : '(MT5)' }) : t('journal_baseline')}
@@ -616,7 +692,13 @@ export default function JournalTab({
         </div>
       </div>
 
-      <JournalAnalytics stats={activeStats} loading={isStatsLoading} periodLabel={periodLabel} />
+      <JournalAnalytics
+        stats={activeStats}
+        loading={isStatsLoading}
+        periodLabel={periodLabel}
+        selectedSymbol={selectedSymbol}
+        onSelectSymbol={setSelectedSymbol}
+      />
 
 
       {/* Filter Tabs */}

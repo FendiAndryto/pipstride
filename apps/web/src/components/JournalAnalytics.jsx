@@ -96,7 +96,7 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
   );
 }
 
-export default function JournalAnalytics({ stats, loading, periodLabel }) {
+export default function JournalAnalytics({ stats, loading, periodLabel, selectedSymbol = 'ALL', onSelectSymbol = null }) {
   const { t } = useLanguage();
   const totals = stats?.totals;
   const hasTrades = Boolean(totals && totals.trades > 0);
@@ -202,25 +202,40 @@ export default function JournalAnalytics({ stats, loading, periodLabel }) {
                 </tr>
               </thead>
               <tbody>
-                {(stats.by_symbol || []).map((bucket) => (
-                  <tr key={bucket.key} style={{ borderBottom: '1px solid #1c2b33' }}>
-                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{bucket.key}</td>
-                    <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{bucket.trades}</td>
-                    <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{bucket.win_rate.toFixed(1)}%</td>
-                    <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{ratio(bucket.profit_factor)}</td>
-                    <td
+                {(stats.by_symbol || []).map((bucket) => {
+                  const isSelected = selectedSymbol === bucket.key;
+                  return (
+                    <tr
+                      key={bucket.key}
+                      onClick={() => onSelectSymbol && onSelectSymbol(isSelected ? 'ALL' : bucket.key)}
                       style={{
-                        padding: '8px 6px',
-                        textAlign: 'right',
-                        fontFamily: 'monospace',
-                        fontWeight: 700,
-                        color: bucket.net_profit >= 0 ? 'var(--g)' : 'var(--red)'
+                        borderBottom: '1px solid #1c2b33',
+                        cursor: onSelectSymbol ? 'pointer' : 'default',
+                        background: isSelected ? 'rgba(69, 224, 173, 0.08)' : 'transparent',
+                        transition: 'background 0.12s ease'
                       }}
+                      title={onSelectSymbol ? (isSelected ? 'Reset filter to all symbols' : `Filter by ${bucket.key}`) : undefined}
                     >
-                      {money(bucket.net_profit)}
-                    </td>
-                  </tr>
-                ))}
+                      <td style={{ padding: '8px 6px', fontWeight: 700, color: isSelected ? 'var(--g)' : 'inherit' }}>
+                        {bucket.key}
+                      </td>
+                      <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{bucket.trades}</td>
+                      <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{bucket.win_rate.toFixed(1)}%</td>
+                      <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{ratio(bucket.profit_factor)}</td>
+                      <td
+                        style={{
+                          padding: '8px 6px',
+                          textAlign: 'right',
+                          fontFamily: 'monospace',
+                          fontWeight: 700,
+                          color: bucket.net_profit >= 0 ? 'var(--g)' : 'var(--red)'
+                        }}
+                      >
+                        {money(bucket.net_profit)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

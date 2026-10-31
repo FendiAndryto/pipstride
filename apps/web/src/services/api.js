@@ -314,10 +314,14 @@ export const api = {
 
   /**
    * Aggregated journal analytics for the active connection.
-   * range: 1M | 3M | 1Y | ALL, source: all | ea | manual
+   * range: 1M | 3M | 1Y | ALL, source: all | ea | manual, symbol: string | null
    */
-  async getJournalStats(range = '1M', source = 'all') {
-    const query = new URLSearchParams({ range, source });
+  async getJournalStats(range = '1M', source = 'all', symbol = null) {
+    const params = { range, source };
+    if (symbol && symbol !== 'ALL') {
+      params.symbol = symbol;
+    }
+    const query = new URLSearchParams(params);
     const res = await authFetch(`${API_BASE}/api/v1/journal/stats?${query.toString()}`, {
       method: 'GET'
     });
