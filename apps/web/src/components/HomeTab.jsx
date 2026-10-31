@@ -293,33 +293,54 @@ export default function HomeTab({
               (!currentAccountNumber || !equityCurveData.account_number || equityCurveData.account_number === currentAccountNumber)
             );
             const activeCurve = isCurveActive ? equityCurveData : null;
-            const points = activeCurve?.points || [];
-            let pathD = '';
-            let areaD = '';
-
-            const isNetPositive = (activeCurve?.current_equity ?? equity) >= (activeCurve?.starting_equity ?? balance);
+            const startVal = activeCurve?.initial_deposit ?? initialDeposit;
+            const currentVal = activeCurve?.current_equity ?? equity;
+            const netVal = currentVal - startVal;
+            const isNetPositive = netVal >= 0;
             const strokeColor = isNetPositive ? '#45e0ad' : '#ff5b6b';
             const gradientId = isNetPositive ? 'pipstride-area-pos' : 'pipstride-area-neg';
 
+            // Build points: prefer activeCurve points, fallback to reconstructed curve from historyData and initialDeposit
+            let points = activeCurve?.points || [];
+            if (points.length === 0 && historyData?.trades && historyData.trades.length > 0) {
+              let run = startVal;
+              const sorted = [...historyData.trades].sort((a, b) => (a.close_time || 0) - (b.close_time || 0));
+              points = [
+                { timestamp: (sorted[0].close_time || 0) - 300, equity: startVal, balance: startVal },
+                ...sorted.map((t) => {
+                  run = Math.round((run + (t.profit || 0)) * 100) / 100;
+                  return { timestamp: t.close_time || 0, equity: run, balance: run };
+                }),
+                { timestamp: Math.floor(Date.now() / 1000), equity: currentVal, balance: balance }
+              ];
+            }
+
+            let pathD = '';
+            let areaD = '';
+
             if (points.length >= 2) {
               const equities = points.map((p) => p.equity);
-              let minEq = Math.min(...equities);
-              let maxEq = Math.max(...equities);
+              let minEq = Math.min(startVal, ...equities);
+              let maxEq = Math.max(startVal, ...equities);
               if (maxEq - minEq < 1.0) {
                 maxEq += 5.0;
                 minEq -= 5.0;
               }
+              const pad = Math.max((maxEq - minEq) * 0.08, 2.0);
+              const yMin = minEq - pad;
+              const yMax = maxEq + pad;
+
               const coords = points.map((p, idx) => {
                 const x = Math.round((idx / (points.length - 1)) * 600);
-                const y = Math.round(155 - ((p.equity - minEq) / (maxEq - minEq)) * 120);
+                const y = Math.round(155 - ((p.equity - yMin) / (yMax - yMin)) * 120);
                 return `${x},${y}`;
               });
               pathD = `M ${coords.join(' L ')}`;
               areaD = `${pathD} L 600,180 L 0,180 Z`;
             } else {
-              // Steady baseline at current equity
-              pathD = 'M 0,90 L 600,90';
-              areaD = 'M 0,90 L 600,90 L 600,180 L 0,180 Z';
+              // Steady baseline at initial deposit to current equity
+              pathD = 'M 0,120 L 600,75';
+              areaD = 'M 0,120 L 600,75 L 600,180 L 0,180 Z';
             }
 
             return (
@@ -343,10 +364,10 @@ export default function HomeTab({
                 </svg>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted)', fontSize: '9.5px', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
-                  <span>{t('home_curve_start', { range: rangeLabel })} {formatCurrency(activeCurve?.starting_equity ?? balance, currency)}</span>
-                  <span>{t('home_equity_real')} {formatCurrency(equity, currency)}</span>
-                  <span style={{ fontWeight: 700, color: (activeCurve?.all_time_pnl ?? allTimePnl) >= 0 ? 'var(--g)' : 'var(--red)' }}>
-                    {t('home_net')} {(activeCurve?.all_time_pnl ?? allTimePnl) >= 0 ? '+' : ''}{formatCurrency(activeCurve?.all_time_pnl ?? allTimePnl, currency)}
+                  <span>{t('home_curve_start', { range: rangeLabel })} {formatCurrency(startVal, currency)}</span>
+                  <span>{t('home_equity_real')} {formatCurrency(currentVal, currency)}</span>
+                  <span style={{ fontWeight: 700, color: isNetPositive ? 'var(--g)' : 'var(--red)' }}>
+                    {t('home_net')} {isNetPositive ? '+' : ''}{formatCurrency(netVal, currency)}
                   </span>
                 </div>
               </>

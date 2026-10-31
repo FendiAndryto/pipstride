@@ -300,37 +300,56 @@ class BridgeService:
         days = {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "1Y": 365}.get(time_range.upper(), 30)
         since = _now() - timedelta(days=days)
 
-        rows = list(
+        deposit = self.get_effective_initial_deposit(db, connection)
+        if not deposit or deposit <= 0:
+            deposit = 500.0
+
+        # Fetch closed trades for this connection
+        trades = list(
             db.scalars(
-                select(TelemetrySnapshot)
-                .where(
-                    TelemetrySnapshot.connection_id == connection.id,
-                    TelemetrySnapshot.captured_at >= since,
-                )
-                .order_by(TelemetrySnapshot.captured_at)
+                select(Trade)
+                .where(Trade.connection_id == connection.id)
+                .order_by(Trade.closed_at)
             )
         )
 
-        points = [
-            EquityPointItem(
-                timestamp=_ts(row.captured_at) or 0,
-                equity=row.equity,
-                balance=row.balance,
-            )
-            for row in rows
-        ]
+        running_equity = deposit
+        points: List[EquityPointItem] = []
 
-        deposit = self.get_effective_initial_deposit(db, connection)
-        current_equity = points[-1].equity if points else 0.0
-        peak = max((p.equity for p in points), default=0.0)
+        if trades:
+            first_trade_time = trades[0].closed_at or since
+            start_ts = int((first_trade_time - timedelta(minutes=5)).timestamp())
+            points.append(EquityPointItem(timestamp=start_ts, equity=deposit, balance=deposit))
+
+            for t in trades:
+                running_equity = round(running_equity + (t.profit or 0.0), 2)
+                t_time = _ts(t.closed_at) or start_ts
+                points.append(EquityPointItem(timestamp=t_time, equity=running_equity, balance=running_equity))
+
+        # Append latest live equity point
+        live = self._live(connection)
+        current_equity = running_equity
+        if live and "payload" in live:
+            p = live["payload"]
+            live_eq = float(p.get("equity", running_equity))
+            live_bal = float(p.get("balance", running_equity))
+            current_equity = live_eq
+            points.append(EquityPointItem(timestamp=_ts(_now()) or 0, equity=live_eq, balance=live_bal))
+        elif not points:
+            points.append(EquityPointItem(timestamp=_ts(_now() - timedelta(days=1)) or 0, equity=deposit, balance=deposit))
+            points.append(EquityPointItem(timestamp=_ts(_now()) or 0, equity=deposit, balance=deposit))
+
+        starting_equity = points[0].equity if points else deposit
+        current_equity = points[-1].equity if points else deposit
+        peak = max((p.equity for p in points), default=current_equity)
 
         return EquityCurveResponse(
-            starting_equity=points[0].equity if points else 0.0,
+            starting_equity=starting_equity,
             initial_deposit=deposit,
             current_equity=current_equity,
             peak_equity=peak,
-            all_time_pnl=round(current_equity - deposit, 2) if deposit else None,
-            roi_percent=round(((current_equity - deposit) / deposit) * 100.0, 2) if deposit else None,
+            all_time_pnl=round(current_equity - deposit, 2),
+            roi_percent=round(((current_equity - deposit) / deposit) * 100.0, 2) if deposit > 0 else 0.0,
             account_number=connection.account_number,
             server=connection.broker_server,
             points=points,
