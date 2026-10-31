@@ -10,6 +10,7 @@ class RiskWatchdogStatusResponse(BaseModel):
     alert_reason: Optional[str] = None
     alert_time: Optional[int] = None
     daily_drawdown_percent: float = 0.0
+    daily_starting_balance: Optional[float] = None
     max_daily_drawdown_percent: float = 3.0
     margin_level: float = 0.0
     max_spread_points: int = Field(35, description="Spread ceiling used by the watchdog")

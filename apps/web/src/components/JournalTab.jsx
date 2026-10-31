@@ -66,16 +66,6 @@ export default function JournalTab({
   const historyInFlightRef = useRef(false);
   const statsInFlightRef = useRef(false);
 
-  const initialDeposit = bridgeStatus?.initial_deposit ?? bridgeStatus?.metrics?.initial_deposit ?? null;
-  const isDepositOverridden = bridgeStatus?.is_deposit_overridden ?? false;
-  const equity = bridgeStatus?.metrics?.equity ?? null;
-  const allTimePnl = bridgeStatus?.all_time_pnl !== undefined && bridgeStatus?.all_time_pnl !== null
-    ? bridgeStatus.all_time_pnl
-    : (equity !== null && initialDeposit !== null ? equity - initialDeposit : null);
-  const allTimePnlPercent = bridgeStatus?.all_time_pnl_percent !== undefined && bridgeStatus?.all_time_pnl_percent !== null
-    ? bridgeStatus.all_time_pnl_percent
-    : (initialDeposit > 0 && allTimePnl !== null ? (allTimePnl / initialDeposit) * 100 : null);
-
   const isHistoryLoading = loading || (!historyData && !historyError && (hasConnection || isConnected));
   const isStatsLoading = statsLoading || (period === 'MONTH' ? isHistoryLoading : (!stats && !statsError && (hasConnection || isConnected)));
 
@@ -466,6 +456,92 @@ export default function JournalTab({
     return matchesFilter && matchesSymbol && matchesSearch && matchesMonth;
   });
 
+  const [page, setPage] = useState(1);
+  const [prevFilterKey, setPrevFilterKey] = useState('');
+  const filterKey = `${filter}|${selectedSymbol}|${search}|${period}|${selectedMonth}`;
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(filteredTrades.length / pageSize) || 1;
+  const currentPage = Math.min(page, totalPages);
+  const paginatedTrades = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTrades.slice(start, start + pageSize);
+  }, [filteredTrades, currentPage, pageSize]);
+
+  const dayBuckets = useMemo(() => {
+    const nowSec = Math.floor(new Date().getTime() / 1000);
+    const relevantTrades = period === 'MONTH' ? monthTrades : trades.filter((t) => {
+      if (!t.close_time) return false;
+      const isEa = t.magic > 0;
+      const source = isEa ? 'EA' : 'Manual';
+      const matchesFilter = filter === 'All' || source === filter;
+      const matchesSymbol = selectedSymbol === 'ALL' || t.symbol?.toUpperCase() === selectedSymbol.toUpperCase();
+      if (!matchesFilter || !matchesSymbol) return false;
+
+      if (period === '1M') return t.close_time >= (nowSec - 30 * 86400);
+      if (period === '3M') return t.close_time >= (nowSec - 90 * 86400);
+      if (period === '1Y') return t.close_time >= (nowSec - 365 * 86400);
+      return true;
+    });
+
+    const dayMap = {};
+    relevantTrades.forEach((t) => {
+      if (!t.close_time) return;
+      const d = new Date(t.close_time * 1000);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      const isoDate = `${y}-${m}-${dayNum}`;
+
+      if (!dayMap[isoDate]) {
+        const formattedLabel = new Intl.DateTimeFormat(locale, {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short'
+        }).format(d);
+
+        dayMap[isoDate] = {
+          key: formattedLabel,
+          timestamp: t.close_time,
+          trades: 0,
+          wins: 0,
+          losses: 0,
+          net_profit: 0,
+          gross_profit: 0,
+          gross_loss: 0
+        };
+      }
+
+      const item = dayMap[isoDate];
+      item.trades += 1;
+      const prof = t.profit || 0;
+      item.net_profit += prof;
+      if (prof > 0) {
+        item.wins += 1;
+        item.gross_profit += prof;
+      } else if (prof < 0) {
+        item.losses += 1;
+        item.gross_loss += Math.abs(prof);
+      }
+    });
+
+    return Object.values(dayMap)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map((d) => ({
+        key: d.key,
+        trades: d.trades,
+        wins: d.wins,
+        losses: d.losses,
+        net_profit: Math.round(d.net_profit * 100) / 100,
+        win_rate: d.trades > 0 ? (d.wins / d.trades) * 100 : 0,
+        profit_factor: d.gross_loss > 0 ? d.gross_profit / d.gross_loss : (d.gross_profit > 0 ? null : 0)
+      }));
+  }, [period, monthTrades, trades, filter, selectedSymbol, locale]);
+
   const handleExportCSV = () => {
     const tradesToExport = filteredTrades.length > 0 ? filteredTrades : trades;
     if (tradesToExport.length === 0) {
@@ -641,7 +717,7 @@ export default function JournalTab({
       )}
 
       {/* Real KPIs Grid */}
-      <div className="grid-cards-responsive-2col five-cols-desktop">
+      <div className="grid-cards-responsive-2col four-cols-desktop">
         <div className="card" id="journal-kpi-net-pnl">
           <div className={`metric ${netPnl >= 0 ? 'positive' : 'negative'}`}>
             {formatCurrency(netPnl)}
@@ -649,22 +725,6 @@ export default function JournalTab({
           <div className="label">{t('journal_realized_pnl')}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
             {periodLabel}
-          </div>
-        </div>
-        <div className="card" id="journal-kpi-deposit-return">
-          <div className={`metric ${(allTimePnl ?? netPnl) >= 0 ? 'positive' : 'negative'}`}>
-            {allTimePnl !== null ? `${allTimePnl >= 0 ? '+' : '−'}$${Math.abs(allTimePnl).toFixed(2)}` : formatCurrency(netPnl)}
-          </div>
-          <div className="label">
-            {t('journal_all_time_growth')} {allTimePnlPercent !== null ? `(${allTimePnlPercent >= 0 ? '+' : ''}${allTimePnlPercent.toFixed(1)}%)` : ''}
-            {selectedSymbol !== 'ALL' && (
-              <span className="tiny" style={{ marginLeft: '4px', opacity: 0.8, color: 'var(--muted)' }}>
-                ({t('journal_account_total')})
-              </span>
-            )}
-          </div>
-          <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
-            {initialDeposit ? t('journal_initial_balance_short', { amount: `$${initialDeposit.toFixed(2)}`, source: isDepositOverridden ? '(Manual)' : '(MT5)' }) : t('journal_baseline')}
           </div>
         </div>
         <div className="card" id="journal-kpi-win-rate">
@@ -693,7 +753,10 @@ export default function JournalTab({
       </div>
 
       <JournalAnalytics
-        stats={activeStats}
+        stats={{
+          ...activeStats,
+          by_weekday: dayBuckets.length > 0 ? dayBuckets : (activeStats?.by_weekday || [])
+        }}
         loading={isStatsLoading}
         periodLabel={periodLabel}
         selectedSymbol={selectedSymbol}
@@ -747,9 +810,9 @@ export default function JournalTab({
           <span className="tiny">{t('journal_records', { count: filteredTrades.length })}</span>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', maxHeight: '440px', overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, background: '#0e181e', zIndex: 2 }}>
               <tr style={{ borderBottom: '1px solid var(--line)', textAlign: 'left' }}>
                 <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_ticket')}</th>
                 <th style={{ padding: '10px 8px', color: 'var(--muted)', fontSize: '10px' }}>{t('journal_th_symbol')}</th>
@@ -762,7 +825,7 @@ export default function JournalTab({
               </tr>
             </thead>
             <tbody>
-              {filteredTrades.map((tradeItem) => {
+              {paginatedTrades.map((tradeItem) => {
                 const isEa = tradeItem.magic > 0;
                 const source = isEa ? 'EA' : 'Manual';
                 const closeDateStr = tradeItem.close_time
@@ -834,6 +897,49 @@ export default function JournalTab({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: '12px',
+              marginTop: '10px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+              fontSize: '11px',
+              color: 'var(--muted)'
+            }}
+          >
+            <span>
+              {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredTrades.length)} / {filteredTrades.length}
+            </span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn alt"
+                style={{ padding: '4px 10px', fontSize: '11px', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer' }}
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                &larr;
+              </button>
+              <span style={{ padding: '0 6px', fontWeight: 700, color: '#e6f1f2' }}>
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn alt"
+                style={{ padding: '4px 10px', fontSize: '11px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer' }}
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                &rarr;
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Real Trading Calendar */}

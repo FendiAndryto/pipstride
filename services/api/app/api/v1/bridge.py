@@ -133,12 +133,17 @@ def get_risk_watchdog(
 
     status_response = bridge_service.get_status(db, connection)
     drawdown = 0.0
-    if status_response.initial_deposit and status_response.metrics:
-        drawdown = max(
-            0.0,
-            ((status_response.initial_deposit - status_response.metrics.equity)
-             / status_response.initial_deposit) * 100.0,
+    daily_start_balance = 0.0
+    if status_response.metrics and status_response.metrics.balance:
+        daily_start_balance = bridge_service.get_daily_starting_balance(
+            db, connection, status_response.metrics.balance
         )
+        equity = status_response.metrics.equity
+        if daily_start_balance > 0 and equity < daily_start_balance:
+            drawdown = max(
+                0.0,
+                ((daily_start_balance - equity) / daily_start_balance) * 100.0,
+            )
 
     return RiskWatchdogStatusResponse(
         is_alert_active=drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT,
@@ -150,6 +155,7 @@ def get_risk_watchdog(
         ),
         alert_time=int(time.time()) if drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT else None,
         daily_drawdown_percent=round(drawdown, 2),
+        daily_starting_balance=round(daily_start_balance, 2) if daily_start_balance > 0 else None,
         max_daily_drawdown_percent=settings.MAX_DAILY_DRAWDOWN_PERCENT,
         margin_level=status_response.metrics.margin_level if status_response.metrics else 0.0,
         max_spread_points=settings.MAX_SPREAD_POINTS,

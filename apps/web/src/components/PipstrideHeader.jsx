@@ -30,8 +30,7 @@ export default function PipstrideHeader({
     function handleClickOutside(event) {
       if (
         profileMenuRef.current &&
-        !profileMenuRef.current.contains(event.target) &&
-        !event.target.closest('#header-mobile-account-chip')
+        !profileMenuRef.current.contains(event.target)
       ) {
         setIsProfileMenuOpen(false);
       }
@@ -136,22 +135,6 @@ export default function PipstrideHeader({
             </span>
           )}
         </div>
-
-        {/* Mobile-only compact active account chip (<720px) */}
-        {activeConn?.account_number && (
-          <button
-            type="button"
-            className="header-mobile-account-chip"
-            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
-            title={`MT5 #${activeConn.account_number}`}
-            id="header-mobile-account-chip"
-            aria-expanded={isProfileMenuOpen}
-            aria-label={t('header_toggle_profile')}
-          >
-            <Wallet size={11} />
-            <span>#{activeConn.account_number}</span>
-          </button>
-        )}
 
         {/* Live MT5 Terminal Web-GUI Button */}
         {onOpenMt5Modal && (
@@ -281,26 +264,43 @@ export default function PipstrideHeader({
                 </div>
               </div>
 
-              {/* Mobile-only language switcher inside dropdown */}
-              <div className="header-profile-dropdown-lang">
+              {/* Language switcher inside dropdown */}
+              <div
+                className="header-profile-dropdown-lang"
+                id="header-profile-lang-row"
+                onClick={(e) => {
+                  if (!e.target.closest('.header-lang-btn')) {
+                    toggleLang();
+                  }
+                }}
+                title={t('header_switch_language')}
+              >
                 <span className="header-profile-dropdown-lang-label">
-                  <Globe size={13} />
+                  <Globe size={13} style={{ color: 'var(--g)' }} />
                   <span>{t('header_language')}</span>
                 </span>
                 <div className="header-lang-switcher">
                   <button
                     type="button"
                     className={`header-lang-btn ${lang === 'en' ? 'active' : ''}`}
-                    onClick={() => setLang('en')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLang('en');
+                    }}
                     title={t('header_lang_en')}
+                    id="profile-lang-en-btn"
                   >
                     EN
                   </button>
                   <button
                     type="button"
                     className={`header-lang-btn ${lang === 'id' ? 'active' : ''}`}
-                    onClick={() => setLang('id')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLang('id');
+                    }}
                     title={t('header_lang_id')}
+                    id="profile-lang-id-btn"
                   >
                     ID
                   </button>

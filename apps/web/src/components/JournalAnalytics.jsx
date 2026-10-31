@@ -46,15 +46,15 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
         <span style={{ fontSize: '12px', fontWeight: 700 }}>{title}</span>
         {subtitle ? <span className="tiny">{subtitle}</span> : null}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
         {buckets.map((bucket) => {
           const positive = bucket.net_profit >= 0;
           return (
             <div key={bucket.key} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
               <div
-                style={{ display: 'grid', gridTemplateColumns: '34px 1fr 82px', gap: '8px', alignItems: 'center' }}
+                style={{ display: 'grid', gridTemplateColumns: 'minmax(105px, max-content) 1fr 82px', gap: '10px', alignItems: 'center' }}
               >
-                <span className="tiny" style={{ fontFamily: 'monospace', color: '#c9d8dc' }}>
+                <span className="tiny" style={{ fontFamily: 'monospace', color: '#c9d8dc', whiteSpace: 'nowrap' }}>
                   {bucket.key}
                 </span>
                 <div
@@ -85,7 +85,7 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
                   {money(bucket.net_profit)}
                 </span>
               </div>
-              <span className="tiny" style={{ fontSize: '9px', color: 'var(--muted)', marginLeft: '42px' }}>
+              <span className="tiny" style={{ fontSize: '9px', color: 'var(--muted)', marginLeft: '115px' }}>
                 {t('ja_bucket_detail', { count: bucket.trades, win: bucket.win_rate.toFixed(0), pf: ratio(bucket.profit_factor) })}
               </span>
             </div>
@@ -292,17 +292,11 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '16px' }}>
+      <div>
         <BucketBars
           title={t('ja_by_weekday')}
           subtitle={t('ja_broker_time')}
           buckets={stats.by_weekday || []}
-          icon={BarChart3}
-        />
-        <BucketBars
-          title={t('ja_by_hour')}
-          subtitle={t('ja_broker_time')}
-          buckets={stats.by_hour || []}
           icon={BarChart3}
         />
       </div>

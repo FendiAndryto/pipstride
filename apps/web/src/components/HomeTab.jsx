@@ -173,6 +173,68 @@ export default function HomeTab({
         </div>
       )}
 
+      {/* Performance Snapshot (Moved to top) */}
+      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
+        {t('home_snapshot')}
+      </div>
+      {(() => {
+        const isHistoryActive = Boolean(
+          historyData &&
+          (!currentAccountNumber || !historyData.account_number || historyData.account_number === currentAccountNumber)
+        );
+        const activeHistory = isHistoryActive ? historyData : null;
+
+        return (
+          <div className="grid three" style={{ marginBottom: '20px' }}>
+            <div className="card">
+              <div className="metric">
+                {activeHistory && activeHistory.total_trades > 0
+                  ? `${activeHistory.win_rate.toFixed(1)}%`
+                  : '0.0%'}
+              </div>
+              <div className="label">{t('home_win_rate')}</div>
+              <div className="tiny">
+                {activeHistory && activeHistory.total_trades > 0
+                  ? t('home_trades_breakdown', { total: activeHistory.total_trades, wins: activeHistory.winning_trades, losses: activeHistory.losing_trades })
+                  : t('home_no_trades_yet')}
+              </div>
+            </div>
+            <div className="card">
+              <div className="metric">
+                {activeHistory && activeHistory.total_trades > 0
+                  ? (activeHistory.profit_factor > 0 ? activeHistory.profit_factor.toFixed(2) : (activeHistory.gross_loss === 0 ? '∞' : '0.00'))
+                  : '0.00'}
+              </div>
+              <div className="label">{t('journal_profit_factor')}</div>
+              <div className="tiny">
+                {activeHistory && activeHistory.total_trades > 0
+                  ? `${t('home_gross')} +$${activeHistory.gross_profit?.toFixed(2) ?? '0.00'} / -$${activeHistory.gross_loss?.toFixed(2) ?? '0.00'}`
+                  : t('home_gross_ratio')}
+              </div>
+            </div>
+            <div className="card">
+              {(() => {
+                const ddPct = riskStatus?.daily_drawdown_percent ?? (
+                  balance > 0 && equity < balance ? ((balance - equity) / balance) * 100 : 0
+                );
+                const isNegative = ddPct > 0;
+                return (
+                  <>
+                    <div className={`metric ${isNegative ? 'negative' : ''}`}>
+                      {isNegative ? `−${ddPct.toFixed(2)}%` : '0.0%'}
+                    </div>
+                    <div className="label">{t('home_daily_dd')}</div>
+                    <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
+                      {t('home_daily_dd_desc', { pct: ddPct.toFixed(2) })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* KPIs Grid */}
       <div className="grid kpis">
         {/* Total Balance Card with Initial Deposit & Settled P/L */}
@@ -497,68 +559,6 @@ export default function HomeTab({
           </div>
         )}
       </div>
-
-      {/* Performance Snapshot */}
-      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        {t('home_snapshot')}
-      </div>
-      {(() => {
-        const isHistoryActive = Boolean(
-          historyData &&
-          (!currentAccountNumber || !historyData.account_number || historyData.account_number === currentAccountNumber)
-        );
-        const activeHistory = isHistoryActive ? historyData : null;
-
-        return (
-          <div className="grid three">
-            <div className="card">
-              <div className="metric">
-                {activeHistory && activeHistory.total_trades > 0
-                  ? `${activeHistory.win_rate.toFixed(1)}%`
-                  : '0.0%'}
-              </div>
-              <div className="label">{t('home_win_rate')}</div>
-              <div className="tiny">
-                {activeHistory && activeHistory.total_trades > 0
-                  ? t('home_trades_breakdown', { total: activeHistory.total_trades, wins: activeHistory.winning_trades, losses: activeHistory.losing_trades })
-                  : t('home_no_trades_yet')}
-              </div>
-            </div>
-            <div className="card">
-              <div className="metric">
-                {activeHistory && activeHistory.total_trades > 0
-                  ? (activeHistory.profit_factor > 0 ? activeHistory.profit_factor.toFixed(2) : (activeHistory.gross_loss === 0 ? '∞' : '0.00'))
-                  : '0.00'}
-              </div>
-              <div className="label">{t('journal_profit_factor')}</div>
-              <div className="tiny">
-                {activeHistory && activeHistory.total_trades > 0
-                  ? `${t('home_gross')} +$${activeHistory.gross_profit?.toFixed(2) ?? '0.00'} / -$${activeHistory.gross_loss?.toFixed(2) ?? '0.00'}`
-                  : t('home_gross_ratio')}
-              </div>
-            </div>
-            <div className="card">
-              {(() => {
-                const ddPct = riskStatus?.daily_drawdown_percent ?? (
-                  balance > 0 && equity < balance ? ((balance - equity) / balance) * 100 : 0
-                );
-                const isNegative = ddPct > 0;
-                return (
-                  <>
-                    <div className={`metric ${isNegative ? 'negative' : ''}`}>
-                      {isNegative ? `−${ddPct.toFixed(2)}%` : '0.0%'}
-                    </div>
-                    <div className="label">{t('home_daily_dd')}</div>
-                    <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
-                      {t('home_daily_dd_desc', { pct: ddPct.toFixed(2) })}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }

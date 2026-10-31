@@ -153,9 +153,29 @@ def test_risk_watchdog_is_passive(client, account):
     res = client.get("/api/v1/bridge/risk", headers=account["headers"])
     assert res.status_code == 200
     data = res.json()
-    # Equity above the deposit baseline means no drawdown alert.
-    assert data["daily_drawdown_percent"] == 0.0
+    # Daily drawdown is computed against the daily starting balance (not initial deposit).
+    # Balance 10,500, Equity 10,450 -> 50 / 10,500 = 0.48% (below the 3.0% threshold).
+    assert data["daily_drawdown_percent"] == 0.48
     assert data["is_alert_active"] is False
+
+
+def test_daily_drawdown_calculated_from_daily_start_balance(client, account):
+    """Daily drawdown is measured from start-of-day balance, not initial deposit."""
+    created = create_connection(client, account)
+    # Account grew from 10,000 initial deposit to 12,000 balance.
+    # Today's equity drops to 11,640 -> 360 / 12,000 = 3.0% daily drawdown.
+    # Against initial deposit (10,000) this would wrongly show 0%, but against
+    # daily balance (12,000) it correctly triggers the 3.0% watchdog alert.
+    payload = heartbeat_payload(
+        999999, balance=12_000.0, equity=11_640.0, initial_deposit=10_000.0, closed_trades=[]
+    )
+    send_heartbeat(client, created["token"], payload)
+
+    res = client.get("/api/v1/bridge/risk", headers=account["headers"])
+    assert res.status_code == 200
+    data = res.json()
+    assert data["daily_drawdown_percent"] == 3.0
+    assert data["is_alert_active"] is True
 
 
 def test_rotate_token_invalidates_old_token_and_rebinds(client, account):

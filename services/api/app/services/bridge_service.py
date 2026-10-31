@@ -437,6 +437,49 @@ class BridgeService:
 
         return self.get_initial_deposit_info(db, connection)
 
+    def get_daily_starting_balance(
+        self, db: Session, connection: Mt5Connection, current_balance: float
+    ) -> float:
+        """Calculate start-of-day balance (total saldo awal saat ganti hari).
+
+        At each day rollover (00:00:00 UTC), the daily baseline is the account balance
+        at that exact moment. For the active day, it is reconstructed by subtracting
+        the net profits of trades closed today from the current balance.
+        If a TelemetrySnapshot exists on or before today's start, it is used as verification.
+        """
+        now = _now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # 1. Check for snapshot recorded on or before today's start
+        snapshot = db.scalar(
+            select(TelemetrySnapshot.balance)
+            .where(
+                TelemetrySnapshot.connection_id == connection.id,
+                TelemetrySnapshot.captured_at <= today_start,
+            )
+            .order_by(TelemetrySnapshot.captured_at.desc())
+            .limit(1)
+        )
+        if snapshot is not None and snapshot > 0:
+            return round(float(snapshot), 2)
+
+        # 2. Reconstruct from trades closed today: balance_start = balance_current - today_profits
+        trades_today = list(
+            db.scalars(
+                select(Trade)
+                .where(
+                    Trade.connection_id == connection.id,
+                    Trade.closed_at >= today_start,
+                )
+            )
+        )
+        today_profit = sum((t.profit or 0.0) for t in trades_today)
+        computed_start = round(current_balance - today_profit, 2)
+        if computed_start > 0:
+            return computed_start
+
+        return current_balance if current_balance > 0 else 500.0
+
     def reset_journal(self, db: Session, connection: Mt5Connection) -> dict:
         db.query(Trade).filter(Trade.connection_id == connection.id).delete()
         db.query(TelemetrySnapshot).filter(
