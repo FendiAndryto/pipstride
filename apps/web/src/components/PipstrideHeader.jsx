@@ -54,46 +54,49 @@ export default function PipstrideHeader({
   const activeConn = connections.find((c) => c.id === activeConnectionId) || connections[0];
   return (
     <header className="tradegear-header" id="pipstride-header">
-      {/* Brand & Logo */}
-      <div
-        className="brand-group"
-        onClick={() => onSelectTab('home')}
-        title={t('header_brand_home')}
-      >
-        <div className="brand-logo-box">
-          <img
-            src="/favicon.svg"
-            alt={t('header_logo_alt')}
-            className="brand-logo-img"
-          />
-        </div>
-        <div className="brand-text">
-          Pipstride
-        </div>
-      </div>
+      <div className="header-inner">
+        <div className="header-left">
+          {/* Brand & Logo */}
+          <div
+            className="brand-group"
+            onClick={() => onSelectTab('home')}
+            title={t('header_brand_home')}
+          >
+            <div className="brand-logo-box">
+              <img
+                src="/favicon.svg"
+                alt={t('header_logo_alt')}
+                className="brand-logo-img"
+              />
+            </div>
+            <div className="brand-text">
+              Pipstride
+            </div>
+          </div>
 
-      {/* Desktop Navigation Links */}
-      <nav className="nav-desktop" aria-label={t('header_main_nav')}>
-        {NAV_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`nav-desktop-tab ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectTab(tab.id)}
-              id={`nav-tab-${tab.id}`}
-            >
-              <Icon size={14} />
-              <span>{t(`nav_${tab.id}`)}</span>
-            </button>
-          );
-        })}
-      </nav>
+          {/* Desktop Navigation Links */}
+          <nav className="nav-desktop" aria-label={t('header_main_nav')}>
+            {NAV_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`nav-desktop-tab ${isActive ? 'active' : ''}`}
+                  onClick={() => onSelectTab(tab.id)}
+                  id={`nav-tab-${tab.id}`}
+                >
+                  <Icon size={14} />
+                  <span>{t(`nav_${tab.id}`)}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-      {/* Header Right Actions */}
-      <div className="header-right">
+        {/* Header Right Actions */}
+        <div className="header-right">
         {/* Unified MT5 Connection & Account Badge (Desktop/Tablet >= 720px) */}
         <div
           className={`header-connection-badge ${isConnected ? 'connected' : 'disconnected'}`}
@@ -336,6 +339,7 @@ export default function PipstrideHeader({
             </div>
           )}
         </div>
+      </div>
       </div>
     </header>
   );
