@@ -69,7 +69,6 @@ export default function PipstrideHeader({
         </div>
         <div className="brand-text">
           Pipstride
-          <small>{t('header_brand_tagline')}</small>
         </div>
       </div>
 
@@ -101,7 +100,7 @@ export default function PipstrideHeader({
           id="header-connection-status"
           title={
             isConnected
-              ? t('header_status_connected_tip', { host: hostType === 'vps' ? t('host_vps') : t('host_local') })
+              ? t('header_status_connected_tip', { host: hostType === 'vps' ? t('host_vps') : t('host_local') }) + (latency !== null && latency !== undefined ? ` · ${latency}s` : '')
               : t('header_status_offline_tip')
           }
         >
@@ -132,17 +131,6 @@ export default function PipstrideHeader({
             <span className="header-connection-label">
               {isConnected ? t('status_live') : t('status_offline')}
             </span>
-          )}
-
-          {isConnected && (
-            <span className={`host-badge ${hostType === 'vps' ? 'vps' : 'local'}`}>
-              {hostType === 'vps' ? <Server size={9} /> : <Laptop size={9} />}
-              <span>{hostType === 'vps' ? t('host_vps') : t('host_local')}</span>
-            </span>
-          )}
-
-          {latency !== null && latency !== undefined && isConnected && (
-            <span className="header-connection-latency">{latency}s</span>
           )}
         </div>
 

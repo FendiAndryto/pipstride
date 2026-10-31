@@ -177,7 +177,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const hostType = bridgeStatus?.host_type || bridgeStatus?.metrics?.host_type || 'local';
 
   return (
-    <div className="app-shell" id="pipstride-dashboard">
+    <div className="dashboard-container" id="pipstride-dashboard">
       {/* Sticky Header with Logo, Navigation Tabs & Status */}
       <PipstrideHeader
         activeTab={activeTab}
@@ -193,8 +193,9 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
         onLogout={onLogout}
       />
 
-      {/* Main Container */}
-      <main className="app-main">
+      <div className="app-shell">
+        {/* Main Container */}
+        <main className="app-main">
         {/* Tab 1: Home Command Center */}
         <div className={`page-container ${activeTab === 'home' ? 'active' : ''}`} id="tab-home">
           <HomeTab
@@ -255,6 +256,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
           />
         </div>
       </main>
+      </div>
 
       {/* Mobile Fixed Bottom Navigation Bar */}
       <PipstrideBottomNav activeTab={activeTab} onSelectTab={setActiveTab} />
