@@ -83,6 +83,30 @@ def test_status_reports_live_metrics_after_heartbeat(client, account):
     assert data["positions"][0]["symbol"] == "EURUSD"
 
 
+def test_trade_sync_updates_cached_status_count(client, account):
+    created = create_connection(client, account)
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(232323, closed_trades=[]),
+    )
+
+    initial = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert initial["closed_trades_count"] == 0
+
+    trades = heartbeat_payload(232323)["closed_trades"]
+    res = client.post(
+        "/api/v1/bridge/sync-trades",
+        json={"account_number": 232323, "closed_trades": trades},
+        headers={"X-Bridge-Token": created["token"]},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["inserted"] == 2
+
+    updated = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert updated["closed_trades_count"] == 2
+
+
 def test_status_without_connection_returns_conflict(client, account):
     res = client.get("/api/v1/bridge/status", headers=account["headers"])
     assert res.status_code == 409

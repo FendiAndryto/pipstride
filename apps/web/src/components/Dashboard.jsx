@@ -34,7 +34,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const [connections, setConnections] = useState([]);
   const [activeConnectionId, setActiveConnectionId] = useState(getActiveConnectionId());
   const [connectionsLoaded, setConnectionsLoaded] = useState(false);
-  const [pollInterval, setPollInterval] = useState(2000);
+  const [pollInterval, setPollInterval] = useState(10000);
 
   // Modals state
   const [isMt5ModalOpen, setIsMt5ModalOpen] = useState(false);

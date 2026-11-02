@@ -20,8 +20,10 @@ logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "pipstride:live:"
 RESYNC_PREFIX = "pipstride:resync:"
+TRADE_COUNT_PREFIX = "pipstride:tradecount:"
 TTL_SECONDS = 120
 RESYNC_TTL_SECONDS = 3600
+TRADE_COUNT_TTL_SECONDS = 3600
 
 
 class _MemoryBackend:
@@ -154,3 +156,31 @@ def consume_trade_resync(connection_id: str) -> bool:
         _backend.delete(key)
         return True
     return False
+
+
+def save_trade_count(connection_id: str, count: int) -> None:
+    """Cache the closed-trade count used by the dashboard status poll.
+
+    ``/bridge/status`` is polled continuously; without this cache every poll
+    runs ``COUNT(*)`` over the connection's trade history. The count is
+    refreshed on trade ingest and on journal reset.
+    """
+    _backend.set(
+        f"{TRADE_COUNT_PREFIX}{connection_id}",
+        str(max(0, int(count))),
+        TRADE_COUNT_TTL_SECONDS,
+    )
+
+
+def load_trade_count(connection_id: str) -> Optional[int]:
+    raw = _backend.get(f"{TRADE_COUNT_PREFIX}{connection_id}")
+    if raw is None:
+        return None
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def clear_trade_count(connection_id: str) -> None:
+    _backend.delete(f"{TRADE_COUNT_PREFIX}{connection_id}")

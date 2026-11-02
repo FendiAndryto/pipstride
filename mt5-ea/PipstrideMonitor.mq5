@@ -23,7 +23,7 @@ input string        InpBridgeToken       = "";                                  
 input ENUM_HOST_ENV InpHostEnv           = HOST_ENV_AUTO;                             // Host Environment (Auto/Local/VPS)
 input string        InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
 input int           InpHistoryDays       = 90;                                        // History lookback days (0 = All History)
-input int           InpHeartbeatInterval = 3;                                         // Heartbeat interval in seconds (3-5 recommended)
+input int           InpHeartbeatInterval = 5;                                         // Heartbeat interval in seconds (5 recommended)
 input bool          InpVerboseLog        = false;                                     // Print detailed logs to Experts tab
 
 //--- Global Variables
@@ -38,9 +38,31 @@ string   g_cached_candles_m5 = "[]";
 datetime g_candles_built_at = 0;
 double   g_cached_initial_deposit = 0.0;
 datetime g_deposit_cached_at = 0;
+long     g_cached_deposit_login = 0;
 bool     g_trades_dirty = true;
 datetime g_last_sync_attempt = 0;
 datetime g_last_full_sync = 0;
+
+// Watchlist and D1 quote caches. FindBrokerSymbol scans every symbol in the
+// terminal and CopyRates has real terminal overhead, so neither belongs on a
+// 5-second heartbeat path.
+#define MAX_WATCH_SYMBOLS 64
+#define D1_REFRESH_SECONDS 60
+
+struct D1BarCache
+{
+   datetime day;
+   datetime refreshed_at;
+   double   open;
+   double   high;
+   double   low;
+   bool     valid;
+};
+
+string    g_watch_base[MAX_WATCH_SYMBOLS];
+string    g_watch_broker[MAX_WATCH_SYMBOLS];
+int       g_watch_count = -1;
+D1BarCache g_d1_cache[MAX_WATCH_SYMBOLS];
 
 // Forward Declarations
 void SendHeartbeat();
@@ -201,6 +223,58 @@ string FindBrokerSymbol(string baseSym)
 }
 
 //+------------------------------------------------------------------+
+//| Resolve the watchlist once. FindBrokerSymbol walks every symbol  |
+//| in the terminal, which is far too expensive for a timer tick.    |
+//+------------------------------------------------------------------+
+void EnsureWatchlistCache()
+{
+   if(g_watch_count >= 0) return;
+
+   string symbols[];
+   int total = StringSplit(InpMonitoredSymbols, ',', symbols);
+   int count = 0;
+
+   for(int i = 0; i < total && count < MAX_WATCH_SYMBOLS; i++)
+   {
+      string baseSym = symbols[i];
+      StringTrimLeft(baseSym);
+      StringTrimRight(baseSym);
+      if(baseSym == "") continue;
+
+      g_watch_base[count] = baseSym;
+      g_watch_broker[count] = FindBrokerSymbol(baseSym);
+      SymbolSelect(g_watch_broker[count], true);
+      count++;
+   }
+   g_watch_count = count;
+}
+
+//+------------------------------------------------------------------+
+//| Refresh one symbol's D1 bar at most once per minute.             |
+//| The open is pinned to the first bar seen for that trading day;   |
+//| only high/low move intraday, so the expensive history call is    |
+//| amortised across many heartbeats.                                |
+//+------------------------------------------------------------------+
+bool RefreshD1Cache(int idx, string symbol)
+{
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   if(CopyRates(symbol, PERIOD_D1, 0, 1, rates) <= 0)
+      return g_d1_cache[idx].valid;
+
+   if(!g_d1_cache[idx].valid || g_d1_cache[idx].day != rates[0].time)
+   {
+      g_d1_cache[idx].day = rates[0].time;
+      g_d1_cache[idx].open = rates[0].open;
+   }
+   g_d1_cache[idx].high = rates[0].high;
+   g_d1_cache[idx].low = rates[0].low;
+   g_d1_cache[idx].refreshed_at = TimeCurrent();
+   g_d1_cache[idx].valid = true;
+   return true;
+}
+
+//+------------------------------------------------------------------+
 //| Get Entry Price and Entry Time for a closed position's deals     |
 //+------------------------------------------------------------------+
 void GetDealPositionOpenDetails(ulong posId, double &openPrice, long &openTime)
@@ -314,20 +388,17 @@ string BuildClosedTradesJson()
 //+------------------------------------------------------------------+
 string BuildMarketQuotesJson()
 {
-   string symbols[];
-   int totalSym = StringSplit(InpMonitoredSymbols, ',', symbols);
+   EnsureWatchlistCache();
+
+   datetime now = TimeCurrent();
    string json = "[";
    int count = 0;
 
-   for(int i = 0; i < totalSym; i++)
+   for(int i = 0; i < g_watch_count; i++)
    {
-      string baseSym = symbols[i];
-      StringTrimLeft(baseSym);
-      StringTrimRight(baseSym);
-      if(baseSym == "") continue;
-
-      string actualSym = FindBrokerSymbol(baseSym);
-      SymbolSelect(actualSym, true);
+      string baseSym = g_watch_base[i];
+      string actualSym = g_watch_broker[i];
+      if(actualSym == "") continue;
 
       double bid = SymbolInfoDouble(actualSym, SYMBOL_BID);
       double ask = SymbolInfoDouble(actualSym, SYMBOL_ASK);
@@ -340,16 +411,16 @@ string BuildMarketQuotesJson()
       double high = bid;
       double low = bid;
 
-      MqlRates d1Rates[];
-      ArraySetAsSeries(d1Rates, true);
-      if(CopyRates(actualSym, PERIOD_D1, 0, 1, d1Rates) > 0)
+      if(!g_d1_cache[i].valid || (now - g_d1_cache[i].refreshed_at) >= D1_REFRESH_SECONDS)
       {
-         if(d1Rates[0].open > 0.0)
-         {
-            changePct = ((bid - d1Rates[0].open) / d1Rates[0].open) * 100.0;
-         }
-         high = d1Rates[0].high;
-         low = d1Rates[0].low;
+         RefreshD1Cache(i, actualSym);
+      }
+
+      if(g_d1_cache[i].valid && g_d1_cache[i].open > 0.0)
+      {
+         changePct = ((bid - g_d1_cache[i].open) / g_d1_cache[i].open) * 100.0;
+         high = g_d1_cache[i].high;
+         low = g_d1_cache[i].low;
       }
 
       if(count > 0) json += ",";
@@ -401,19 +472,35 @@ string BuildCandlesJson(ENUM_TIMEFRAMES tf = PERIOD_M15)
 }
 
 //+------------------------------------------------------------------+
-//| Cached wrapper for initial-deposit scan (rebuild at most 1/min)  |
+//| Cached wrapper for the one-time initial-deposit scan.            |
+//| The first balance deal of a live account never changes, so once  |
+//| found the value is kept for the lifetime of the EA. If history   |
+//| was not ready yet, retry at most once every five minutes.        |
 //+------------------------------------------------------------------+
 double GetAccountInitialDepositCached()
 {
-   // Scanning all balance deals every tick is O(n) over lifetime history
-   // and dominates heartbeat cost on old accounts.
-   datetime now = TimeCurrent();
-   if(g_deposit_cached_at != 0 && (now - g_deposit_cached_at) < 60)
+   long login = (long)AccountInfoInteger(ACCOUNT_LOGIN);
+   if(login != g_cached_deposit_login)
    {
-      return g_cached_initial_deposit;
+      // Account switched without a full reinitialisation: discard the old
+      // account's baseline instead of reporting it for the new one.
+      g_cached_initial_deposit = 0.0;
+      g_deposit_cached_at = 0;
+      g_cached_deposit_login = login;
    }
-   g_cached_initial_deposit = GetAccountInitialDeposit();
+
+   if(g_cached_initial_deposit > 0.0)
+      return g_cached_initial_deposit;
+
+   datetime now = TimeCurrent();
+   if(g_deposit_cached_at != 0 && (now - g_deposit_cached_at) < 300)
+      return g_cached_initial_deposit;
+
+   double scanned = GetAccountInitialDeposit();
    g_deposit_cached_at = now;
+   if(scanned > 0.0)
+      g_cached_initial_deposit = scanned;
+
    return g_cached_initial_deposit;
 }
 
@@ -578,6 +665,9 @@ bool SendTradeSync(bool silent)
 
    string headers = "Content-Type: application/json\r\nX-Bridge-Token: " + InpBridgeToken + "\r\n";
    ResetLastError();
+   // Keep a larger budget than the heartbeat: this request carries the whole
+   // history window in one body and runs at most once per 30s, so a tight
+   // 1.5s cap could fail the sync forever on a slow uplink.
    int res = WebRequest("POST", endpoint, headers, 3000, postData, resultData, resultHeaders);
    if(res == 200)
    {
@@ -617,7 +707,7 @@ void SendHeartbeat()
    }
    ResetLastError();
 
-   int res = WebRequest("POST", endpoint, headers, 3000, postData, resultData, resultHeaders);
+   int res = WebRequest("POST", endpoint, headers, 1500, postData, resultData, resultHeaders);
 
    if(res == 200)
    {

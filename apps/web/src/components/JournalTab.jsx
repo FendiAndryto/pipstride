@@ -179,7 +179,7 @@ export default function JournalTab({
   }, [activeTab, closedTradesCount, activeAccountNumber, hasConnection, isConnected]);
 
   // Synchronized background sync while actively viewing Journal tab:
-  // History every 4s, heavier stats aggregates every 16s (every 4th tick)
+  // History every 20s, heavier stats aggregates every 80s (every 4th tick)
   useEffect(() => {
     if (activeTab !== 'journal') return;
     let ticks = 0;
@@ -189,7 +189,7 @@ export default function JournalTab({
       if (ticks % 4 === 0) {
         void fetchStats();
       }
-    }, 4000);
+    }, 20000);
     return () => clearInterval(timer);
   }, [activeTab, fetchHistory, fetchStats]);
 

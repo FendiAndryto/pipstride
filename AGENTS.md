@@ -118,7 +118,7 @@ Run from project root:
 
 ## Gotchas
 
-- Production container (`pipstride_api`) excludes `pytest`, `tests/`, and `scripts/`. Do not run test commands via `docker exec pipstride_api python -m pytest`.
+- Production container (`pipstride_api`) excludes `pytest` and `tests/`, but ships `scripts/` so `python scripts/prune_snapshots.py` can run from the host cron. Do not run test commands via `docker exec pipstride_api python -m pytest`.
 - Host Python environment is 3.14 without project dependencies; run backend commands via ephemeral Docker container or inside a dedicated Python 3.12 venv.
 - In PowerShell, `curl` is aliased to `Invoke-WebRequest`. Use `curl.exe` when testing API endpoints via CLI.
 - Database runs on port `55432` on the host to avoid collisions with default local PostgreSQL instances (`5432`).

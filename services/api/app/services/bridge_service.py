@@ -170,7 +170,13 @@ class BridgeService:
             # dedupe SELECT and this commit. The live payload is already in
             # Redis, so drop the durable batch and let the next tick retry.
             db.rollback()
+            live_state.clear_trade_count(connection.id)
             logger.warning("Heartbeat commit hit a duplicate trade ticket; deferred")
+
+        # Refresh the cached count only when a batch actually inserted rows.
+        # An idle heartbeat must not pay for COUNT(*).
+        if trades_added:
+            self._refresh_trade_count_cache(db, connection)
 
         return HeartbeatResponse(
             status="ok",
@@ -281,11 +287,13 @@ class BridgeService:
             try:
                 db.bulk_save_objects(self._trade_rows(connection.id, new_items))
                 db.commit()
+                self._refresh_trade_count_cache(db, connection)
                 return {"status": "ok", "received": received, "inserted": len(new_items)}
             except IntegrityError:
                 # Lost a race against a concurrent insert for the same ticket.
                 # Re-dedupe against committed rows and retry once.
                 db.rollback()
+                live_state.clear_trade_count(connection.id)
                 if attempt == 1:
                     raise
         return {"status": "ok", "received": received, "inserted": 0}
@@ -351,13 +359,21 @@ class BridgeService:
             host_type=payload.host_type or "local",
         )
 
-    def _closed_trade_count(self, db: Session, connection: Mt5Connection) -> int:
-        return int(
+    def _refresh_trade_count_cache(self, db: Session, connection: Mt5Connection) -> int:
+        count = int(
             db.scalar(
                 select(func.count(Trade.id)).where(Trade.connection_id == connection.id)
             )
             or 0
         )
+        live_state.save_trade_count(connection.id, count)
+        return count
+
+    def _closed_trade_count(self, db: Session, connection: Mt5Connection) -> int:
+        cached = live_state.load_trade_count(connection.id)
+        if cached is not None:
+            return cached
+        return self._refresh_trade_count_cache(db, connection)
 
     def get_positions(self, connection: Mt5Connection) -> List[PositionItem]:
         live = self._live(connection)
@@ -646,6 +662,7 @@ class BridgeService:
             TelemetrySnapshot.connection_id == connection.id
         ).delete()
         db.commit()
+        live_state.save_trade_count(connection.id, 0)
         # The lean heartbeat no longer carries trades, so tell the EA to replay
         # its history on the next tick — otherwise the journal stays empty
         # until the next deal closes or the EA restarts.

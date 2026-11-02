@@ -61,7 +61,6 @@ export default function HomeTab({
   // Active account number tracking for instant automatic synchronization
   const currentAccountNumber = metrics.account_number || null;
   const prevAccountNumberRef = useRef(currentAccountNumber);
-  const fetchInFlightRef = useRef(false);
 
   // Initial Balance Benchmark & All-Time Performance Calculations
   const initialDeposit = bridgeStatus?.initial_deposit ?? metrics.initial_deposit ?? balance;
@@ -94,8 +93,7 @@ export default function HomeTab({
 
     let isMounted = true;
     const fetchData = async () => {
-      if (document.hidden || fetchInFlightRef.current) return;
-      fetchInFlightRef.current = true;
+      if (document.hidden) return;
       try {
         const [curve, history] = await Promise.all([
           api.getEquityCurve(chartRange).catch(() => null),
@@ -115,21 +113,21 @@ export default function HomeTab({
         }
       } catch {
         // Ignore transient error
-      } finally {
-        fetchInFlightRef.current = false;
       }
     };
 
     fetchData();
 
-    // Auto-sync polling every 5s to keep performance curve up to date
-    const syncInterval = setInterval(() => {
-      if (isMounted) fetchData();
-    }, 5000);
+    // The 5s poll is gone; refresh once when the user returns to the tab so a
+    // trade that closed while the page was hidden still lands immediately.
+    const handleVisibility = () => {
+      if (!document.hidden && isMounted) fetchData();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       isMounted = false;
-      clearInterval(syncInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [hasConnection, isConnected, currentAccountNumber, chartRange, bridgeStatus?.closed_trades_count]);
 
