@@ -660,7 +660,15 @@ string BuildHeartbeatJson()
 //+------------------------------------------------------------------+
 bool SendTradeSync(bool silent)
 {
-   if(StringLen(InpBridgeToken) == 0) return false;
+   if(StringLen(InpBridgeToken) == 0)
+   {
+      // Same network degradation as the heartbeat: without the bridge token
+      // header a POST can arrive as GET. Do not attempt the request.
+      g_consecutive_errors++;
+      if(g_consecutive_errors % 10 == 1)
+         Print(">>> [PipstrideMonitor] Trade sync skipped: InpBridgeToken is empty.");
+      return false;
+   }
 
    string closedTradesJson = BuildClosedTradesJson();
    // Avoid the network round-trip when nothing changed (empty payload).
@@ -675,9 +683,10 @@ bool SendTradeSync(bool silent)
    char postData[];
    char resultData[];
    string resultHeaders;
-   StringToCharArray(body, postData, 0, WHOLE_ARRAY, CP_UTF8);
-   int postLen = ArraySize(postData);
-   if(postLen > 0 && postData[postLen - 1] == 0) ArrayResize(postData, postLen - 1);
+   // Same empty-body guard as SendHeartbeat: zero-size data would turn the
+   // request into a GET.
+   if(StringLen(body) == 0) body = "{\"closed_trades\":[]}";
+   StringToCharArray(body, postData, 0, StringLen(body), CP_UTF8);
 
    string headers = "Content-Type: application/json\r\nX-Bridge-Token: " + InpBridgeToken + "\r\n";
    ResetLastError();
@@ -702,25 +711,38 @@ bool SendTradeSync(bool silent)
 //+------------------------------------------------------------------+
 void SendHeartbeat()
 {
+   // Without the custom X-Bridge-Token header, this terminal/network path
+   // degrades the heartbeat POST into a bare GET the API answers with 405.
+   // Fail fast with an actionable message instead of sending broken telemetry.
+   if(StringLen(InpBridgeToken) == 0)
+   {
+      g_consecutive_errors++;
+      g_status_msg = "Token kosong - Set InpBridgeToken dari halaman Pipstride";
+      if(g_consecutive_errors % 5 == 1)
+      {
+         Print(">>> [PipstrideMonitor] ERROR: InpBridgeToken is empty. Open Pipstride -> Connections, copy the token into the EA inputs.");
+      }
+      UpdateChartHUD(g_status_msg);
+      return;
+   }
+
    string endpoint = InpBackendUrl + "/api/v1/bridge/heartbeat";
    string json = BuildHeartbeatJson();
+
+   // MQL5 quirk: WebRequest with a zero-size body sends a GET regardless of
+   // the method parameter. Never hand it an empty array.
+   if(StringLen(json) == 0)
+      json = StringFormat("{\"account_number\":%I64d}", (long)AccountInfoInteger(ACCOUNT_LOGIN));
 
    char postData[];
    char resultData[];
    string resultHeaders;
 
-   StringToCharArray(json, postData, 0, WHOLE_ARRAY, CP_UTF8);
-   int postLen = ArraySize(postData);
-   if(postLen > 0 && postData[postLen - 1] == 0)
-   {
-      ArrayResize(postData, postLen - 1);
-   }
+   // StringLen-based copy: exact bytes, no trailing NUL, no manual trim.
+   StringToCharArray(json, postData, 0, StringLen(json), CP_UTF8);
 
    string headers = "Content-Type: application/json\r\n";
-   if(StringLen(InpBridgeToken) > 0)
-   {
-      headers += "X-Bridge-Token: " + InpBridgeToken + "\r\n";
-   }
+   headers += "X-Bridge-Token: " + InpBridgeToken + "\r\n";
    ResetLastError();
 
    int res = WebRequest("POST", endpoint, headers, 1500, postData, resultData, resultHeaders);
