@@ -390,36 +390,5 @@ export const api = {
       throw new Error('Failed to retrieve risk watchdog status');
     }
     return res.json();
-  },
-
-  // ------------------------------------------------------------ telegram
-  async getTelegramStatus() {
-    const res = await authFetch(`${API_BASE}/api/v1/telegram/status`, { method: 'GET' });
-    if (!res.ok) {
-      throw new Error('Failed to retrieve Telegram status');
-    }
-    return res.json();
-  },
-
-  async sendTelegramTestAlert(message = null) {
-    const res = await authFetch(`${API_BASE}/api/v1/telegram/test-alert`, {
-      method: 'POST',
-      body: JSON.stringify(message ? { message } : {})
-    });
-    if (!res.ok) {
-      throw await parseError(res, 'Test alert delivery failed');
-    }
-    return res.json();
-  },
-
-  async toggleTelegram(enabled) {
-    const res = await authFetch(`${API_BASE}/api/v1/telegram/toggle`, {
-      method: 'POST',
-      body: JSON.stringify({ enabled })
-    });
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to toggle Telegram notifications');
-    }
-    return res.json();
   }
 };

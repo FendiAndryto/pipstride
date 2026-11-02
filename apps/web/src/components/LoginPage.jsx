@@ -334,6 +334,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="signin-username"
+                  name="username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -389,6 +390,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="signin-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -437,13 +439,14 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 color: 'var(--muted)'
               }}
             >
-              <label style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer' }}>
+              <label htmlFor="remember-me-checkbox" style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer' }}>
                 <input
+                  id="remember-me-checkbox"
+                  name="remember_me"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   style={{ accentColor: 'var(--g)', cursor: 'pointer' }}
-                  id="remember-me-checkbox"
                 />
                 <span>{t('auth_remember')}</span>
               </label>
@@ -524,6 +527,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="reg-username"
+                  name="reg_username"
                   type="text"
                   value={regUsername}
                   onChange={(e) => setRegUsername(e.target.value)}
@@ -556,6 +560,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="reg-email"
+                  name="reg_email"
                   type="email"
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
@@ -591,6 +596,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="reg-password"
+                  name="reg_password"
                   type={showRegPassword ? 'text' : 'password'}
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
@@ -638,6 +644,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="reg-confirm-password"
+                  name="reg_confirm_password"
                   type={showRegPassword ? 'text' : 'password'}
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
@@ -690,6 +697,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 />
                 <input
                   id="forgot-email"
+                  name="forgot_email"
                   type="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}

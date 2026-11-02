@@ -12,7 +12,6 @@ import {
   getActiveConnectionId,
   setActiveConnectionId as persistActiveConnectionId
 } from '../services/api';
-import { useLanguage } from '../context/LanguageContext';
 
 function applyConnections(list, setConnections, setActiveConnectionId) {
   const safeList = Array.isArray(list) ? list : [];
@@ -27,19 +26,16 @@ function applyConnections(list, setConnections, setActiveConnectionId) {
 }
 
 export default function Dashboard({ user, onLogout, onRefreshUser }) {
-  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('home');
   const [bridgeStatus, setBridgeStatus] = useState(null);
   const [riskStatus, setRiskStatus] = useState(null);
   const [connections, setConnections] = useState([]);
   const [activeConnectionId, setActiveConnectionId] = useState(getActiveConnectionId());
   const [connectionsLoaded, setConnectionsLoaded] = useState(false);
-  const [pollInterval, setPollInterval] = useState(10000);
+  const pollInterval = 10000;
 
   // Modals state
   const [isMt5ModalOpen, setIsMt5ModalOpen] = useState(false);
-  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
-  const [telegramStatusMsg, setTelegramStatusMsg] = useState(null);
   const timerRef = useRef(null);
   const inFlightRef = useRef(false);
 
@@ -154,23 +150,6 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
     return list;
   };
 
-  const handleTestTelegram = async () => {
-    setIsTestingTelegram(true);
-    setTelegramStatusMsg(null);
-    try {
-      const res = await api.sendTelegramTestAlert();
-      if (res.delivered) {
-        setTelegramStatusMsg({ type: 'success', text: t('telegram_sent') });
-      } else {
-        setTelegramStatusMsg({ type: 'warning', text: t('telegram_not_configured') });
-      }
-    } catch (err) {
-      setTelegramStatusMsg({ type: 'error', text: err.message || t('telegram_failed') });
-    } finally {
-      setIsTestingTelegram(false);
-    }
-  };
-
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
   const secondsSinceHeartbeat = bridgeStatus?.seconds_since_last_heartbeat ?? null;
@@ -246,12 +225,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
             activeConnectionId={activeConnectionId}
             onSelectConnection={handleSelectConnection}
             onConnectionsChanged={handleConnectionsChanged}
-            pollInterval={pollInterval}
-            onPollIntervalChange={setPollInterval}
             onOpenMt5Modal={() => setIsMt5ModalOpen(true)}
-            onTestTelegram={handleTestTelegram}
-            isTestingTelegram={isTestingTelegram}
-            telegramStatusMsg={telegramStatusMsg}
             onRefreshUser={onRefreshUser}
           />
         </div>

@@ -1,4 +1,3 @@
-import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -27,8 +26,8 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
         except Exception:
             return False
             
-    # Otherwise fallback to constant-time string comparison (e.g. plain text password from .env)
-    return hmac.compare_digest(plain_password, stored_password)
+    # Stored password must be a valid bcrypt hash; plaintext comparison is prohibited in production
+    return False
 
 
 def create_access_token(

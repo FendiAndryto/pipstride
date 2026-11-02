@@ -649,6 +649,8 @@ export default function JournalTab({
               <input
                 ref={monthInputRef}
                 type="month"
+                id="journal-month-input"
+                name="selected_month"
                 value={selectedMonth}
                 max={getCurrentYearMonth()}
                 aria-label={t('journal_select_month')}
@@ -661,7 +663,6 @@ export default function JournalTab({
                   }
                 }}
                 className="journal-month-input-overlay"
-                id="journal-month-input"
               />
             </div>
 
@@ -782,10 +783,13 @@ export default function JournalTab({
       {/* Search Bar */}
       <div style={{ marginBottom: '14px' }}>
         <input
+          id="journal-search-input"
+          name="search"
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('journal_search_ph')}
+          aria-label={t('journal_search_ph')}
           style={{
             width: '100%',
             background: '#0b151b',
@@ -796,7 +800,6 @@ export default function JournalTab({
             outline: 'none',
             fontSize: '12px'
           }}
-          id="journal-search-input"
         />
       </div>
 

@@ -465,16 +465,6 @@ export const translations = {
     profile_confirm_ph: 'Confirm the new password',
     profile_updating: 'Updating...',
     profile_save_password: 'Save New Password',
-    profile_system_section: 'System & Telegram Notifications',
-    profile_telegram_title: 'Telegram Alert Push',
-    profile_telegram_desc: 'Send a test message to the Telegram bot to verify real-time alerts.',
-    profile_test_alert: 'Test Alert',
-    profile_testing: 'Sending...',
-    profile_poll_title: 'MT5 Telemetry Refresh Rate',
-    profile_poll_desc: 'Polling frequency for live balance, equity, and open positions.',
-    profile_poll_2s: '2 seconds (High refresh)',
-    profile_poll_5s: '5 seconds',
-    profile_poll_10s: '10 seconds (Recommended)',
     profile_conn_failed: 'Failed to process the connection.',
     profile_conn_created: 'Connection created. Copy the token below and paste it into InpBridgeToken.',
     profile_conn_rotated: 'New token created. Copy it now — the token is shown only once.',
@@ -487,10 +477,7 @@ export const translations = {
     err_new_password_alnum: 'The new password must combine letters and numbers.',
     err_new_password_mismatch: 'The new password confirmation does not match.',
     err_change_password: 'Failed to change the password.',
-    err_save_email: 'Failed to save the email.',
-    telegram_sent: 'Telegram alert sent successfully!',
-    telegram_not_configured: 'Telegram bot not configured or disabled.',
-    telegram_failed: 'Telegram test failed.'
+    err_save_email: 'Failed to save the email.'
   },
 
   id: {
@@ -956,16 +943,6 @@ export const translations = {
     profile_confirm_ph: 'Konfirmasi password baru',
     profile_updating: 'Memperbarui...',
     profile_save_password: 'Simpan Password Baru',
-    profile_system_section: 'Sistem & Notifikasi Telegram',
-    profile_telegram_title: 'Push Alert Telegram',
-    profile_telegram_desc: 'Kirim pesan uji coba ke bot Telegram untuk verifikasi alert real-time.',
-    profile_test_alert: 'Uji Alert',
-    profile_testing: 'Mengirim...',
-    profile_poll_title: 'Refresh Rate Telemetri MT5',
-    profile_poll_desc: 'Frekuensi polling live balance, equity, dan open positions.',
-    profile_poll_2s: '2 detik (Refresh tinggi)',
-    profile_poll_5s: '5 detik',
-    profile_poll_10s: '10 detik (Direkomendasikan)',
     profile_conn_failed: 'Gagal memproses koneksi.',
     profile_conn_created: 'Koneksi dibuat. Salin token di bawah dan tempelkan ke InpBridgeToken.',
     profile_conn_rotated: 'Token baru dibuat. Salin sekarang — token hanya ditampilkan sekali.',
@@ -978,9 +955,6 @@ export const translations = {
     err_new_password_alnum: 'Password baru wajib berisi kombinasi huruf dan angka.',
     err_new_password_mismatch: 'Konfirmasi password baru tidak cocok.',
     err_change_password: 'Gagal mengubah password.',
-    err_save_email: 'Gagal menyimpan email.',
-    telegram_sent: 'Alert Telegram berhasil dikirim!',
-    telegram_not_configured: 'Bot Telegram belum dikonfigurasi atau dinonaktifkan.',
-    telegram_failed: 'Uji Telegram gagal.'
+    err_save_email: 'Gagal menyimpan email.'
   }
 };

@@ -172,6 +172,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
                   />
                   <input
                     id="reset-password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -211,6 +212,7 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
                   />
                   <input
                     id="reset-password-confirm"
+                    name="confirm_password"
                     type={showPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}

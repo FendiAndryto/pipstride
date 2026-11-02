@@ -249,10 +249,13 @@ export default function Mt5ConnectModal({
             ) : connections.length === 0 ? (
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
+                  id="mt5-new-account-init-input"
+                  name="account_name"
                   type="text"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   placeholder={t('modal_account_name_ph')}
+                  aria-label={t('modal_account_name_ph')}
                   maxLength={64}
                   style={{
                     flex: 1,
@@ -341,10 +344,13 @@ export default function Mt5ConnectModal({
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
                   <input
+                    id="mt5-new-account-input"
+                    name="account_name"
                     type="text"
                     value={newLabel}
                     onChange={(e) => setNewLabel(e.target.value)}
                     placeholder={t('modal_account_name_new')}
+                    aria-label={t('modal_account_name_new')}
                     maxLength={64}
                     style={{
                       flex: 1,
@@ -380,10 +386,13 @@ export default function Mt5ConnectModal({
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
+                id="mt5-token-reveal-input"
+                name="bridge_token"
                 type="text"
                 readOnly
                 value={revealedToken || ''}
                 placeholder={connections.length ? t('modal_token_ph_empty') : 'pst_live_...'}
+                aria-label={t('modal_token_label')}
                 style={{
                   flex: 1,
                   background: '#0a1419',
@@ -495,9 +504,12 @@ export default function Mt5ConnectModal({
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
+                id="mt5-backend-url-input"
+                name="backend_url"
                 type="text"
                 readOnly
                 value={bridgeUrl}
+                aria-label={t('modal_backend_url')}
                 style={{
                   flex: 1,
                   background: '#0a1419',

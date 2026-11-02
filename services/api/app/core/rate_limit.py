@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 from typing import Optional, Tuple
+from starlette.requests import Request
 
 from app.core.config import settings
 
@@ -147,6 +148,24 @@ def clear(key: str) -> None:
             backend.clear(_full_key(key))
         except Exception:  # pragma: no cover - infra failure path
             continue
+
+
+def get_client_ip(request: Request) -> str:
+    """Safely extract client IP address.
+
+    Prioritizes headers set by trusted upstream reverse proxies (Nginx / Caddy),
+    falling back to Starlette's client.host.
+    """
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
 
 
 class LoginRateLimiter:

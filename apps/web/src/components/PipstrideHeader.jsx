@@ -116,6 +116,7 @@ export default function PipstrideHeader({
               <div className="header-connection-select-wrap">
                 <select
                   id="header-connection-switcher"
+                  name="active_connection"
                   value={activeConnectionId || ''}
                   onChange={(e) => onSelectConnection(e.target.value)}
                   aria-label={t('select_account')}
@@ -206,6 +207,8 @@ export default function PipstrideHeader({
                     <span>{t('select_account')}</span>
                   </div>
                   <select
+                    id="header-profile-account-select"
+                    name="mobile_active_connection"
                     value={activeConnectionId || ''}
                     onChange={(e) => {
                       onSelectConnection(e.target.value);
@@ -213,7 +216,6 @@ export default function PipstrideHeader({
                     }}
                     className="header-profile-dropdown-select"
                     aria-label={t('select_account')}
-                    id="header-profile-account-select"
                   >
                     {connections.map((c) => (
                       <option key={c.id} value={c.id}>

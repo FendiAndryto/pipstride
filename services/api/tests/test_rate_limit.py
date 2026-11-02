@@ -98,3 +98,13 @@ def test_heartbeat_rejects_oversized_candles():
             timestamp=1,
             candles=list(range(501)),
         )
+
+
+def test_unauthenticated_heartbeat_is_rate_limited(client):
+    rate_limit.clear("hb_anon:testclient")
+    rate_limit.clear("hb_ip:testclient")
+    bad = {"account_number": 999999, "server": "demo", "balance": 100, "equity": 100, "timestamp": 123}
+    for _ in range(10):
+        client.post("/api/v1/bridge/heartbeat", json=bad)
+    blocked = client.post("/api/v1/bridge/heartbeat", json=bad)
+    assert blocked.status_code == 429

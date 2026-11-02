@@ -44,7 +44,8 @@ services:
     container_name: pipstride_api
     restart: unless-stopped
     ports:
-      - "${API_PORT:-8089}:8000"
+      # Bound to loopback so direct unauthenticated traffic cannot bypass Nginx/Caddy.
+      - "127.0.0.1:${API_PORT:-8089}:8000"
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://pipstride:pipstride_dev_password@postgres:5432/pipstride}

@@ -1,12 +1,12 @@
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_active_connection
-from app.core.rate_limit import consume
+from app.core.rate_limit import consume, get_client_ip
 from app.core.tokens import hash_token
 from app.db.base import get_db
 from app.db.models import Mt5Connection, User
@@ -37,11 +37,27 @@ router = APIRouter(prefix="/bridge", tags=["Bridge"])
 )
 def receive_heartbeat(
     payload: HeartbeatPayload,
+    request: Request,
     response: Response,
     x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
     db: Session = Depends(get_db),
 ):
     token = x_bridge_token or payload.bridge_token
+    client_ip = get_client_ip(request)
+
+    # General IP-level throttle against volumetric flood attacks (e.g. rotating fake tokens)
+    ip_limited, ip_retry_after = consume(
+        f"hb_ip:{client_ip}",
+        limit=settings.HEARTBEAT_RATE_LIMIT * 2,
+        window_seconds=settings.HEARTBEAT_RATE_WINDOW_SECONDS,
+    )
+    if ip_limited:
+        response.headers["Retry-After"] = str(ip_retry_after)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Heartbeat rate limit exceeded for this IP.",
+            headers={"Retry-After": str(ip_retry_after)},
+        )
 
     # A misconfigured terminal can push far faster than the 1s cadence. Limit
     # per token so one runaway EA cannot starve the API for everyone else.
@@ -58,6 +74,16 @@ def receive_heartbeat(
                 detail="Heartbeat rate limit exceeded; slow down the monitor interval.",
                 headers={"Retry-After": str(retry_after)},
             )
+    else:
+        # Tightly limit unauthenticated requests to mitigate DB connection exhaustion
+        anon_limited, anon_retry = consume(f"hb_anon:{client_ip}", limit=10, window_seconds=10)
+        if anon_limited:
+            response.headers["Retry-After"] = str(anon_retry)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Unauthenticated heartbeat rate limit exceeded.",
+                headers={"Retry-After": str(anon_retry)},
+            )
 
     return bridge_service.process_heartbeat(db, payload, raw_token=token)
 
@@ -68,24 +94,55 @@ def receive_heartbeat(
 )
 def sync_trades(
     payload: SyncTradesRequest,
+    request: Request,
     response: Response,
     x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
     db: Session = Depends(get_db),
 ):
     token = x_bridge_token
-    if token:
-        limited, retry_after = consume(
-            f"hb:{hash_token(token)}",
-            limit=settings.HEARTBEAT_RATE_LIMIT,
-            window_seconds=settings.HEARTBEAT_RATE_WINDOW_SECONDS,
-        )
-        if limited:
-            response.headers["Retry-After"] = str(retry_after)
+    client_ip = get_client_ip(request)
+
+    if not token:
+        # Tightly limit unauthenticated sync attempts by IP before hitting DB
+        anon_limited, anon_retry = consume(f"sync_anon:{client_ip}", limit=10, window_seconds=10)
+        if anon_limited:
+            response.headers["Retry-After"] = str(anon_retry)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Trade sync rate limit exceeded.",
-                headers={"Retry-After": str(retry_after)},
+                detail="Sync trades rate limit exceeded.",
+                headers={"Retry-After": str(anon_retry)},
             )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bridge token is required.",
+        )
+
+    # General IP-level throttle
+    ip_limited, ip_retry_after = consume(
+        f"sync_ip:{client_ip}",
+        limit=settings.HEARTBEAT_RATE_LIMIT * 2,
+        window_seconds=settings.HEARTBEAT_RATE_WINDOW_SECONDS,
+    )
+    if ip_limited:
+        response.headers["Retry-After"] = str(ip_retry_after)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trade sync rate limit exceeded for this IP.",
+            headers={"Retry-After": str(ip_retry_after)},
+        )
+
+    limited, retry_after = consume(
+        f"hb:{hash_token(token)}",
+        limit=settings.HEARTBEAT_RATE_LIMIT,
+        window_seconds=settings.HEARTBEAT_RATE_WINDOW_SECONDS,
+    )
+    if limited:
+        response.headers["Retry-After"] = str(retry_after)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trade sync rate limit exceeded.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
     connection = connection_service.get_by_token(db, token or "")
     if connection is None:

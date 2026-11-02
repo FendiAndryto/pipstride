@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user
-from app.core.rate_limit import consume, rate_limiter
+from app.core.rate_limit import consume, get_client_ip, rate_limiter
 from app.core.security import create_access_token
 from app.core.tokens import hash_token
 from app.db.base import get_db
@@ -34,11 +34,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 def _client_ip(request: Request) -> str:
-    # Trust Cloudflare / reverse-proxy forwarding headers first.
-    forwarded = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+    return get_client_ip(request)
 
 
 def _app_base(request: Request) -> str:

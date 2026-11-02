@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   ShieldCheck,
   Monitor,
-  Send,
-  Clock,
   KeyRound,
   Lock,
   Eye,
@@ -43,12 +41,7 @@ export default function ProfileTab({
   activeConnectionId,
   onSelectConnection,
   onConnectionsChanged,
-  pollInterval,
-  onPollIntervalChange,
   onOpenMt5Modal,
-  onTestTelegram,
-  isTestingTelegram,
-  telegramStatusMsg,
   onRefreshUser
 }) {
   const { t } = useLanguage();
@@ -369,9 +362,12 @@ export default function ProfileTab({
         {revealedToken && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             <input
+              id="profile-revealed-token"
+              name="bridge_token"
               type="text"
               readOnly
               value={revealedToken}
+              aria-label={t('modal_token_label')}
               style={{
                 flex: 1,
                 background: '#0a1419',
@@ -613,10 +609,13 @@ export default function ProfileTab({
           style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}
         >
           <input
+            id="profile-email-input"
+            name="email"
             type="email"
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
             placeholder={emailInfo.email || t('profile_email_ph')}
+            aria-label={t('profile_email_ph')}
             disabled={isSavingEmail}
             style={{
               flex: 1,
@@ -686,10 +685,14 @@ export default function ProfileTab({
         <form onSubmit={handleChangePassword} id="profile-change-password-form">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
             <div>
-              <label className="label" style={{ display: 'block' }}>{t('profile_current_password')}</label>
+              <label htmlFor="profile-old-password" className="label" style={{ display: 'block' }}>
+                {t('profile_current_password')}
+              </label>
               <div style={{ position: 'relative' }}>
                 <Lock size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--muted)' }} />
                 <input
+                  id="profile-old-password"
+                  name="current_password"
                   type={showOldPass ? 'text' : 'password'}
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
@@ -718,10 +721,14 @@ export default function ProfileTab({
             </div>
 
             <div>
-              <label className="label" style={{ display: 'block' }}>{t('profile_new_password')}</label>
+              <label htmlFor="profile-new-password" className="label" style={{ display: 'block' }}>
+                {t('profile_new_password')}
+              </label>
               <div style={{ position: 'relative' }}>
                 <Lock size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--muted)' }} />
                 <input
+                  id="profile-new-password"
+                  name="new_password"
                   type={showNewPass ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -750,10 +757,14 @@ export default function ProfileTab({
             </div>
 
             <div>
-              <label className="label" style={{ display: 'block' }}>{t('profile_repeat_password')}</label>
+              <label htmlFor="profile-confirm-password" className="label" style={{ display: 'block' }}>
+                {t('profile_repeat_password')}
+              </label>
               <div style={{ position: 'relative' }}>
                 <Lock size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--muted)' }} />
                 <input
+                  id="profile-confirm-password"
+                  name="confirm_password"
                   type={showNewPass ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -786,67 +797,6 @@ export default function ProfileTab({
             <span>{isChangingPass ? t('profile_updating') : t('profile_save_password')}</span>
           </button>
         </form>
-      </div>
-
-      {/* Preferences & Telemetry */}
-      <div className="section" style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>
-        {t('profile_system_section')}
-      </div>
-
-      <div className="card">
-        {/* Telegram Test */}
-        <div className="row">
-          <div className="grow">
-            <div className="rowtitle">{t('profile_telegram_title')}</div>
-            <div className="rowsub">{t('profile_telegram_desc')}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn alt"
-              onClick={onTestTelegram}
-              disabled={isTestingTelegram}
-              id="profile-test-telegram-btn"
-            >
-              <Send size={13} />
-              <span>{isTestingTelegram ? t('profile_testing') : t('profile_test_alert')}</span>
-            </button>
-          </div>
-        </div>
-        {telegramStatusMsg && (
-          <div style={{ padding: '8px 0', fontSize: '11px', color: telegramStatusMsg.type === 'success' ? 'var(--g)' : 'var(--amber)' }}>
-            {telegramStatusMsg.text}
-          </div>
-        )}
-
-        {/* Polling Interval */}
-        <div className="row">
-          <div className="grow">
-            <div className="rowtitle">{t('profile_poll_title')}</div>
-            <div className="rowsub">{t('profile_poll_desc')}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Clock size={13} style={{ color: 'var(--muted)' }} />
-            <select
-              value={pollInterval}
-              onChange={(e) => onPollIntervalChange(Number(e.target.value))}
-              style={{
-                background: '#0b151b',
-                border: '1px solid var(--line)',
-                color: 'var(--text)',
-                padding: '5px 8px',
-                borderRadius: '8px',
-                fontSize: '11px',
-                outline: 'none'
-              }}
-              id="profile-poll-rate-select"
-            >
-              <option value={2000}>{t('profile_poll_2s')}</option>
-              <option value={5000}>{t('profile_poll_5s')}</option>
-              <option value={10000}>{t('profile_poll_10s')}</option>
-            </select>
-          </div>
-        </div>
       </div>
     </div>
   );

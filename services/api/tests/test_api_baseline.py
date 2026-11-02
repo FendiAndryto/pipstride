@@ -73,3 +73,27 @@ def test_logout_revokes_existing_token(client, account):
     assert client.post("/api/v1/auth/logout", headers=account["headers"]).status_code == 200
     # token_version was bumped, so the old bearer token is now rejected.
     assert client.get("/api/v1/auth/me", headers=account["headers"]).status_code == 401
+
+
+def test_telegram_toggle_requires_admin(client, account, auth_headers):
+    # Trader account is rejected with 403 Forbidden
+    res = client.post("/api/v1/telegram/toggle", json={"enabled": True}, headers=account["headers"])
+    assert res.status_code == 403
+
+    # Admin user can toggle
+    admin_res = client.post("/api/v1/telegram/toggle", json={"enabled": True}, headers=auth_headers)
+    assert admin_res.status_code == 200
+    assert admin_res.json()["status"] == "success"
+
+
+def test_telegram_test_alert_requires_admin(client, account):
+    # Non-admin cannot send test alert
+    res = client.post("/api/v1/telegram/test-alert", json={"message": "hello"}, headers=account["headers"])
+    assert res.status_code == 403
+
+
+def test_verify_password_rejects_plaintext():
+    from app.core.security import verify_password
+    # Plain text stored password without bcrypt prefix must return False
+    assert not verify_password("secret123", "secret123")
+    assert not verify_password("secret123", "md5hashorplaintext")
