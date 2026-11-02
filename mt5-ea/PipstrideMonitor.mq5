@@ -42,6 +42,7 @@ long     g_cached_deposit_login = 0;
 bool     g_trades_dirty = true;
 datetime g_last_sync_attempt = 0;
 datetime g_last_full_sync = 0;
+string   g_bridge_token = "";
 
 // Watchlist and D1 quote caches. FindBrokerSymbol scans every symbol in the
 // terminal and CopyRates has real terminal overhead, so neither belongs on a
@@ -73,6 +74,24 @@ void GetDealPositionOpenDetails(ulong posId, double &openPrice, long &openTime);
 void InvalidateDerivedCaches();
 
 //+------------------------------------------------------------------+
+//| Strip clipboard artifacts from the pasted bridge token.          |
+//| A trailing newline/space inside the header breaks WebRequest so   |
+//| the request silently degrades to GET (API answers 405).          |
+//+------------------------------------------------------------------+
+string SanitizeBridgeToken(string raw)
+{
+   string clean = raw;
+   StringReplace(clean, "\r\n", "");
+   StringReplace(clean, "\r", "");
+   StringReplace(clean, "\n", "");
+   StringReplace(clean, "\t", "");
+   StringReplace(clean, " ", "");
+   StringTrimLeft(clean);
+   StringTrimRight(clean);
+   return clean;
+}
+
+//+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
@@ -85,6 +104,10 @@ int OnInit()
    // changes), so caches derived from the settings must be rebuilt here or an
    // edited InpMonitoredSymbols would never take effect.
    InvalidateDerivedCaches();
+
+   // Clipboard-pasted tokens often keep a trailing newline from the web
+   // editor; sanitise once and use the cleaned copy everywhere.
+   g_bridge_token = SanitizeBridgeToken(InpBridgeToken);
 
    // Set timer for periodic telemetry heartbeat
    EventSetTimer(MathMax(1, InpHeartbeatInterval));
@@ -647,7 +670,7 @@ string BuildHeartbeatJson()
       + "\"candles\":" + candlesM15Json + ","
       + "\"candles_m5\":" + candlesM5Json + ","
       + "\"chart_symbol\":\"" + EscapeJsonString(_Symbol) + "\","
-      + "\"bridge_token\":\"" + EscapeJsonString(InpBridgeToken) + "\","
+      + "\"bridge_token\":\"" + EscapeJsonString(g_bridge_token) + "\","
       + "\"host_type\":\"" + host_type + "\","
       + StringFormat("\"timestamp\":%I64d", timestamp)
       + "}";
@@ -660,7 +683,7 @@ string BuildHeartbeatJson()
 //+------------------------------------------------------------------+
 bool SendTradeSync(bool silent)
 {
-   if(StringLen(InpBridgeToken) == 0)
+   if(StringLen(g_bridge_token) == 0)
    {
       // Same network degradation as the heartbeat: without the bridge token
       // header a POST can arrive as GET. Do not attempt the request.
@@ -688,7 +711,7 @@ bool SendTradeSync(bool silent)
    if(StringLen(body) == 0) body = "{\"closed_trades\":[]}";
    StringToCharArray(body, postData, 0, StringLen(body), CP_UTF8);
 
-   string headers = "Content-Type: application/json\r\nX-Bridge-Token: " + InpBridgeToken + "\r\n";
+   string headers = "Content-Type: application/json\r\nX-Bridge-Token: " + g_bridge_token + "\r\n";
    ResetLastError();
    // Keep a larger budget than the heartbeat: this request carries the whole
    // history window in one body and runs at most once per 30s, so a tight
@@ -714,10 +737,10 @@ void SendHeartbeat()
    // Without the custom X-Bridge-Token header, this terminal/network path
    // degrades the heartbeat POST into a bare GET the API answers with 405.
    // Fail fast with an actionable message instead of sending broken telemetry.
-   if(StringLen(InpBridgeToken) == 0)
+   if(StringLen(g_bridge_token) == 0)
    {
       g_consecutive_errors++;
-      g_status_msg = "Token kosong - Set InpBridgeToken dari halaman Pipstride";
+      g_status_msg = "Token kosong / whitespace - Set InpBridgeToken dari Pipstride";
       if(g_consecutive_errors % 5 == 1)
       {
          Print(">>> [PipstrideMonitor] ERROR: InpBridgeToken is empty. Open Pipstride -> Connections, copy the token into the EA inputs.");
@@ -742,7 +765,7 @@ void SendHeartbeat()
    StringToCharArray(json, postData, 0, StringLen(json), CP_UTF8);
 
    string headers = "Content-Type: application/json\r\n";
-   headers += "X-Bridge-Token: " + InpBridgeToken + "\r\n";
+   headers += "X-Bridge-Token: " + g_bridge_token + "\r\n";
    ResetLastError();
 
    int res = WebRequest("POST", endpoint, headers, 1500, postData, resultData, resultHeaders);
