@@ -841,9 +841,9 @@ export default function ProfileTab({
               }}
               id="profile-poll-rate-select"
             >
-              <option value={1000}>{t('profile_poll_1s')}</option>
               <option value={2000}>{t('profile_poll_2s')}</option>
               <option value={5000}>{t('profile_poll_5s')}</option>
+              <option value={10000}>{t('profile_poll_10s')}</option>
             </select>
           </div>
         </div>

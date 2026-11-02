@@ -6,12 +6,14 @@ reports and never sends execution commands back to the terminal.
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import live_state
@@ -31,7 +33,36 @@ from app.models.bridge import (
 )
 from app.services.connection_service import connection_service
 
-SNAPSHOT_MIN_INTERVAL_SECONDS = 30
+SNAPSHOT_MIN_INTERVAL_SECONDS = settings.SNAPSHOT_MIN_INTERVAL_SECONDS
+
+# Fields the EA repeats on every poll but that the dashboard never reads from
+# /status. Closed trades are served by /bridge/history and persisted in SQL,
+# so echoing 100+ rows back on every poll is pure egress. Candles stay: the
+# market chart reads them from the live payload.
+HEAVY_PAYLOAD_KEYS = ("closed_trades",)
+
+# Cap the number of closed trades replayed per ingest call. The EA already
+# sends at most ~100 recent deals; anything larger is a client bug.
+MAX_INGEST_TRADES = 2000
+
+logger = logging.getLogger(__name__)
+
+
+def _dedupe_trades(items: Iterable[ClosedTradeItem]) -> List[ClosedTradeItem]:
+    """Keep one row per ticket.
+
+    A position can produce several deals (entry + exit + partials) and retried
+    batches can repeat tickets. Inserting duplicates would violate
+    uq_trade_connection_ticket and abort the whole batch.
+    """
+    seen: set = set()
+    unique: List[ClosedTradeItem] = []
+    for item in items:
+        if item.ticket in seen:
+            continue
+        seen.add(item.ticket)
+        unique.append(item)
+    return unique[:MAX_INGEST_TRADES]
 
 
 def _now() -> datetime:
@@ -78,29 +109,45 @@ class BridgeService:
                 detail="Invalid or revoked connection token.",
             )
 
-        try:
-            connection_service.bind_account(
-                db,
-                connection,
-                account_number=payload.account_number,
-                broker_server=payload.server,
-                currency=payload.currency,
-            )
-        except Exception as exc:  # ConnectionBindingError
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(exc),
-            )
+        # Skip duplicate-account conflict check when already bound (saves 1
+        # SELECT per heartbeat for the common case).
+        if connection.account_number is None or connection.account_number != payload.account_number:
+            try:
+                connection_service.bind_account(
+                    db,
+                    connection,
+                    account_number=payload.account_number,
+                    broker_server=payload.server,
+                    currency=payload.currency,
+                )
+            except Exception as exc:  # ConnectionBindingError
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=str(exc),
+                )
 
-        connection.last_seen_at = _now()
-        connection.status = "connected"
+        # Throttle last_seen writes: only flush to PG every N seconds. Live
+        # freshness comes from the Redis captured_at timestamp, not this column.
+        changed = False
+        now = _now()
+        last_seen = _as_utc(connection.last_seen_at)
+        if last_seen is None or (now - last_seen).total_seconds() >= settings.LAST_SEEN_FLUSH_SECONDS:
+            connection.last_seen_at = now
+            changed = True
+        if connection.status != "connected":
+            connection.status = "connected"
+            changed = True
 
-        self._persist_snapshot(db, connection, payload)
-        self._persist_trades(db, connection, payload)
+        snapshot_added = self._persist_snapshot(db, connection, payload)
+        trades_added = self._persist_trades(db, connection, payload)
 
+        # Build a lean live payload: strip heavy keys that the dashboard reads
+        # through dedicated endpoints.
         payload_data = payload.model_dump(mode="json")
         payload_data.pop("bridge_token", None)
+        for key in HEAVY_PAYLOAD_KEYS:
+            payload_data.pop(key, None)
         live_state.save_live_payload(
             connection.id,
             {
@@ -109,21 +156,40 @@ class BridgeService:
             },
         )
 
-        db.commit()
+        # Only touch PostgreSQL when something actually changed. An idle
+        # heartbeat is now a single SELECT for the token plus one Redis SET.
+        # ``db.new``/``db.dirty`` cover writes made by bind_account() (first
+        # bind, audit row) that the local flags do not track.
+        try:
+            if changed or snapshot_added or trades_added or db.new or db.dirty:
+                db.commit()
+            else:
+                db.rollback()
+        except IntegrityError:
+            # A concurrent worker inserted the same trade ticket between our
+            # dedupe SELECT and this commit. The live payload is already in
+            # Redis, so drop the durable batch and let the next tick retry.
+            db.rollback()
+            logger.warning("Heartbeat commit hit a duplicate trade ticket; deferred")
 
-        return HeartbeatResponse(status="ok", server_time=int(time.time()))
+        return HeartbeatResponse(
+            status="ok",
+            server_time=int(time.time()),
+            resync_trades=live_state.consume_trade_resync(connection.id),
+        )
 
-    def _persist_snapshot(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> None:
-        latest = db.scalar(
-            select(TelemetrySnapshot)
+    def _persist_snapshot(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> bool:
+        # Use an index-only scan on captured_at instead of loading the full row.
+        latest_at = db.scalar(
+            select(TelemetrySnapshot.captured_at)
             .where(TelemetrySnapshot.connection_id == connection.id)
             .order_by(TelemetrySnapshot.captured_at.desc())
             .limit(1)
         )
-        if latest is not None:
-            age = (_now() - _as_utc(latest.captured_at)).total_seconds()
+        if latest_at is not None:
+            age = (_now() - _as_utc(latest_at)).total_seconds()
             if age < SNAPSHOT_MIN_INTERVAL_SECONDS:
-                return
+                return False
 
         db.add(
             TelemetrySnapshot(
@@ -137,35 +203,92 @@ class BridgeService:
                 open_positions=payload.open_positions,
             )
         )
+        return True
 
-    def _persist_trades(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> None:
-        if not payload.closed_trades:
-            return
+    def _existing_tickets(self, db: Session, connection_id: str, tickets: List[int]) -> set:
+        """Fetch only the tickets present in this payload, chunked.
 
-        existing = set(
-            db.scalars(
-                select(Trade.ticket).where(Trade.connection_id == connection.id)
-            )
-        )
-        for item in payload.closed_trades:
-            if item.ticket in existing:
-                continue
-            db.add(
-                Trade(
-                    connection_id=connection.id,
-                    ticket=item.ticket,
-                    symbol=item.symbol,
-                    direction=item.type,
-                    volume=item.volume,
-                    open_price=item.open_price,
-                    close_price=item.close_price,
-                    profit=item.profit,
-                    magic=item.magic,
-                    opened_at=_to_dt(item.open_time),
-                    closed_at=_to_dt(item.close_time),
+        The old implementation selected every ticket the connection had ever
+        seen on every heartbeat.
+        """
+        existing: set = set()
+        chunk = settings.TRADE_SYNC_CHUNK_SIZE
+        for start in range(0, len(tickets), chunk):
+            existing.update(
+                db.scalars(
+                    select(Trade.ticket).where(
+                        Trade.connection_id == connection_id,
+                        Trade.ticket.in_(tickets[start : start + chunk]),
+                    )
                 )
             )
-            existing.add(item.ticket)
+        return existing
+
+    @staticmethod
+    def _trade_rows(connection_id: str, items: List[ClosedTradeItem]) -> List[Trade]:
+        return [
+            Trade(
+                connection_id=connection_id,
+                ticket=item.ticket,
+                symbol=item.symbol,
+                direction=item.type,
+                volume=item.volume,
+                open_price=item.open_price,
+                close_price=item.close_price,
+                profit=item.profit,
+                magic=item.magic,
+                opened_at=_to_dt(item.open_time),
+                closed_at=_to_dt(item.close_time),
+            )
+            for item in items
+        ]
+
+    def _persist_trades(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> bool:
+        incoming = _dedupe_trades(payload.closed_trades or [])
+        if not incoming:
+            return False
+
+        existing = self._existing_tickets(db, connection.id, [item.ticket for item in incoming])
+        new_items = [item for item in incoming if item.ticket not in existing]
+        if not new_items:
+            return False
+        db.bulk_save_objects(self._trade_rows(connection.id, new_items))
+        return True
+
+    # ------------------------------------------------------- trade sync path
+    def sync_trades(
+        self,
+        db: Session,
+        connection: Mt5Connection,
+        closed_trades: List[ClosedTradeItem],
+    ) -> dict:
+        """Dedicated trade-sync endpoint handler (no heartbeat attached).
+
+        The dashboard reads trades from ``trades``; the live payload no longer
+        carries them. Idempotent: existing tickets are ignored, and a race with
+        another worker is retried once instead of failing the whole batch.
+        """
+        incoming = _dedupe_trades(closed_trades or [])
+        received = len(incoming)
+        if not received:
+            return {"status": "ok", "received": 0, "inserted": 0}
+
+        for attempt in range(2):
+            existing = self._existing_tickets(db, connection.id, [item.ticket for item in incoming])
+            new_items = [item for item in incoming if item.ticket not in existing]
+            if not new_items:
+                return {"status": "ok", "received": received, "inserted": 0}
+            try:
+                db.bulk_save_objects(self._trade_rows(connection.id, new_items))
+                db.commit()
+                return {"status": "ok", "received": received, "inserted": len(new_items)}
+            except IntegrityError:
+                # Lost a race against a concurrent insert for the same ticket.
+                # Re-dedupe against committed rows and retry once.
+                db.rollback()
+                if attempt == 1:
+                    raise
+        return {"status": "ok", "received": received, "inserted": 0}
 
     # ------------------------------------------------------------------- reads
     def _live(self, connection: Mt5Connection) -> Optional[dict]:
@@ -248,12 +371,41 @@ class BridgeService:
             return []
         return list(HeartbeatPayload(**live["payload"]).market_quotes)
 
-    def get_trade_history(self, db: Session, connection: Mt5Connection) -> TradeHistoryResponse:
+    def get_trade_history(
+        self,
+        db: Session,
+        connection: Mt5Connection,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> TradeHistoryResponse:
+        scope = Trade.connection_id == connection.id
+
+        # Aggregates are computed in SQL so pagination never loads the whole
+        # table into memory.
+        summary = db.execute(
+            select(
+                func.count(Trade.id),
+                func.coalesce(func.sum(case((Trade.profit > 0, Trade.profit), else_=0.0)), 0.0),
+                func.coalesce(func.sum(case((Trade.profit < 0, Trade.profit), else_=0.0)), 0.0),
+                func.count(case((Trade.profit > 0, Trade.id))),
+                func.count(case((Trade.profit < 0, Trade.id))),
+            ).where(scope)
+        ).one()
+        total, gross_profit, gross_loss, wins, losses = (
+            int(summary[0]),
+            round(float(summary[1]), 2),
+            round(float(summary[2]), 2),
+            int(summary[3]),
+            int(summary[4]),
+        )
+
         rows = list(
             db.scalars(
                 select(Trade)
-                .where(Trade.connection_id == connection.id)
+                .where(scope)
                 .order_by(Trade.closed_at.desc().nullslast())
+                .limit(max(1, min(int(limit or 1000), 5000)))
+                .offset(max(0, int(offset or 0)))
             )
         )
 
@@ -273,13 +425,7 @@ class BridgeService:
             for row in rows
         ]
 
-        gross_profit = round(sum(t.profit for t in trades if t.profit > 0), 2)
-        gross_loss = round(sum(t.profit for t in trades if t.profit < 0), 2)
         net_pnl = round(gross_profit + gross_loss, 2)
-        wins = sum(1 for t in trades if t.profit > 0)
-        losses = sum(1 for t in trades if t.profit < 0)
-        total = len(trades)
-
         return TradeHistoryResponse(
             trades=trades,
             net_pnl=net_pnl,
@@ -327,20 +473,34 @@ class BridgeService:
         if not deposit or deposit <= 0:
             deposit = 500.0
 
-        # Fetch closed trades for this connection ordered chronologically
-        all_trades = list(
-            db.scalars(
-                select(Trade)
-                .where(Trade.connection_id == connection.id)
-                .order_by(Trade.closed_at.asc().nulls_last(), Trade.id.asc())
+        # Fetch the selected window from PostgreSQL and aggregate the baseline
+        # in SQL. The previous version loaded every trade the account ever made.
+        trade_filter = [Trade.connection_id == connection.id]
+        if since is not None:
+            prior_pnl = db.scalar(
+                select(func.coalesce(func.sum(Trade.profit), 0.0)).where(
+                    *trade_filter, Trade.closed_at < since
+                )
             )
-        )
-
-        prior_trades = [t for t in all_trades if since and t.closed_at and t.closed_at < since]
-        period_trades = [t for t in all_trades if not since or (t.closed_at and t.closed_at >= since)]
+            period_trades = list(
+                db.scalars(
+                    select(Trade)
+                    .where(*trade_filter, Trade.closed_at >= since)
+                    .order_by(Trade.closed_at.asc(), Trade.id.asc())
+                )
+            )
+        else:
+            prior_pnl = 0.0
+            period_trades = list(
+                db.scalars(
+                    select(Trade)
+                    .where(*trade_filter)
+                    .order_by(Trade.closed_at.asc().nulls_last(), Trade.id.asc())
+                )
+            )
 
         # Baseline equity at the beginning of the selected window
-        period_start_equity = round(deposit + sum((t.profit or 0.0) for t in prior_trades), 2)
+        period_start_equity = round(deposit + float(prior_pnl or 0.0), 2)
         running_equity = period_start_equity
 
         points: List[EquityPointItem] = []
@@ -486,6 +646,10 @@ class BridgeService:
             TelemetrySnapshot.connection_id == connection.id
         ).delete()
         db.commit()
+        # The lean heartbeat no longer carries trades, so tell the EA to replay
+        # its history on the next tick — otherwise the journal stays empty
+        # until the next deal closes or the EA restarts.
+        live_state.request_trade_resync(connection.id)
         return {
             "status": "success",
             "message": "Riwayat jurnal dihapus. Data akan tersinkron ulang dari MT5.",

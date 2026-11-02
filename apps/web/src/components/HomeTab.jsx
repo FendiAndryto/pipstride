@@ -99,7 +99,7 @@ export default function HomeTab({
       try {
         const [curve, history] = await Promise.all([
           api.getEquityCurve(chartRange).catch(() => null),
-          api.getTradeHistory().catch(() => null)
+          api.getTradeHistory(20).catch(() => null)
         ]);
         if (!isMounted) return;
         // Verify account number to prevent race conditions or cross-account data bleeding

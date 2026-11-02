@@ -5,6 +5,7 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import router as auth_router
@@ -24,30 +25,41 @@ configure_logging(settings.LOG_LEVEL)
 
 
 def _seed_defaults() -> None:
-    """Seed the plan catalogue and the initial admin account."""
-    with SessionLocal() as db:
-        for code, name, max_conn, price in (
-            ("free", "Free", 1, 0),
-            ("core", "Core", 1, 5900),
-            ("plus", "Plus", 3, 12900),
-            ("pro", "Pro", 5, 19900),
-        ):
-            if db.get(Plan, code) is None:
-                db.add(Plan(code=code, name=name, max_connections=max_conn, price_cents=price))
+    """Seed the plan catalogue and the initial admin account.
 
-        admin = db.scalar(select(User).where(User.username == settings.ADMIN_USERNAME.strip()))
-        if admin is None:
-            admin = User(
-                username=settings.ADMIN_USERNAME.strip(),
-                password_hash=hash_password(settings.ADMIN_PASSWORD),
-                role="admin",
-            )
-            db.add(admin)
-            db.flush()
-            db.add(Entitlement(user_id=admin.id, plan_code="pro", max_connections=5))
-            logger.info("Seeded default admin user '%s'", admin.username)
+    Runs in every worker process at boot, so it must survive races:
+    partial inserts are rolled back and the next attempt sees the rows that
+    the winning worker committed.
+    """
+    for attempt in range(3):
+        try:
+            with SessionLocal() as db:
+                for code, name, max_conn, price in (
+                    ("free", "Free", 1, 0),
+                    ("core", "Core", 1, 5900),
+                    ("plus", "Plus", 3, 12900),
+                    ("pro", "Pro", 5, 19900),
+                ):
+                    if db.get(Plan, code) is None:
+                        db.add(Plan(code=code, name=name, max_connections=max_conn, price_cents=price))
 
-        db.commit()
+                admin = db.scalar(select(User).where(User.username == settings.ADMIN_USERNAME.strip()))
+                if admin is None:
+                    admin = User(
+                        username=settings.ADMIN_USERNAME.strip(),
+                        password_hash=hash_password(settings.ADMIN_PASSWORD),
+                        role="admin",
+                    )
+                    db.add(admin)
+                    db.flush()
+                    db.add(Entitlement(user_id=admin.id, plan_code="pro", max_connections=5))
+                    logger.info("Seeded default admin user '%s'", admin.username)
+
+                db.commit()
+            return
+        except IntegrityError:
+            logger.info("Seed race detected (attempt %d), retrying", attempt + 1)
+    logger.warning("Could not seed defaults after 3 attempts; continuing without them")
 
 
 @asynccontextmanager
@@ -135,13 +147,18 @@ def ready():
 
     if settings.REDIS_URL:
         try:
-            import redis
+            # Reuse the live-state backend instead of opening a new connection
+            # on every probe. A memory fallback while Redis is configured means
+            # workers hold divergent live state, so report it as unready.
+            from app.core import live_state as _live_state
 
-            client = redis.Redis.from_url(settings.REDIS_URL, socket_timeout=1.0)
-            if not client.ping():
+            backend = _live_state._backend
+            if not isinstance(backend, _live_state._RedisBackend):
                 report["redis"] = "error"
                 report["status"] = "unready"
                 status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            elif not backend._client.ping():
+                raise RuntimeError("Redis PING returned False")
         except Exception as exc:
             logger.error("Redis readiness check failed: %s", exc)
             report["redis"] = "error"

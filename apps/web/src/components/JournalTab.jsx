@@ -77,7 +77,7 @@ export default function JournalTab({
     if (document.hidden || historyInFlightRef.current) return;
     historyInFlightRef.current = true;
     try {
-      const data = await api.getTradeHistory();
+      const data = await api.getTradeHistory(2000);
       // Ensure incoming history belongs to currently connected MT5 account
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setHistoryData(data);
@@ -158,7 +158,7 @@ export default function JournalTab({
     if (activeTab === 'journal' || !activeTab) {
       if (hasConnection || isConnected) {
         let active = true;
-        api.getTradeHistory()
+        api.getTradeHistory(2000)
           .then((data) => {
             if (active && (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber)) {
               setHistoryData(data);

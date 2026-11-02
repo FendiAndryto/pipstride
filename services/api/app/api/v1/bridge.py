@@ -19,10 +19,12 @@ from app.models.bridge import (
     InitialDepositResponse,
     MarketQuoteItem,
     PositionItem,
+    SyncTradesRequest,
     TradeHistoryResponse,
 )
 from app.models.risk import RiskWatchdogStatusResponse
 from app.services.bridge_service import bridge_service
+from app.services.connection_service import connection_service
 
 router = APIRouter(prefix="/bridge", tags=["Bridge"])
 
@@ -60,6 +62,46 @@ def receive_heartbeat(
     return bridge_service.process_heartbeat(db, payload, raw_token=token)
 
 
+@router.post(
+    "/sync-trades",
+    summary="Push closed trades on deal events (lean heartbeats carry none)",
+)
+def sync_trades(
+    payload: SyncTradesRequest,
+    response: Response,
+    x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
+    db: Session = Depends(get_db),
+):
+    token = x_bridge_token
+    if token:
+        limited, retry_after = consume(
+            f"hb:{hash_token(token)}",
+            limit=settings.HEARTBEAT_RATE_LIMIT,
+            window_seconds=settings.HEARTBEAT_RATE_WINDOW_SECONDS,
+        )
+        if limited:
+            response.headers["Retry-After"] = str(retry_after)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Trade sync rate limit exceeded.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+    connection = connection_service.get_by_token(db, token or "")
+    if connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or revoked connection token.",
+        )
+    if payload.account_number is not None and connection.account_number is not None:
+        if payload.account_number != connection.account_number:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Sync payload belongs to a different MT5 account.",
+            )
+    return bridge_service.sync_trades(db, connection, payload.closed_trades)
+
+
 @router.get(
     "/status",
     response_model=BridgeStatusResponse,
@@ -84,10 +126,12 @@ def get_market_quotes(connection: Mt5Connection = Depends(get_active_connection)
 
 @router.get("/history", response_model=TradeHistoryResponse)
 def get_trade_history(
+    limit: int = 1000,
+    offset: int = 0,
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.get_trade_history(db, connection)
+    return bridge_service.get_trade_history(db, connection, limit=limit, offset=offset)
 
 
 @router.post("/history/reset")

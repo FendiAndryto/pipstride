@@ -293,8 +293,8 @@ export const api = {
     return res.json();
   },
 
-  async getTradeHistory() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/history`, { method: 'GET' });
+  async getTradeHistory(limit = 1000) {
+    const res = await authFetch(`${API_BASE}/api/v1/bridge/history?limit=${limit}`, { method: 'GET' });
     if (res.status === 409) {
       return {
         trades: [],

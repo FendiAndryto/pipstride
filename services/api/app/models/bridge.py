@@ -107,10 +107,26 @@ class HeartbeatPayload(BaseModel):
 class HeartbeatResponse(BaseModel):
     status: str = "ok"
     server_time: int
+    # True when the server has no trade rows for this connection (e.g. after a
+    # journal reset) and the EA should replay its full history via /sync-trades.
+    resync_trades: bool = False
 
 
 class InitialDepositRequest(BaseModel):
     initial_deposit: Optional[float] = Field(None, description="Custom deposit baseline amount, or null/0 to reset to auto MT5")
+
+
+class SyncTradesRequest(BaseModel):
+    """Event-driven trade sync (sent by the EA only when deals change).
+
+    Keeps the per-second heartbeat lean: 100+ closed trades are pushed only
+    when a deal actually closed, then replicated through the regular history
+    endpoints.
+    """
+
+    account_number: Optional[int] = Field(None, description="MT5 account login, must match the bound account")
+    closed_trades: List[ClosedTradeItem] = Field(default_factory=list, max_length=2000)
+
 
 
 class InitialDepositResponse(BaseModel):

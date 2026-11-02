@@ -19,7 +19,9 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "pipstride:live:"
+RESYNC_PREFIX = "pipstride:resync:"
 TTL_SECONDS = 120
+RESYNC_TTL_SECONDS = 3600
 
 
 class _MemoryBackend:
@@ -79,7 +81,12 @@ class _RedisBackend:
     def __init__(self, url: str) -> None:
         import redis
 
-        self._client = redis.Redis.from_url(url, decode_responses=True)
+        self._client = redis.Redis.from_url(
+            url,
+            decode_responses=True,
+            socket_timeout=1.0,
+            socket_connect_timeout=1.0,
+        )
 
     def set(self, key: str, value: str, ttl: int) -> None:
         try:
@@ -129,3 +136,21 @@ def load_live_payload(connection_id: str) -> Optional[dict[str, Any]]:
 
 def clear_live_payload(connection_id: str) -> None:
     _backend.delete(f"{KEY_PREFIX}{connection_id}")
+
+
+def request_trade_resync(connection_id: str) -> None:
+    """Ask the EA to replay its full trade history on the next heartbeat.
+
+    Used after ``reset_journal`` wipes the durable rows: the lean heartbeat no
+    longer carries trades, so the client must be told explicitly to resend.
+    """
+    _backend.set(f"{RESYNC_PREFIX}{connection_id}", "1", RESYNC_TTL_SECONDS)
+
+
+def consume_trade_resync(connection_id: str) -> bool:
+    """Return True once per pending resync request, then clear it."""
+    key = f"{RESYNC_PREFIX}{connection_id}"
+    if _backend.get(key):
+        _backend.delete(key)
+        return True
+    return False

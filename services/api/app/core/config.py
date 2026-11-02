@@ -32,8 +32,19 @@ class Settings(BaseSettings):
     # which is correct for local development and single-origin deployments.
     PUBLIC_BASE_URL: str = ""
     MT5_MONITORED_SYMBOLS: str = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD"
-    MT5_HEARTBEAT_INTERVAL_SECONDS: int = 1
+    MT5_HEARTBEAT_INTERVAL_SECONDS: int = 3
     MT5_HISTORY_DAYS: int = 90
+
+    # Ingest write throttles. The heartbeat itself is cheap (Redis only); these
+    # bound how often a single connection is allowed to touch PostgreSQL.
+    LAST_SEEN_FLUSH_SECONDS: int = 10
+    SNAPSHOT_MIN_INTERVAL_SECONDS: int = 30
+    TRADE_SYNC_CHUNK_SIZE: int = 400
+
+    # Connection pool, per worker process. 4 workers x (5 + 5) = 40 server
+    # connections, safely under PostgreSQL's default max_connections (100).
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
 
     # Public dashboard origin used in emailed links. Falls back to
     # PUBLIC_BASE_URL and then to the inbound request origin.
