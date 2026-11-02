@@ -23,7 +23,7 @@ input string        InpBridgeToken       = "";                                  
 input ENUM_HOST_ENV InpHostEnv           = HOST_ENV_AUTO;                             // Host Environment (Auto/Local/VPS)
 input string        InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
 input int           InpHistoryDays       = 90;                                        // History lookback days (0 = All History)
-input int           InpHeartbeatInterval = 1;                                         // Heartbeat interval in seconds
+input int           InpHeartbeatInterval = 3;                                         // Heartbeat interval in seconds (3-5 recommended)
 input bool          InpVerboseLog        = false;                                     // Print detailed logs to Experts tab
 
 //--- Global Variables
@@ -31,8 +31,20 @@ datetime g_last_heartbeat = 0;
 int      g_consecutive_errors = 0;
 string   g_status_msg = "Initializing...";
 
+// Cached heavy payload parts: rebuilt only when fresh, otherwise reused so
+// OnTimer stays cheap. Trade history is event-driven (OnTradeTransaction).
+string   g_cached_candles_m15 = "[]";
+string   g_cached_candles_m5 = "[]";
+datetime g_candles_built_at = 0;
+double   g_cached_initial_deposit = 0.0;
+datetime g_deposit_cached_at = 0;
+bool     g_trades_dirty = true;
+datetime g_last_sync_attempt = 0;
+datetime g_last_full_sync = 0;
+
 // Forward Declarations
 void SendHeartbeat();
+bool SendTradeSync(bool silent);
 void UpdateChartHUD(string status_text);
 string FindBrokerSymbol(string baseSym);
 void GetDealPositionOpenDetails(ulong posId, double &openPrice, long &openTime);
@@ -55,6 +67,19 @@ int OnInit()
    // Send initial heartbeat immediately
    SendHeartbeat();
 
+   // Seed full trade history once at startup; afterwards only deal events (and
+   // a 30-minute safety net) trigger a sync.
+   g_last_sync_attempt = TimeCurrent();
+   if(SendTradeSync(false))
+   {
+      g_trades_dirty = false;
+      g_last_full_sync = TimeCurrent();
+   }
+   else
+   {
+      g_trades_dirty = true;
+   }
+
    return(INIT_SUCCEEDED);
 }
 
@@ -73,7 +98,44 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   datetime now = TimeCurrent();
+
+   // Full replay safety net: heals a journal reset, a missed DEAL_ADD while
+   // the terminal was offline, and any dropped batch. Cheap (one request per
+   // 30 min) and bounded by the 100-deal window.
+   bool periodic = (now - g_last_full_sync) >= 1800;
+
+   // Event-driven sync. After a failure, back off to one attempt per 30s so a
+   // dead backend cannot turn every tick into a 3-second blocking request.
+   if((g_trades_dirty || periodic) && (now - g_last_sync_attempt) >= 30)
+   {
+      g_last_sync_attempt = now;
+      if(periodic) g_last_full_sync = now;
+      if(SendTradeSync(true))
+      {
+         g_trades_dirty = false;
+         g_last_full_sync = now;
+      }
+   }
+
    SendHeartbeat();
+}
+
+//+------------------------------------------------------------------+
+//| Trade transaction event: only mark trade history dirty            |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(
+   const MqlTradeTransaction &trans,
+   const MqlTradeRequest &request,
+   const MqlTradeResult &result
+)
+{
+   // DEAL_ADD signals a new deal (balance, in, or out). Full trade detail is
+   // fetched lazily in the next timer tick, so this handler never blocks.
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
+   {
+      g_trades_dirty = true;
+   }
 }
 
 //+------------------------------------------------------------------+
@@ -339,6 +401,23 @@ string BuildCandlesJson(ENUM_TIMEFRAMES tf = PERIOD_M15)
 }
 
 //+------------------------------------------------------------------+
+//| Cached wrapper for initial-deposit scan (rebuild at most 1/min)  |
+//+------------------------------------------------------------------+
+double GetAccountInitialDepositCached()
+{
+   // Scanning all balance deals every tick is O(n) over lifetime history
+   // and dominates heartbeat cost on old accounts.
+   datetime now = TimeCurrent();
+   if(g_deposit_cached_at != 0 && (now - g_deposit_cached_at) < 60)
+   {
+      return g_cached_initial_deposit;
+   }
+   g_cached_initial_deposit = GetAccountInitialDeposit();
+   g_deposit_cached_at = now;
+   return g_cached_initial_deposit;
+}
+
+//+------------------------------------------------------------------+
 //| Build JSON telemetry payload with live positions list            |
 //+------------------------------------------------------------------+
 string BuildHeartbeatJson()
@@ -370,7 +449,7 @@ string BuildHeartbeatJson()
    double profit = AccountInfoDouble(ACCOUNT_PROFIT);
    if(!MathIsValidNumber(profit)) profit = 0.0;
 
-   double initial_deposit = GetAccountInitialDeposit();
+   double initial_deposit = GetAccountInitialDepositCached();
    if(!MathIsValidNumber(initial_deposit) || initial_deposit <= 0.0)
    {
       initial_deposit = balance;
@@ -422,9 +501,18 @@ string BuildHeartbeatJson()
    positionsJson += "]";
 
    string quotesJson = BuildMarketQuotesJson();
-   string closedTradesJson = BuildClosedTradesJson();
-   string candlesM15Json = BuildCandlesJson(PERIOD_M15);
-   string candlesM5Json = BuildCandlesJson(PERIOD_M5);
+
+   // Rebuild candles at most once per 30s; the chart shows the freshest bar
+   // from market quotes anyway. Trade history is sent only on deal events
+   // via SendTradeSync(), never on every heartbeat.
+   if(g_candles_built_at == 0 || (TimeCurrent() - g_candles_built_at) >= 30)
+   {
+      g_cached_candles_m15 = BuildCandlesJson(PERIOD_M15);
+      g_cached_candles_m5 = BuildCandlesJson(PERIOD_M5);
+      g_candles_built_at = TimeCurrent();
+   }
+   string candlesM15Json = g_cached_candles_m15;
+   string candlesM5Json = g_cached_candles_m5;
 
    string host_type = "local";
    if(InpHostEnv == HOST_ENV_VPS)
@@ -452,7 +540,7 @@ string BuildHeartbeatJson()
       + StringFormat("\"open_positions\":%d,", positions)
       + "\"positions\":" + positionsJson + ","
       + "\"market_quotes\":" + quotesJson + ","
-      + "\"closed_trades\":" + closedTradesJson + ","
+      + "\"closed_trades\":[],"
       + "\"candles\":" + candlesM15Json + ","
       + "\"candles_m5\":" + candlesM5Json + ","
       + "\"chart_symbol\":\"" + EscapeJsonString(_Symbol) + "\","
@@ -462,6 +550,45 @@ string BuildHeartbeatJson()
       + "}";
 
    return json;
+}
+
+//+------------------------------------------------------------------+
+//| Send a dedicated trade-sync request (only on deal events)        |
+//+------------------------------------------------------------------+
+bool SendTradeSync(bool silent)
+{
+   if(StringLen(InpBridgeToken) == 0) return false;
+
+   string closedTradesJson = BuildClosedTradesJson();
+   // Avoid the network round-trip when nothing changed (empty payload).
+   if(closedTradesJson == "[]") return true;
+
+   string body = "{"
+      + StringFormat("\"account_number\":%I64d,", (long)AccountInfoInteger(ACCOUNT_LOGIN))
+      + "\"closed_trades\":" + closedTradesJson
+      + "}";
+
+   string endpoint = InpBackendUrl + "/api/v1/bridge/sync-trades";
+   char postData[];
+   char resultData[];
+   string resultHeaders;
+   StringToCharArray(body, postData, 0, WHOLE_ARRAY, CP_UTF8);
+   int postLen = ArraySize(postData);
+   if(postLen > 0 && postData[postLen - 1] == 0) ArrayResize(postData, postLen - 1);
+
+   string headers = "Content-Type: application/json\r\nX-Bridge-Token: " + InpBridgeToken + "\r\n";
+   ResetLastError();
+   int res = WebRequest("POST", endpoint, headers, 3000, postData, resultData, resultHeaders);
+   if(res == 200)
+   {
+      if(!silent && InpVerboseLog)
+         Print(">>> [PipstrideMonitor] Trade sync OK: ", CharArrayToString(resultData, 0, WHOLE_ARRAY, CP_UTF8));
+      return true;
+   }
+   g_consecutive_errors++;
+   if(g_consecutive_errors % 10 == 1)
+      Print(">>> [PipstrideMonitor] Trade sync failed. HTTP: ", res, ", Err: ", GetLastError());
+   return false;
 }
 
 //+------------------------------------------------------------------+
@@ -498,9 +625,15 @@ void SendHeartbeat()
       g_consecutive_errors = 0;
       g_status_msg = "Connected (Read-Only OK - 200)";
 
+      string responseStr = CharArrayToString(resultData, 0, WHOLE_ARRAY, CP_UTF8);
+      // Server wiped the journal (reset) or has no rows: replay history.
+      if(StringFind(responseStr, "\"resync_trades\":true") >= 0)
+      {
+         g_trades_dirty = true;
+      }
+
       if(InpVerboseLog)
       {
-         string responseStr = CharArrayToString(resultData, 0, WHOLE_ARRAY, CP_UTF8);
          Print(">>> [PipstrideMonitor] Telemetry OK: ", responseStr);
       }
       UpdateChartHUD(g_status_msg);
