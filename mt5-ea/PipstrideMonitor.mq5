@@ -70,6 +70,7 @@ bool SendTradeSync(bool silent);
 void UpdateChartHUD(string status_text);
 string FindBrokerSymbol(string baseSym);
 void GetDealPositionOpenDetails(ulong posId, double &openPrice, long &openTime);
+void InvalidateDerivedCaches();
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -79,6 +80,11 @@ int OnInit()
    Print(">>> [PipstrideMonitor] Initializing Pure Read-Only MT5 Telemetry Monitor v1.00...");
    Print(">>> [PipstrideMonitor] NOTICE: This EA is 100% READ-ONLY. It possesses ZERO order execution capability.");
    Print(">>> [PipstrideMonitor] Target Backend: ", InpBackendUrl);
+
+   // Globals survive a reinit without a full reload (input edits, chart
+   // changes), so caches derived from the settings must be rebuilt here or an
+   // edited InpMonitoredSymbols would never take effect.
+   InvalidateDerivedCaches();
 
    // Set timer for periodic telemetry heartbeat
    EventSetTimer(MathMax(1, InpHeartbeatInterval));
@@ -220,6 +226,16 @@ string FindBrokerSymbol(string baseSym)
    }
 
    return _Symbol;
+}
+
+//+------------------------------------------------------------------+
+//| Drop every cache derived from inputs or quotes. Reinit-safe.     |
+//+------------------------------------------------------------------+
+void InvalidateDerivedCaches()
+{
+   g_watch_count = -1;                       // forces EnsureWatchlistCache to re-resolve
+   for(int i = 0; i < MAX_WATCH_SYMBOLS; i++)
+      g_d1_cache[i].valid = false;           // stale symbol data must not survive a re-init
 }
 
 //+------------------------------------------------------------------+

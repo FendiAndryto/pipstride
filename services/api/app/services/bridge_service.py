@@ -662,6 +662,10 @@ class BridgeService:
             TelemetrySnapshot.connection_id == connection.id
         ).delete()
         db.commit()
+        # Clear first: if the SET below fails, the cleared entry forces the
+        # next status poll to re-count; a lone SET failure would otherwise
+        # leave the pre-reset cached count visible for up to an hour.
+        live_state.clear_trade_count(connection.id)
         live_state.save_trade_count(connection.id, 0)
         # The lean heartbeat no longer carries trades, so tell the EA to replay
         # its history on the next tick — otherwise the journal stays empty
