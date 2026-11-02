@@ -18,7 +18,7 @@ enum ENUM_HOST_ENV
 
 //--- Inputs
 input group "--- Pipstride Telemetry Settings ---"
-input string        InpBackendUrl        = "http://localhost:8089";                    // Backend API URL
+input string        InpBackendUrl        = "https://pipstride.homever.my.id";          // Backend API URL
 input string        InpBridgeToken       = "";                                        // Pipstride Connection Token (from Web Dashboard)
 input ENUM_HOST_ENV InpHostEnv           = HOST_ENV_AUTO;                             // Host Environment (Auto/Local/VPS)
 input string        InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
@@ -43,6 +43,7 @@ bool     g_trades_dirty = true;
 datetime g_last_sync_attempt = 0;
 datetime g_last_full_sync = 0;
 string   g_bridge_token = "";
+string   g_backend_url = "";
 
 // Watchlist and D1 quote caches. FindBrokerSymbol scans every symbol in the
 // terminal and CopyRates has real terminal overhead, so neither belongs on a
@@ -92,22 +93,64 @@ string SanitizeBridgeToken(string raw)
 }
 
 //+------------------------------------------------------------------+
+//| Strip whitespace, trailing slashes, and auto-upgrade http to     |
+//| https for remote endpoints. A 301 redirect from Cloudflare/Nginx |
+//| makes WebRequest convert POST into GET (API answers 405).        |
+//+------------------------------------------------------------------+
+string SanitizeBackendUrl(string raw)
+{
+   string clean = raw;
+   StringReplace(clean, "\r\n", "");
+   StringReplace(clean, "\r", "");
+   StringReplace(clean, "\n", "");
+   StringReplace(clean, "\t", "");
+   StringReplace(clean, " ", "");
+   StringTrimLeft(clean);
+   StringTrimRight(clean);
+
+   // Fall back to default production server if left empty
+   if(StringLen(clean) == 0)
+   {
+      clean = "https://pipstride.homever.my.id";
+   }
+
+   // Auto-upgrade remote HTTP to HTTPS to prevent 301 redirect method degradation to GET
+   if(StringFind(clean, "http://") == 0)
+   {
+      if(StringFind(clean, "http://localhost") != 0 && StringFind(clean, "http://127.0.0.1") != 0)
+      {
+         clean = "https://" + StringSubstr(clean, 7);
+      }
+   }
+
+   // Strip trailing slash so endpoint paths don't double-slash (which causes 404)
+   while(StringLen(clean) > 0 && StringSubstr(clean, StringLen(clean) - 1, 1) == "/")
+   {
+      clean = StringSubstr(clean, 0, StringLen(clean) - 1);
+   }
+
+   return clean;
+}
+
+//+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
    Print(">>> [PipstrideMonitor] Initializing Pure Read-Only MT5 Telemetry Monitor v1.00...");
    Print(">>> [PipstrideMonitor] NOTICE: This EA is 100% READ-ONLY. It possesses ZERO order execution capability.");
-   Print(">>> [PipstrideMonitor] Target Backend: ", InpBackendUrl);
 
    // Globals survive a reinit without a full reload (input edits, chart
    // changes), so caches derived from the settings must be rebuilt here or an
    // edited InpMonitoredSymbols would never take effect.
    InvalidateDerivedCaches();
 
-   // Clipboard-pasted tokens often keep a trailing newline from the web
-   // editor; sanitise once and use the cleaned copy everywhere.
+   // Clipboard-pasted tokens and URLs often keep trailing newlines/spaces or
+   // http:// schemes. Clean them once and use the sanitized values everywhere.
    g_bridge_token = SanitizeBridgeToken(InpBridgeToken);
+   g_backend_url  = SanitizeBackendUrl(InpBackendUrl);
+
+   Print(">>> [PipstrideMonitor] Target Backend: ", g_backend_url);
 
    // Set timer for periodic telemetry heartbeat
    EventSetTimer(MathMax(1, InpHeartbeatInterval));
@@ -702,21 +745,20 @@ bool SendTradeSync(bool silent)
       + "\"closed_trades\":" + closedTradesJson
       + "}";
 
-   string endpoint = InpBackendUrl + "/api/v1/bridge/sync-trades";
+   string endpoint = g_backend_url + "/api/v1/bridge/sync-trades";
    char postData[];
    char resultData[];
    string resultHeaders;
-   // Same empty-body guard as SendHeartbeat: zero-size data would turn the
-   // request into a GET.
+   // Ensure non-empty body and complete UTF-8 bytes without trailing NUL
    if(StringLen(body) == 0) body = "{\"closed_trades\":[]}";
-   StringToCharArray(body, postData, 0, StringLen(body), CP_UTF8);
+   StringToCharArray(body, postData, 0, WHOLE_ARRAY, CP_UTF8);
+   int postLen = ArraySize(postData);
+   if(postLen > 0 && postData[postLen - 1] == 0) ArrayResize(postData, postLen - 1);
 
    string headers = "Content-Type: application/json\r\nX-Bridge-Token: " + g_bridge_token + "\r\n";
    ResetLastError();
-   // Keep a larger budget than the heartbeat: this request carries the whole
-   // history window in one body and runs at most once per 30s, so a tight
-   // 1.5s cap could fail the sync forever on a slow uplink.
-   int res = WebRequest("POST", endpoint, headers, 3000, postData, resultData, resultHeaders);
+   // Keep a generous budget: trade-sync carries closed deals and runs rarely.
+   int res = WebRequest("POST", endpoint, headers, 5000, postData, resultData, resultHeaders);
    if(res == 200)
    {
       if(!silent && InpVerboseLog)
@@ -749,7 +791,7 @@ void SendHeartbeat()
       return;
    }
 
-   string endpoint = InpBackendUrl + "/api/v1/bridge/heartbeat";
+   string endpoint = g_backend_url + "/api/v1/bridge/heartbeat";
    string json = BuildHeartbeatJson();
 
    // MQL5 quirk: WebRequest with a zero-size body sends a GET regardless of
@@ -761,14 +803,20 @@ void SendHeartbeat()
    char resultData[];
    string resultHeaders;
 
-   // StringLen-based copy: exact bytes, no trailing NUL, no manual trim.
-   StringToCharArray(json, postData, 0, StringLen(json), CP_UTF8);
+   // Safely encode entire UTF-8 payload (including multi-byte characters) and strip terminating NUL
+   StringToCharArray(json, postData, 0, WHOLE_ARRAY, CP_UTF8);
+   int postLen = ArraySize(postData);
+   if(postLen > 0 && postData[postLen - 1] == 0)
+   {
+      ArrayResize(postData, postLen - 1);
+   }
 
    string headers = "Content-Type: application/json\r\n";
    headers += "X-Bridge-Token: " + g_bridge_token + "\r\n";
    ResetLastError();
 
-   int res = WebRequest("POST", endpoint, headers, 1500, postData, resultData, resultHeaders);
+   // 4000ms timeout provides ample headroom for Cloudflare Tunnel latency without timing out (err 5203)
+   int res = WebRequest("POST", endpoint, headers, 4000, postData, resultData, resultHeaders);
 
    if(res == 200)
    {
@@ -810,7 +858,7 @@ void SendHeartbeat()
    {
       if(err == 4014)
       {
-         Print(">>> [PipstrideMonitor] ERROR 4014: URL not allowed! Add '", InpBackendUrl, "' to Tools -> Options -> Expert Advisors -> Allow WebRequest.");
+         Print(">>> [PipstrideMonitor] ERROR 4014: URL not allowed! Add '", g_backend_url, "' to Tools -> Options -> Expert Advisors -> Allow WebRequest.");
       }
       else
       {
@@ -829,7 +877,7 @@ void UpdateChartHUD(string status_text)
    string hud = "========================================\n"
               + "  PIPSTRIDE MONITOR - 100% READ-ONLY   \n"
               + "========================================\n"
-              + "Backend URL    : " + InpBackendUrl + "\n"
+              + "Backend URL    : " + g_backend_url + "\n"
               + "Host Env       : " + host_desc + "\n"
               + "Monitor Status : " + status_text + "\n"
               + "Execution Mode : READ-ONLY (No Orders Executed)\n"
