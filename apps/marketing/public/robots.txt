@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pipstride.homever.my.id/sitemap-index.xml

@@ -1,0 +1,405 @@
+---
+// DashboardMockup.astro - High-Fidelity Replica of Pipstride's Live Dashboard Cockpit
+---
+
+<div class="mockup-frame">
+  <!-- Window Titlebar / Terminal Connectivity -->
+  <div class="window-bar">
+    <div class="terminal-badge">
+      <span class="pulse-indicator"></span>
+      <span class="mono terminal-name">MT5 TERMINAL // ICMarketsSC-Live</span>
+    </div>
+
+    <div class="terminal-meta mono">
+      <span class="meta-tag">ACCT: <strong class="text-cyan">#849201</strong></span>
+      <span class="divider">/</span>
+      <span class="meta-tag meta-hide-mobile">LEVERAGE: <strong>1:500</strong></span>
+      <span class="divider meta-hide-mobile">/</span>
+      <span class="meta-tag text-emerald">PING: 8MS</span>
+    </div>
+  </div>
+
+  <div class="cockpit-body">
+    <!-- Live Metrics Strip (HomeTab Snapshot) -->
+    <div class="metrics-grid">
+      <!-- Balance Card -->
+      <div class="metric-card">
+        <div class="card-label">ACCOUNT BALANCE</div>
+        <div class="card-val mono font-bold">$24,850.00</div>
+        <div class="card-sub text-muted">Baseline: $20,000.00</div>
+      </div>
+
+      <!-- Equity Card with Floating Pill -->
+      <div class="metric-card active-card">
+        <div class="card-header-row">
+          <span class="card-label">LIVE EQUITY</span>
+          <span class="floating-badge mono text-emerald">+2.26%</span>
+        </div>
+        <div class="card-val mono font-bold text-emerald">$25,412.30</div>
+        <div class="card-sub text-emerald">Floating: +$562.30 PnL</div>
+      </div>
+
+      <!-- Margin Level -->
+      <div class="metric-card">
+        <div class="card-label">MARGIN LEVEL</div>
+        <div class="card-val mono font-bold text-cyan">4,149.6%</div>
+        <div class="card-sub text-muted">Used: $612 / Free: $24.7k</div>
+      </div>
+
+      <!-- Active Positions Count -->
+      <div class="metric-card">
+        <div class="card-label">ACTIVE TRADES</div>
+        <div class="card-val mono font-bold">2 OPEN</div>
+        <div class="card-sub text-muted">Auto-Sync via EA</div>
+      </div>
+    </div>
+
+    <!-- Active Open Positions Table (Direct Pipstride UI replica) -->
+    <div class="positions-panel">
+      <div class="panel-header mono">
+        <div class="panel-title">
+          <span class="radar-dot"></span>
+          <span>STREAMING POSITIONS (LIVE TELEMETRY)</span>
+        </div>
+        <span class="sync-tag">1-WAY HTTPS EGRESS</span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="positions-table mono">
+          <thead>
+            <tr>
+              <th>SYMBOL</th>
+              <th>TYPE</th>
+              <th>VOLUME</th>
+              <th class="col-hide-mobile">OPEN PRICE</th>
+              <th>CURRENT</th>
+              <th class="col-hide-mobile">SL / TP</th>
+              <th class="text-right">FLOATING PNL</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-bold text-cyan">XAUUSD</td>
+              <td><span class="type-pill buy">BUY</span></td>
+              <td>0.50</td>
+              <td class="text-secondary col-hide-mobile">2,740.10</td>
+              <td class="text-white">2,748.50</td>
+              <td class="text-muted col-hide-mobile">2,732.00 / 2,760.00</td>
+              <td class="text-right text-emerald font-bold">+$420.00</td>
+            </tr>
+            <tr>
+              <td class="font-bold text-cyan">EURUSD</td>
+              <td><span class="type-pill sell">SELL</span></td>
+              <td>1.00</td>
+              <td class="text-secondary col-hide-mobile">1.08500</td>
+              <td class="text-white">1.08358</td>
+              <td class="text-muted col-hide-mobile">1.08850 / 1.07900</td>
+              <td class="text-right text-emerald font-bold">+$142.30</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Telemetry Heartbeat Status Bar -->
+    <div class="cockpit-footer mono">
+      <div class="sensor-status">
+        <span class="sensor-dot"></span>
+        <span class="text-muted">SENSOR:</span>
+        <span class="text-emerald">PipstrideMonitor.mq5 Attached</span>
+      </div>
+      <div class="read-only-seal text-cyan">
+        <span>STRICTLY READ-ONLY • 0 EXECUTION</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .mockup-frame {
+    background: #0d171e;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 24px 70px -15px rgba(0, 0, 0, 0.75), 0 0 40px rgba(69, 224, 173, 0.1);
+    overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    position: relative;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  .window-bar {
+    background: #091218;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.5);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  @media (max-width: 640px) {
+    .window-bar {
+      padding: 10px 14px;
+    }
+    .meta-hide-mobile {
+      display: none;
+    }
+  }
+
+  .terminal-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 0;
+  }
+
+  .pulse-indicator {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--g);
+    box-shadow: 0 0 8px var(--g);
+    animation: pulse-dot 2s infinite;
+    flex-shrink: 0;
+  }
+
+  .terminal-name {
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .terminal-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+
+  .divider {
+    color: rgba(41, 64, 74, 0.8);
+  }
+
+  .cockpit-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 640px) {
+    .cockpit-body {
+      padding: 12px;
+      gap: 12px;
+    }
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  @media (max-width: 768px) {
+    .metrics-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+  }
+
+  .metric-card {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    .metric-card {
+      padding: 10px 12px;
+    }
+    .card-val {
+      font-size: 15px !important;
+    }
+    .card-sub {
+      font-size: 9px !important;
+    }
+  }
+
+  .active-card {
+    border-color: rgba(69, 224, 173, 0.35);
+    background: linear-gradient(180deg, rgba(69, 224, 173, 0.06) 0%, rgba(17, 30, 38, 0.8) 100%);
+  }
+
+  .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .floating-badge {
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(69, 224, 173, 0.15);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+  }
+
+  .card-label {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .card-val {
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .card-sub {
+    font-size: 10px;
+  }
+
+  .positions-panel {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .panel-header {
+    background: #0e1920;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.4);
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sync-tag {
+    color: var(--muted);
+    font-size: 9.5px;
+    white-space: nowrap;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .positions-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .positions-table th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.4);
+    background: #101c24;
+    white-space: nowrap;
+  }
+
+  .positions-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.25);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 580px) {
+    .col-hide-mobile {
+      display: none !important;
+    }
+    .positions-table th,
+    .positions-table td {
+      padding: 8px 6px;
+      font-size: 10.5px;
+    }
+    .panel-header {
+      padding: 8px 10px;
+    }
+  }
+
+  .cockpit-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    padding-top: 4px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .cockpit-footer {
+      font-size: 9.5px;
+    }
+  }
+
+  .sensor-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sensor-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--g);
+  }
+
+  .read-only-seal {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+</style>

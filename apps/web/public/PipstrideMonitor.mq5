@@ -18,7 +18,7 @@ enum ENUM_HOST_ENV
 
 //--- Inputs
 input group "--- Pipstride Telemetry Settings ---"
-input string        InpBackendUrl        = "https://pipstride.homever.my.id";          // Backend API URL
+input string        InpBackendUrl        = "https://app-pipstride.homever.my.id";      // Backend API URL
 input string        InpBridgeToken       = "";                                        // Pipstride Connection Token (from Web Dashboard)
 input ENUM_HOST_ENV InpHostEnv           = HOST_ENV_AUTO;                             // Host Environment (Auto/Local/VPS)
 input string        InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
@@ -111,7 +111,7 @@ string SanitizeBackendUrl(string raw)
    // Fall back to default production server if left empty
    if(StringLen(clean) == 0)
    {
-      clean = "https://pipstride.homever.my.id";
+      clean = "https://app-pipstride.homever.my.id";
    }
 
    // Auto-upgrade remote HTTP to HTTPS to prevent 301 redirect method degradation to GET

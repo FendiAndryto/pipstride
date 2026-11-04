@@ -1,0 +1,468 @@
+---
+// PricingSection.astro - Pricing Specifications with 14-Day Trial & Coming Soon Subscriptions
+const appUrl = 'https://app-pipstride.homever.my.id';
+
+const plans = [
+  {
+    code: 'core',
+    name: 'Core',
+    terminals: '1 MT5 Terminal',
+    description: '',
+    features: [],
+    highlight: false,
+  },
+  {
+    code: 'plus',
+    name: 'Plus',
+    terminals: '3 MT5 Terminals',
+    description: '',
+    features: [],
+    highlight: true,
+  },
+  {
+    code: 'pro',
+    name: 'Pro',
+    terminals: '5 MT5 Terminals',
+    description: '',
+    features: [],
+    highlight: false,
+  },
+];
+---
+
+<section class="section pricing-section" id="pricing">
+  <div class="site-container">
+    <!-- Header -->
+    <div class="section-header text-center reveal-on-scroll">
+      <span class="section-tag mono">SUBSCRIPTION TIERS & ACCESS</span>
+      <h2 class="section-title">Transparent specifications. Instant trial.</h2>
+      <p class="section-desc mx-auto">
+        Subscription tiers are currently in early access preview. Every trader can get started immediately with a full-featured trial.
+      </p>
+    </div>
+
+    <!-- Trial Announcement Hero Banner (Fully Responsive) -->
+    <div class="trial-hero-card reveal-on-scroll">
+      <div class="trial-content">
+        <div class="trial-badge mono">
+          <span class="pulse-indicator"></span>
+          <span>EARLY ACCESS BETA TRIAL</span>
+        </div>
+        <h3 class="trial-heading">
+          Get <span class="gradient-text">14 Days of Full Pro Access</span> on Any MT5 Account
+        </h3>
+        <p class="trial-sub">
+          Test drive high-frequency telemetry streaming, multi-symbol performance breakdowns, and automated journaling risk-free. No credit card required, zero automated billing surprises.
+        </p>
+      </div>
+      <div class="trial-action">
+        <a href={appUrl} class="btn-primary trial-btn" target="_blank" rel="noopener noreferrer">
+          <span>Start 14-Day Free Trial</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="7" y1="17" x2="17" y2="7"></line>
+            <polyline points="7 7 17 7 17 17"></polyline>
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 3 Plan Cards (Free removed, descriptions emptied, Coming Soon pricing) -->
+    <div class="pricing-grid">
+      {plans.map((plan, index) => (
+        <div class:list={["pricing-card", `reveal-on-scroll stagger-${index + 1}`, { popular: plan.highlight }]}>
+          {plan.highlight && (
+            <div class="popular-ribbon mono">BETA FAVORITE // RECOMMENDED</div>
+          )}
+
+          <div class="plan-header">
+            <h3 class="plan-name">{plan.name}</h3>
+            <span class="plan-capacity mono text-cyan">{plan.terminals}</span>
+          </div>
+
+          <!-- Coming Soon Price Box -->
+          <div class="price-box">
+            <div class="coming-soon-pill mono">
+              <span class="cs-dot"></span>
+              <span>COMING SOON</span>
+            </div>
+            <div class="price-subtext mono text-muted">Subscription pricing unlocks soon</div>
+          </div>
+
+          <!-- Feature List / Specifications -->
+          {plan.features && plan.features.length > 0 ? (
+            <ul class="feature-list">
+              {plan.features.map((feat) => (
+                <li class="feature-item">
+                  <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>{feat}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div class="specs-placeholder">
+              <div class="specs-badge mono">
+                <span class="specs-dot"></span>
+                <span>Specifications coming soon</span>
+              </div>
+            </div>
+          )}
+
+          <div class="card-action">
+            <a
+              href={appUrl}
+              class:list={["btn-tier", plan.highlight ? "btn-primary" : "btn-secondary"]}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span>Start 14-Day Free Trial</span>
+            </a>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- Trust Badges Strip (Responsive on mobile) -->
+    <div class="trust-assurances mono">
+      <span class="assurance-item"><span class="text-emerald">✓</span> NO CREDIT CARD REQUIRED</span>
+      <span class="assurance-sep">•</span>
+      <span class="assurance-item"><span class="text-emerald">✓</span> INSTANT EA TOKEN ACTIVATION</span>
+      <span class="assurance-sep">•</span>
+      <span class="assurance-item"><span class="text-emerald">✓</span> PRESERVE ALL JOURNAL HISTORY</span>
+      <span class="assurance-sep">•</span>
+      <span class="assurance-item"><span class="text-emerald">✓</span> CANCEL IN 1 CLICK</span>
+    </div>
+  </div>
+</section>
+
+<style>
+  .pricing-section {
+    padding: 90px 0;
+    position: relative;
+  }
+
+  @media (max-width: 640px) {
+    .pricing-section {
+      padding: 60px 0;
+    }
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .section-header {
+    margin-bottom: 44px;
+  }
+
+  /* Trial Hero Card */
+  .trial-hero-card {
+    background: linear-gradient(135deg, rgba(23, 41, 50, 0.8) 0%, rgba(13, 23, 30, 0.95) 100%);
+    border: 1px solid rgba(69, 224, 173, 0.4);
+    border-radius: var(--radius-lg);
+    padding: 30px 32px;
+    margin-bottom: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 30px rgba(69, 224, 173, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .trial-hero-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--g), transparent);
+  }
+
+  .trial-content {
+    max-width: 650px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .trial-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--g);
+    width: fit-content;
+  }
+
+  .pulse-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--g);
+    animation: pulse-dot 2s infinite;
+  }
+
+  .trial-heading {
+    font-size: clamp(20px, 2.5vw, 26px);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  .trial-sub {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .trial-btn {
+    padding: 12px 24px;
+    font-size: 14.5px;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 800px) {
+    .trial-hero-card {
+      padding: 24px 20px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 20px;
+    }
+    .trial-action {
+      width: 100%;
+    }
+    .trial-btn {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
+    }
+  }
+
+  /* Pricing Grid */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-bottom: 36px;
+  }
+
+  @media (max-width: 992px) {
+    .pricing-grid {
+      grid-template-columns: 1fr;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+
+  .pricing-card {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.55);
+    border-radius: var(--radius-md);
+    padding: 30px 24px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: all 0.25s ease;
+  }
+
+  @media (max-width: 640px) {
+    .pricing-card {
+      padding: 26px 20px;
+    }
+  }
+
+  .pricing-card.popular {
+    border-color: rgba(69, 224, 173, 0.5);
+    background: linear-gradient(180deg, rgba(23, 41, 50, 0.7) 0%, rgba(17, 30, 38, 0.9) 100%);
+    box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.6), 0 0 30px rgba(69, 224, 173, 0.12);
+  }
+
+  .popular-ribbon {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--g);
+    color: #080f14;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 3px 12px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+  }
+
+  .plan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+
+  .plan-name {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .plan-capacity {
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(131, 189, 255, 0.1);
+    border: 1px solid rgba(131, 189, 255, 0.3);
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+  }
+
+  .price-box {
+    background: #091218;
+    border: 1px solid rgba(41, 64, 74, 0.4);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    text-align: center;
+  }
+
+  .coming-soon-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--blue);
+    margin-bottom: 2px;
+  }
+
+  .cs-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+  }
+
+  .price-subtext {
+    font-size: 11px;
+  }
+
+  .specs-placeholder {
+    flex: 1;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    margin-bottom: 28px;
+    border: 1px dashed rgba(41, 64, 74, 0.45);
+    border-radius: var(--radius-sm);
+    background: rgba(9, 18, 24, 0.35);
+    text-align: center;
+  }
+
+  .specs-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  .specs-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    opacity: 0.6;
+  }
+
+  @media (max-width: 640px) {
+    .specs-placeholder {
+      min-height: 80px;
+      padding: 16px 12px;
+      margin-bottom: 22px;
+    }
+  }
+
+  .feature-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 28px;
+    flex: 1;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .check-icon {
+    color: var(--g);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .card-action {
+    margin-top: auto;
+  }
+
+  .btn-tier {
+    width: 100%;
+    padding: 11px 16px;
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    display: block;
+    box-sizing: border-box;
+  }
+
+  .trust-assurances {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-wrap: wrap;
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  @media (max-width: 640px) {
+    .assurance-sep {
+      display: none;
+    }
+    .assurance-item {
+      display: block;
+      width: 100%;
+    }
+  }
+
+  .assurance-sep {
+    color: rgba(41, 64, 74, 0.6);
+  }
+</style>

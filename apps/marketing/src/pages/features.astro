@@ -1,0 +1,99 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FeatureBento from '../components/sections/FeatureBento.astro';
+import JournalAnalyticsShowcase from '../components/showcase/JournalAnalyticsShowcase.astro';
+import BrokerMarquee from '../components/sections/BrokerMarquee.astro';
+import OnboardingSteps from '../components/sections/OnboardingSteps.astro';
+import CtaBanner from '../components/sections/CtaBanner.astro';
+
+const appUrl = 'https://app-pipstride.homever.my.id';
+---
+
+<BaseLayout
+  title="Feature Specifications & Architecture — Pipstride"
+  description="In-depth breakdown of Pipstride's pure read-only MT5 telemetry conduit, sub-second Redis live state, and automated journal analytics."
+>
+  <div class="features-page-header">
+    <div class="site-container text-center">
+      <div class="tech-pill status-live animate-pulse-glow">
+        <span class="radar-dot"></span>
+        <span>TECHNICAL SPECIFICATION & ARCHITECTURE</span>
+      </div>
+      <h1 class="page-title">
+        Engineered for Institutional Precision & Discipline
+      </h1>
+      <p class="page-desc mx-auto">
+        Learn how Pipstride isolates your capital with zero execution privileges, streams real-time telemetry, and automates your entire trading journal.
+      </p>
+    </div>
+  </div>
+
+  <BrokerMarquee />
+
+  <FeatureBento />
+
+  <section class="section showcase-section">
+    <div class="site-container">
+      <div class="section-header text-center">
+        <span class="section-tag mono">DEEP DIVE: JOURNAL ANALYTICS</span>
+        <h2 class="section-title">Automated trade ledger & equity telemetry.</h2>
+        <p class="section-desc mx-auto">
+          Gain institutional-grade clarity into your trading performance without manual logging errors.
+        </p>
+      </div>
+
+      <div class="journal-showcase-wrap">
+        <JournalAnalyticsShowcase />
+      </div>
+    </div>
+  </section>
+
+  <OnboardingSteps />
+
+  <CtaBanner />
+</BaseLayout>
+
+<style>
+  .features-page-header {
+    padding: 80px 0 50px;
+    background: radial-gradient(circle at 50% -10%, rgba(131, 189, 255, 0.1) 0%, transparent 60%);
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .page-title {
+    font-size: clamp(32px, 4.5vw, 54px);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-top: 18px;
+    margin-bottom: 16px;
+    max-width: 840px;
+  }
+
+  .page-desc {
+    max-width: 640px;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .showcase-section {
+    padding: 85px 0;
+    position: relative;
+  }
+
+  .journal-showcase-wrap {
+    width: 100%;
+    max-width: 1060px;
+    margin: 0 auto;
+  }
+</style>

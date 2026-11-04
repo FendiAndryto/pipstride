@@ -1,0 +1,237 @@
+---
+// FeatureBento.astro - Modern Bento Feature Grid for Pipstride Core
+---
+
+<section class="section features-section" id="features">
+  <div class="site-container">
+    <div class="section-header text-center reveal-on-scroll">
+      <span class="section-tag mono">CORE ARCHITECTURE</span>
+      <h2 class="section-title">Engineered strictly for telemetry & analytics.</h2>
+      <p class="section-desc mx-auto">
+        Pipstride is an egress-only telemetry conduit and automated journal. Every component is designed to be lightweight, deterministic, and isolated from your trading capital.
+      </p>
+    </div>
+
+    <div class="bento-grid">
+      <!-- Feature 1: Pure Read-Only -->
+      <div class="bento-card reveal-on-scroll stagger-1">
+        <div class="card-highlight" aria-hidden="true"></div>
+        <div class="card-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <div class="feature-tag mono text-emerald">+ 01 / SAFETY</div>
+        <h3 class="bento-title">Physically Zero Execution Risk</h3>
+        <p class="bento-text">
+          Unlike automated execution bots or copy-trading services, Pipstride has zero trading functions compiled in its code. It is mathematically incapable of opening, modifying, or closing trades on your account.
+        </p>
+        <div class="bento-metric mono text-emerald">AUDIT: 0 INBOUND TRADE COMMANDS</div>
+      </div>
+
+      <!-- Feature 2: Automated Journal -->
+      <div class="bento-card reveal-on-scroll stagger-2">
+        <div class="card-highlight" aria-hidden="true"></div>
+        <div class="card-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+        </div>
+        <div class="feature-tag mono text-cyan">+ 02 / AUTOMATION</div>
+        <h3 class="bento-title">Automated Trade Journaling</h3>
+        <p class="bento-text">
+          Every closed trade is immediately captured, calculated, and categorized. Analyze your win rate, profit factor, average hold times, and pair distributions without tedious manual spreadsheet entries.
+        </p>
+        <div class="bento-metric mono text-cyan">INDEXING: REAL-TIME TICK SYNC</div>
+      </div>
+
+      <!-- Feature 3: Sub-Second Telemetry -->
+      <div class="bento-card reveal-on-scroll stagger-3">
+        <div class="card-highlight" aria-hidden="true"></div>
+        <div class="card-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div class="feature-tag mono text-emerald">+ 03 / PERFORMANCE</div>
+        <h3 class="bento-title">Sub-Second Live Telemetry</h3>
+        <p class="bento-text">
+          Ultra-lightweight 5-second heartbeats transmit account balance, floating PnL, margin levels, and active tickets with negligible CPU overhead on VPS or desktop terminals.
+        </p>
+        <div class="bento-metric mono text-emerald">LATENCY: &lt; 8MS INGEST RATE</div>
+      </div>
+
+      <!-- Feature 4: Drawdown Watchdog -->
+      <div class="bento-card reveal-on-scroll stagger-4">
+        <div class="card-highlight" aria-hidden="true"></div>
+        <div class="card-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+        </div>
+        <div class="feature-tag mono text-cyan">+ 04 / DISCIPLINE</div>
+        <h3 class="bento-title">Drawdown Watermark Watchdog</h3>
+        <p class="bento-text">
+          Passive equity-to-deposit tracking with real-time watermark calculation. Monitors your risk thresholds and drawdown limits continuously so you maintain institutional trading discipline.
+        </p>
+        <div class="bento-metric mono text-cyan">RISK: PASSIVE WATERMARK</div>
+      </div>
+
+      <!-- Feature 5: PWA Mobile Cockpit -->
+      <div class="bento-card reveal-on-scroll stagger-5">
+        <div class="card-highlight" aria-hidden="true"></div>
+        <div class="card-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+        </div>
+        <div class="feature-tag mono text-emerald">+ 05 / COCKPIT</div>
+        <h3 class="bento-title">Installable Mobile PWA</h3>
+        <p class="bento-text">
+          Instant launch on iOS and Android. Monitor active telemetry, open positions, floating PnL, and journal metrics on the go with zero app store friction or installation delays.
+        </p>
+        <div class="bento-metric mono text-emerald">CLIENT: ZERO DESKTOP LOCK-IN</div>
+      </div>
+
+      <!-- Feature 6: Token-Only Security -->
+      <div class="bento-card reveal-on-scroll stagger-6">
+        <div class="card-highlight" aria-hidden="true"></div>
+        <div class="card-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+          </svg>
+        </div>
+        <div class="feature-tag mono text-cyan">+ 06 / AIR-GAP</div>
+        <h3 class="bento-title">Zero Broker Password Sharing</h3>
+        <p class="bento-text">
+          Never surrender your MT5 master or investor passwords. Connection is established via an encrypted, revocable Bridge Token (<code class="mono">pst_live_...</code>) input directly into your EA.
+        </p>
+        <div class="bento-metric mono text-cyan">CREDENTIALS: 0 RETAINED</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .features-section {
+    padding: 90px 0;
+    position: relative;
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .section-header {
+    margin-bottom: 56px;
+  }
+
+  @media (max-width: 640px) {
+    .features-section {
+      padding: 60px 0;
+    }
+    .section-header {
+      margin-bottom: 36px;
+    }
+    .bento-card {
+      padding: 22px 18px !important;
+    }
+    .bento-grid {
+      gap: 14px !important;
+    }
+  }
+
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  @media (max-width: 992px) {
+    .bento-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .bento-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .bento-card {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.55);
+    border-radius: var(--radius-md);
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.25s ease;
+  }
+
+  .bento-card:hover {
+    border-color: rgba(69, 224, 173, 0.4);
+    background: #15252f;
+    transform: translateY(-2px);
+  }
+
+  .card-highlight {
+    position: absolute;
+    inset: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(69, 224, 173, 0.45), transparent);
+    opacity: 0.8;
+  }
+
+  .card-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: #172932;
+    border: 1px solid rgba(41, 64, 74, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--g);
+    margin-bottom: 18px;
+  }
+
+  .feature-tag {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .bento-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .bento-text {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    flex: 1;
+  }
+
+  .bento-metric {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding-top: 14px;
+    border-top: 1px solid rgba(41, 64, 74, 0.35);
+  }
+</style>

@@ -39,4 +39,4 @@ None
 - Fase 004 (marketing import catalog saat build)
 
 ## Status
-todo
+done

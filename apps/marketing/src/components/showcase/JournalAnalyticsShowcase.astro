@@ -1,0 +1,732 @@
+---
+// JournalAnalyticsShowcase.astro - Interactive Journal & Performance Analytics Showcase
+---
+
+<div class="journal-showcase-container reveal-on-scroll">
+  <!-- Top Control Bar -->
+  <div class="showcase-topbar mono">
+    <div class="ledger-badge">
+      <span class="radar-dot"></span>
+      <span>AUTOMATED JOURNAL LEDGER // TICK_SYNC: VERIFIED</span>
+    </div>
+
+    <!-- Interactive Range Switcher Pills (Mirrors HomeTab chartRange state) -->
+    <div class="range-pills" id="ja-range-pills" role="tablist">
+      <button type="button" class="pill-item" data-range="Day">Day</button>
+      <button type="button" class="pill-item" data-range="Week">Week</button>
+      <button type="button" class="pill-item active" data-range="Month">Month</button>
+      <button type="button" class="pill-item" data-range="All">All</button>
+    </div>
+  </div>
+
+  <!-- KPI Metric Tiles Grid (Mirrors MetricTile from JournalAnalytics.jsx) -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-val mono font-bold text-emerald" id="ja-val-pf">2.18</div>
+      <div class="kpi-lbl">PROFIT FACTOR</div>
+      <div class="kpi-hint text-muted" id="ja-hint-pf">Institutional Grade (&gt; 1.8)</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-val mono font-bold text-emerald" id="ja-val-win">68.4%</div>
+      <div class="kpi-lbl">WIN RATE</div>
+      <div class="kpi-hint text-muted" id="ja-hint-win">41 Wins / 19 Losses (60 Trades)</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-val mono font-bold text-emerald" id="ja-val-pnl">+$5,412.30</div>
+      <div class="kpi-lbl">NET REALIZED PNL</div>
+      <div class="kpi-hint text-muted" id="ja-hint-pnl">+27.06% Return on Capital</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-val mono font-bold text-cyan" id="ja-val-dd">-1.85%</div>
+      <div class="kpi-lbl">MAX DRAWDOWN</div>
+      <div class="kpi-hint text-muted" id="ja-hint-dd">Watermark Peak: $25,412.30</div>
+    </div>
+  </div>
+
+  <!-- Equity Curve Vector Visualizer -->
+  <div class="chart-section">
+    <div class="chart-meta-row mono">
+      <div class="chart-title">
+        <span class="text-muted">EQUITY CURVE VECTOR</span>
+        <span class="baseline-tag">[ DEPOSIT BASELINE: $20,000.00 ]</span>
+      </div>
+      <div class="chart-peak text-emerald" id="ja-chart-peak">
+        <span>PEAK: $25,412.30 (+27.06%)</span>
+      </div>
+    </div>
+
+    <div class="svg-chart-wrap">
+      <svg class="equity-svg" viewBox="0 0 700 160" fill="none" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--g)" stop-opacity="0.32" />
+            <stop offset="70%" stop-color="var(--g)" stop-opacity="0.05" />
+            <stop offset="100%" stop-color="var(--g)" stop-opacity="0.0" />
+          </linearGradient>
+        </defs>
+
+        <!-- Hairline Grid Coordinate Lines -->
+        <line x1="0" y1="40" x2="700" y2="40" stroke="rgba(41, 64, 74, 0.35)" stroke-width="1" stroke-dasharray="4 4" />
+        <line x1="0" y1="80" x2="700" y2="80" stroke="rgba(41, 64, 74, 0.35)" stroke-width="1" stroke-dasharray="4 4" />
+        <line x1="0" y1="120" x2="700" y2="120" stroke="rgba(41, 64, 74, 0.35)" stroke-width="1" stroke-dasharray="4 4" />
+
+        <!-- Deposit baseline (dotted line at 130) -->
+        <line x1="0" y1="130" x2="700" y2="130" stroke="rgba(131, 189, 255, 0.4)" stroke-width="1.2" stroke-dasharray="6 4" />
+
+        <!-- Area fill under equity path -->
+        <polygon
+          id="ja-svg-area"
+          points="0,130 50,126 100,128 150,110 200,114 250,96 300,100 350,80 400,74 450,60 500,64 550,46 600,42 650,28 700,20 700,160 0,160"
+          fill="url(#equityGradient)"
+        />
+
+        <!-- Equity Main Line -->
+        <polyline
+          id="ja-svg-line"
+          points="0,130 50,126 100,128 150,110 200,114 250,96 300,100 350,80 400,74 450,60 500,64 550,46 600,42 650,28 700,20"
+          stroke="var(--g)"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+
+        <!-- Peak Active Telemetry Tick Point -->
+        <circle id="ja-svg-dot" cx="700" cy="20" r="4.5" fill="var(--g)" />
+        <circle id="ja-svg-radar" cx="700" cy="20" r="9" fill="none" stroke="var(--g)" stroke-width="1" class="animate-radar" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- Dual Split: Profit by Symbol & Closed Trades Ledger -->
+  <div class="dual-analytics-grid">
+    <!-- Component 1: BucketBars (Profit by Symbol - from JournalAnalytics.jsx) -->
+    <div class="sub-panel">
+      <div class="sub-header">
+        <span class="sub-title">PROFIT BY SYMBOL</span>
+        <span class="sub-meta mono text-muted">REALIZED NET PNL</span>
+      </div>
+
+      <div class="bucket-list">
+        <!-- XAUUSD -->
+        <div class="bucket-item">
+          <div class="bucket-row mono">
+            <span class="symbol-name text-cyan font-bold">XAUUSD</span>
+            <div class="bar-track">
+              <div class="bar-fill positive" style="width: 88%;"></div>
+            </div>
+            <span class="symbol-val text-emerald">+$3,420.00</span>
+          </div>
+          <div class="bucket-meta mono">26 trades • Win: 71% • PF: 2.45</div>
+        </div>
+
+        <!-- EURUSD -->
+        <div class="bucket-item">
+          <div class="bucket-row mono">
+            <span class="symbol-name text-cyan font-bold">EURUSD</span>
+            <div class="bar-track">
+              <div class="bar-fill positive" style="width: 52%;"></div>
+            </div>
+            <span class="symbol-val text-emerald">+$1,280.00</span>
+          </div>
+          <div class="bucket-meta mono">18 trades • Win: 65% • PF: 1.95</div>
+        </div>
+
+        <!-- USDJPY -->
+        <div class="bucket-item">
+          <div class="bucket-row mono">
+            <span class="symbol-name text-cyan font-bold">USDJPY</span>
+            <div class="bar-track">
+              <div class="bar-fill positive" style="width: 44%;"></div>
+            </div>
+            <span class="symbol-val text-emerald">+$1,022.30</span>
+          </div>
+          <div class="bucket-meta mono">12 trades • Win: 68% • PF: 2.10</div>
+        </div>
+
+        <!-- GBPUSD -->
+        <div class="bucket-item">
+          <div class="bucket-row mono">
+            <span class="symbol-name text-cyan font-bold">GBPUSD</span>
+            <div class="bar-track">
+              <div class="bar-fill negative" style="width: 18%;"></div>
+            </div>
+            <span class="symbol-val text-rose">-$310.00</span>
+          </div>
+          <div class="bucket-meta mono">8 trades • Win: 48% • PF: 0.88</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Component 2: Recent Auto-Indexed Trades Table -->
+    <div class="sub-panel">
+      <div class="sub-header">
+        <span class="sub-title">RECENT INDEXED TRADES</span>
+        <span class="sub-meta mono text-emerald">0 MANUAL ENTRY</span>
+      </div>
+
+      <div class="ledger-table-wrap">
+        <table class="specimen-table mono">
+          <thead>
+            <tr>
+              <th class="col-hide-mobile">TICKET</th>
+              <th>PAIR</th>
+              <th>TYPE</th>
+              <th>LOT</th>
+              <th class="col-hide-mobile">TIME</th>
+              <th class="text-right">NET PNL</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-muted col-hide-mobile">#849201</td>
+              <td class="text-cyan font-bold">XAUUSD</td>
+              <td><span class="type-pill buy">BUY</span></td>
+              <td>0.50</td>
+              <td class="text-secondary col-hide-mobile">11:32</td>
+              <td class="text-right text-emerald font-bold">+$342.50</td>
+            </tr>
+            <tr>
+              <td class="text-muted col-hide-mobile">#849188</td>
+              <td class="text-cyan font-bold">EURUSD</td>
+              <td><span class="type-pill sell">SELL</span></td>
+              <td>1.00</td>
+              <td class="text-secondary col-hide-mobile">09:15</td>
+              <td class="text-right text-emerald font-bold">+$180.00</td>
+            </tr>
+            <tr>
+              <td class="text-muted col-hide-mobile">#849154</td>
+              <td class="text-cyan font-bold">GBPUSD</td>
+              <td><span class="type-pill buy">BUY</span></td>
+              <td>0.75</td>
+              <td class="text-secondary col-hide-mobile">05:12</td>
+              <td class="text-right text-rose font-bold">-$95.20</td>
+            </tr>
+            <tr>
+              <td class="text-muted col-hide-mobile">#849120</td>
+              <td class="text-cyan font-bold">XAUUSD</td>
+              <td><span class="type-pill buy">BUY</span></td>
+              <td>0.50</td>
+              <td class="text-secondary col-hide-mobile">02:40</td>
+              <td class="text-right text-emerald font-bold">+$210.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Sync Footer -->
+  <div class="showcase-footer mono">
+    <span class="text-muted">AUTO-INDEXED UPON ORDER CLOSE • STRICT READ-ONLY SENSOR</span>
+    <span class="text-emerald">SYNC INTERVAL: REALTIME</span>
+  </div>
+
+  <!-- Interactive Range Switcher Script -->
+  <script is:inline>
+    (function() {
+      const container = document.getElementById('ja-range-pills');
+      if (!container) return;
+
+      const dataMap = {
+        Day: {
+          pf: '3.10',
+          hintPf: 'Day Session Factor',
+          win: '75.0%',
+          hintWin: '3 Wins / 1 Loss (4 Trades)',
+          pnl: '+$342.50',
+          hintPnl: '+1.37% Daily Return',
+          dd: '-0.38%',
+          hintDd: 'Session Watermark',
+          peak: 'PEAK: $25,412.30 (+$342.50 Today)',
+          line: '0,110 100,105 200,115 350,85 500,60 700,25',
+          area: '0,110 100,105 200,115 350,85 500,60 700,25 700,160 0,160',
+          dotY: 25
+        },
+        Week: {
+          pf: '2.65',
+          hintPf: 'Weekly Factor',
+          win: '71.4%',
+          hintWin: '10 Wins / 4 Losses (14 Trades)',
+          pnl: '+$1,480.00',
+          hintPnl: '+6.18% Weekly Return',
+          dd: '-1.10%',
+          hintDd: 'Weekly Watermark Peak',
+          peak: 'PEAK: $25,412.30 (+6.18% Week)',
+          line: '0,125 120,118 240,95 360,102 480,68 600,45 700,22',
+          area: '0,125 120,118 240,95 360,102 480,68 600,45 700,22 700,160 0,160',
+          dotY: 22
+        },
+        Month: {
+          pf: '2.18',
+          hintPf: 'Institutional Grade (> 1.8)',
+          win: '68.4%',
+          hintWin: '41 Wins / 19 Losses (60 Trades)',
+          pnl: '+$5,412.30',
+          hintPnl: '+27.06% Return on Capital',
+          dd: '-1.85%',
+          hintDd: 'Watermark Peak: $25,412.30',
+          peak: 'PEAK: $25,412.30 (+27.06%)',
+          line: '0,130 50,126 100,128 150,110 200,114 250,96 300,100 350,80 400,74 450,60 500,64 550,46 600,42 650,28 700,20',
+          area: '0,130 50,126 100,128 150,110 200,114 250,96 300,100 350,80 400,74 450,60 500,64 550,46 600,42 650,28 700,20 700,160 0,160',
+          dotY: 20
+        },
+        All: {
+          pf: '2.05',
+          hintPf: 'All-Time Factor',
+          win: '66.2%',
+          hintWin: '142 Wins / 72 Losses (214 Trades)',
+          pnl: '+$18,920.00',
+          hintPnl: '+94.60% Return on Initial Capital',
+          dd: '-2.40%',
+          hintDd: 'Lifetime Portfolio Watermark',
+          peak: 'PEAK: $25,412.30 (+94.60% All-Time)',
+          line: '0,135 70,130 140,115 210,120 280,105 350,90 420,95 490,70 560,50 630,35 700,15',
+          area: '0,135 70,130 140,115 210,120 280,105 350,90 420,95 490,70 560,50 630,35 700,15 700,160 0,160',
+          dotY: 15
+        }
+      };
+
+      const buttons = container.querySelectorAll('.pill-item');
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const range = btn.getAttribute('data-range');
+          if (!range || !dataMap[range]) return;
+
+          buttons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const d = dataMap[range];
+          document.getElementById('ja-val-pf').textContent = d.pf;
+          document.getElementById('ja-hint-pf').textContent = d.hintPf;
+          document.getElementById('ja-val-win').textContent = d.win;
+          document.getElementById('ja-hint-win').textContent = d.hintWin;
+          document.getElementById('ja-val-pnl').textContent = d.pnl;
+          document.getElementById('ja-hint-pnl').textContent = d.hintPnl;
+          document.getElementById('ja-val-dd').textContent = d.dd;
+          document.getElementById('ja-hint-dd').textContent = d.hintDd;
+          document.getElementById('ja-chart-peak').textContent = d.peak;
+
+          const line = document.getElementById('ja-svg-line');
+          const area = document.getElementById('ja-svg-area');
+          const dot = document.getElementById('ja-svg-dot');
+          const radar = document.getElementById('ja-svg-radar');
+
+          if (line) line.setAttribute('points', d.line);
+          if (area) area.setAttribute('points', d.area);
+          if (dot) dot.setAttribute('cy', d.dotY);
+          if (radar) radar.setAttribute('cy', d.dotY);
+        });
+      });
+    })();
+  </script>
+</div>
+
+<style>
+  .journal-showcase-container {
+    background: #0d171e;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(69, 224, 173, 0.08);
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    .journal-showcase-container {
+      padding: 16px 12px;
+    }
+  }
+
+  .showcase-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 18px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.45);
+    font-size: 11px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .showcase-topbar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+    }
+    .range-pills {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .pill-item {
+      flex: 1;
+      text-align: center;
+      padding: 6px 0 !important;
+    }
+  }
+
+  .ledger-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 10.5px;
+  }
+
+  .range-pills {
+    display: flex;
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.6);
+    border-radius: var(--radius-full);
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .pill-item {
+    padding: 4px 12px;
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+    border-radius: var(--radius-full);
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .pill-item:hover {
+    color: var(--text);
+  }
+
+  .pill-item.active {
+    background: var(--g);
+    color: #080f14;
+    font-weight: 700;
+  }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 768px) {
+    .kpi-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+  }
+
+  .kpi-card {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    transition: transform 0.2s ease;
+  }
+
+  @media (max-width: 640px) {
+    .kpi-card {
+      padding: 10px 12px;
+    }
+    .kpi-val {
+      font-size: 16px !important;
+    }
+    .kpi-lbl {
+      font-size: 9.5px !important;
+    }
+    .kpi-hint {
+      font-size: 8.5px !important;
+    }
+  }
+
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(69, 224, 173, 0.35);
+  }
+
+  .kpi-val {
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    margin-bottom: 2px;
+    transition: color 0.2s ease;
+  }
+
+  .kpi-lbl {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    font-weight: 700;
+  }
+
+  .kpi-hint {
+    font-size: 9.5px;
+    margin-top: 4px;
+  }
+
+  .chart-section {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    margin-bottom: 20px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    .chart-section {
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+  }
+
+  .chart-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10.5px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  @media (max-width: 640px) {
+    .chart-meta-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .baseline-tag {
+      display: block;
+      margin-left: 0 !important;
+      margin-top: 2px;
+    }
+  }
+
+  .baseline-tag {
+    color: var(--blue);
+    margin-left: 8px;
+    font-size: 10px;
+  }
+
+  .svg-chart-wrap {
+    width: 100%;
+    height: 140px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  @media (max-width: 640px) {
+    .svg-chart-wrap {
+      height: 110px;
+    }
+  }
+
+  .equity-svg {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: block;
+  }
+
+  .dual-analytics-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  @media (max-width: 860px) {
+    .dual-analytics-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+  }
+
+  .sub-panel {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    .sub-panel {
+      padding: 12px;
+    }
+  }
+
+  .sub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.35);
+  }
+
+  .sub-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .sub-meta {
+    font-size: 10px;
+  }
+
+  .bucket-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .bucket-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .bucket-row {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 11px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  @media (max-width: 480px) {
+    .bucket-row {
+      grid-template-columns: 50px minmax(0, 1fr) auto;
+      gap: 6px;
+      font-size: 10px;
+    }
+    .bucket-meta {
+      padding-left: 56px !important;
+      font-size: 8.5px !important;
+    }
+  }
+
+  .bar-track {
+    height: 6px;
+    background: #15242e;
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+  }
+
+  .bar-fill.positive {
+    background: var(--g);
+  }
+
+  .bar-fill.negative {
+    background: var(--red);
+  }
+
+  .symbol-val {
+    text-align: right;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .bucket-meta {
+    font-size: 9px;
+    color: var(--muted);
+    padding-left: 66px;
+  }
+
+  .ledger-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .specimen-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .specimen-table th {
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 9.5px;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.4);
+    white-space: nowrap;
+  }
+
+  .specimen-table td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(41, 64, 74, 0.25);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 540px) {
+    .col-hide-mobile {
+      display: none !important;
+    }
+    .specimen-table th,
+    .specimen-table td {
+      padding: 6px 4px;
+      font-size: 10px;
+    }
+  }
+
+  .showcase-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10.5px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(41, 64, 74, 0.35);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .showcase-footer {
+      font-size: 9px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+  }
+</style>

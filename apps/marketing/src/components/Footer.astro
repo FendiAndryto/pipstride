@@ -1,0 +1,207 @@
+---
+// Footer.astro - Clean Modern SaaS Footer for Pipstride with Official Logo
+const currentYear = new Date().getFullYear();
+const appUrl = 'https://app-pipstride.homever.my.id';
+---
+
+<footer class="console-footer">
+  <div class="site-container footer-inner">
+    <!-- Grid Columns -->
+    <div class="footer-grid">
+      <!-- Col 1: Brand -->
+      <div class="footer-col brand-col">
+        <div class="footer-brand">
+          <div class="brand-logo-box">
+            <img src="/favicon.svg" alt="Pipstride Logo" class="brand-logo-img" width="26" height="25" loading="lazy" decoding="async" />
+          </div>
+          <span class="brand-name">Pipstride</span>
+        </div>
+        <p class="footer-desc">
+          Pure read-only MetaTrader 5 telemetry streaming and automated trade journaling. Engineered with zero execution capabilities for absolute trading peace of mind.
+        </p>
+        <div class="footer-status mono">
+          <span class="sensor-dot"></span>
+          <span class="text-emerald">SYSTEM STATUS: ALL SERVICES OPERATIONAL</span>
+        </div>
+      </div>
+
+      <!-- Col 2: Product -->
+      <div class="footer-col">
+        <h4 class="col-title mono">PRODUCT</h4>
+        <ul class="col-links">
+          <li><a href="/#features">Core Features</a></li>
+          <li><a href="/#journal-analytics">Journal Analytics</a></li>
+          <li><a href="/#how-it-works">How It Works</a></li>
+          <li><a href="/#pricing">Pricing & 14-Day Trial</a></li>
+          <li><a href={appUrl} target="_blank" rel="noopener noreferrer">Launch Console [↗]</a></li>
+        </ul>
+      </div>
+
+      <!-- Col 3: Resources & Safety -->
+      <div class="footer-col">
+        <h4 class="col-title mono">SECURITY</h4>
+        <ul class="col-links">
+          <li><a href="/#faq">Safety & FAQ</a></li>
+          <li><span class="text-secondary">Strictly Read-Only Sensor</span></li>
+          <li><span class="text-secondary">Encrypted HTTPS WebRequest</span></li>
+          <li><span class="text-secondary">Zero Password Storage</span></li>
+          <li><span class="text-secondary">Sub-Second Redis Ingest</span></li>
+        </ul>
+      </div>
+
+      <!-- Col 4: Platform -->
+      <div class="footer-col">
+        <h4 class="col-title mono">ECOSYSTEM</h4>
+        <ul class="col-links">
+          <li><span class="text-secondary">MetaTrader 5 (Build 3800+)</span></li>
+          <li><span class="text-secondary">Windows & Windows VPS</span></li>
+          <li><span class="text-secondary">iOS & Android PWA Cockpit</span></li>
+          <li><span class="text-secondary">FastAPI & PostgreSQL Engine</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Disclaimer & Copyright -->
+    <div class="footer-bottom">
+      <div class="copyright text-muted">
+        © {currentYear} Pipstride. All rights reserved. MetaTrader 5 is a registered trademark of MetaQuotes Software Corp.
+      </div>
+      <div class="disclaimer-text text-muted">
+        Risk Disclaimer: Pipstride is exclusively a performance telemetry and trade journaling analytical platform. Pipstride does not execute, manage, or solicit financial orders. Trading Foreign Exchange and CFDs carries significant financial risk.
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .console-footer {
+    background: #060b0f;
+    border-top: 1px solid var(--border-subtle);
+    padding: 70px 0 40px;
+    margin-top: auto;
+  }
+
+  @media (max-width: 640px) {
+    .console-footer {
+      padding: 48px 0 32px;
+    }
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 48px;
+    margin-bottom: 50px;
+  }
+
+  @media (max-width: 900px) {
+    .footer-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 36px;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .footer-grid {
+      grid-template-columns: 1fr;
+      gap: 30px;
+      margin-bottom: 36px;
+    }
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .brand-logo-box {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .brand-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .brand-name {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .footer-desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    max-width: 380px;
+  }
+
+  .footer-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    background: #0d171e;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+  }
+
+  .sensor-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--g);
+    animation: pulse-dot 2s infinite;
+  }
+
+  .col-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .col-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .col-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .col-links a:hover {
+    color: var(--g);
+  }
+
+  .footer-bottom {
+    padding-top: 30px;
+    border-top: 1px solid rgba(41, 64, 74, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+</style>

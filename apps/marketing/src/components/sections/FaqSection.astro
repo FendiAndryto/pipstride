@@ -1,0 +1,194 @@
+---
+// FaqSection.astro - Interactive Accordion FAQ for MT5 Traders
+const faqs = [
+  {
+    q: 'Can Pipstride execute, modify, or close trades on my MetaTrader 5 account?',
+    a: 'Absolutely not. Pipstride is engineered strictly as a passive telemetry sensor. The EA (PipstrideMonitor.mq5) contains zero order placement, modification, or closure functions. It only reads account metrics and streams them via one-way HTTPS to your personal console.',
+  },
+  {
+    q: 'Do I need to surrender my MT5 master or investor passwords?',
+    a: 'Never. Pipstride never asks for your broker login or investor password. You simply generate a unique, revocable Bridge Token (pst_live_...) from your dashboard and paste it into the EA inputs.',
+  },
+  {
+    q: 'How does the 14-day free trial work during early access?',
+    a: 'Every newly connected terminal automatically receives 14 days of full Pro access. You get complete telemetry streaming, multi-symbol performance breakdowns, and automated trade journaling. No credit card is required to begin.',
+  },
+  {
+    q: 'What happens to my journal data after the 14-day trial?',
+    a: 'All of your historical trade records and calculated analytics remain safely preserved in your private database. You will never lose your trading logs when subscription plans go live.',
+  },
+  {
+    q: 'Do I need a 24/7 VPS to run Pipstride?',
+    a: 'A VPS is not required. Pipstride works seamlessly whenever your desktop MetaTrader 5 terminal is open. If you do run MT5 on a Windows or Linux VPS, Pipstride consumes less than 0.1% CPU and transmits lightweight 5-second heartbeats.',
+  },
+  {
+    q: 'Is Pipstride permitted on prop firms like FTMO or Funding Pips?',
+    a: 'Yes. Because Pipstride performs zero automated trading, zero copy-trading, and zero order routing, it is 100% compliant with all prop firm evaluation and funded account guidelines.',
+  },
+];
+---
+
+<section class="section faq-section" id="faq">
+  <div class="site-container">
+    <div class="faq-layout reveal-on-scroll">
+      <!-- Left Column: Title & Info -->
+      <div class="faq-info">
+        <span class="section-tag mono">FREQUENTLY ASKED QUESTIONS</span>
+        <h2 class="section-title">Everything you need to know.</h2>
+        <p class="section-desc">
+          Have more questions about our architecture, privacy, or terminal setup? Our team of active quant traders is always here to help.
+        </p>
+
+        <div class="support-card">
+          <div class="support-title font-bold">Need assistance with your EA?</div>
+          <p class="support-text text-secondary">
+            Check our step-by-step setup guide or reach out to support anytime.
+          </p>
+          <a href="https://app-pipstride.homever.my.id" class="support-link mono text-emerald" target="_blank" rel="noopener noreferrer">
+            Open Web Console & Guides →
+          </a>
+        </div>
+      </div>
+
+      <!-- Right Column: Accordion List -->
+      <div class="faq-accordion">
+        {faqs.map((faq) => (
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span>{faq.q}</span>
+              <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>{faq.a}</p>
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq-section {
+    padding: 90px 0;
+    position: relative;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .faq-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.35fr;
+    gap: 48px;
+    align-items: flex-start;
+  }
+
+  @media (max-width: 900px) {
+    .faq-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .faq-section {
+      padding: 60px 0;
+    }
+    .faq-layout {
+      gap: 32px;
+    }
+    .faq-question {
+      padding: 14px 16px;
+      font-size: 13.5px;
+    }
+    .faq-answer {
+      padding: 0 16px 16px;
+      font-size: 13px;
+    }
+  }
+
+  .support-card {
+    margin-top: 32px;
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+  }
+
+  .support-title {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .support-text {
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .support-link {
+    font-size: 12px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .support-link:hover {
+    text-decoration: underline;
+  }
+
+  .faq-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .faq-item {
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.5);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .faq-item[open] {
+    border-color: rgba(69, 224, 173, 0.4);
+    background: #15252f;
+  }
+
+  .faq-question {
+    padding: 18px 20px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    user-select: none;
+  }
+
+  .faq-question::-webkit-details-marker {
+    display: none;
+  }
+
+  .chevron-icon {
+    color: var(--muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .faq-item[open] .chevron-icon {
+    transform: rotate(180deg);
+    color: var(--g);
+  }
+
+  .faq-answer {
+    padding: 0 20px 20px;
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+</style>

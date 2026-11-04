@@ -1,0 +1,320 @@
+:root {
+  /* Brand Obsidian & Slate Palette */
+  --bg: #070c10;
+  --bg-gradient: radial-gradient(circle at 50% -5%, #0e2028 0%, #070c10 50%), #070c10;
+  --surface-card: #0f1920;
+  --surface-card-hover: #15242e;
+  --surface-elevated: #14222b;
+  --surface-overlay: rgba(7, 12, 16, 0.88);
+  
+  --border-subtle: #1e313b;
+  --border-focus: #45e0ad;
+  --border-emerald: rgba(69, 224, 173, 0.35);
+  --border-cyan: rgba(131, 189, 255, 0.35);
+  --border-rose: rgba(255, 113, 128, 0.35);
+
+  /* Telemetry Accent Tones */
+  --g: #45e0ad;              /* Emerald Phosphor / Live status */
+  --blue: #83bdff;           /* Telemetry Cyan / Data packets */
+  --red: #ff7180;            /* Rose / Drawdown warnings */
+  --amber: #f2c875;          /* Warm Gold / Attention */
+  
+  --text: #eff7f5;           /* Primary technical text */
+  --text-secondary: #a9c1c9; /* Secondary descriptions */
+  --muted: #738c94;          /* Subdued telemetry labels */
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-main: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Elevation & Glows */
+  --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-glow-emerald: 0 0 24px rgba(69, 224, 173, 0.25);
+  --shadow-glow-cyan: 0 0 24px rgba(131, 189, 255, 0.25);
+
+  /* Technical Hairline Grid */
+  --grid-line: rgba(30, 49, 59, 0.4);
+  --grid-pitch: 44px;
+}
+
+/* Global Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-main);
+  background-color: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  line-height: 1.5;
+  font-size: 15px;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+/* Localized Masked Hero Texture Grid */
+.hero-grid-mask {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-pitch) var(--grid-pitch);
+  mask-image: radial-gradient(ellipse at 50% 30%, black 15%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 15%, transparent 75%);
+  pointer-events: none;
+  opacity: 0.65;
+  z-index: 0;
+}
+
+/* Layout Utilities */
+.site-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .site-container {
+    padding: 0 16px;
+  }
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Hairline Borders & Cards */
+.tech-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease,
+              box-shadow 0.2s ease;
+}
+
+.tech-card:hover {
+  border-color: var(--border-emerald);
+  box-shadow: var(--shadow-card), var(--shadow-glow-emerald);
+}
+
+/* Technical Badges */
+.tech-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: rgba(17, 30, 38, 0.7);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.tech-pill.status-live {
+  border-color: var(--border-emerald);
+  color: var(--g);
+}
+
+/* Radar Ping Indicator */
+.radar-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--g);
+  display: inline-block;
+}
+
+.radar-dot::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  border: 1px solid var(--g);
+  opacity: 0.8;
+  animation: radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Technical Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--g);
+  color: #080f14;
+  font-family: var(--font-main);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  border: 1px solid var(--g);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-primary:hover {
+  background: #55f3be;
+  box-shadow: var(--shadow-glow-emerald);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  background: rgba(23, 41, 50, 0.6);
+  color: var(--text);
+  font-family: var(--font-main);
+  font-weight: 500;
+  font-size: 14px;
+  text-decoration: none;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--surface-card-hover);
+  border-color: var(--blue);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+/* Ambient Radial Background & High-Tech Aesthetics */
+.radial-glow-cyan {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(131, 189, 255, 0.12), transparent 70%);
+  filter: blur(48px);
+}
+
+.radial-glow-emerald {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(69, 224, 173, 0.12), transparent 70%);
+  filter: blur(48px);
+}
+
+.glass-panel {
+  background: rgba(14, 25, 33, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #ffffff 25%, #a8d5c8 65%, var(--g) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-cyan {
+  background: linear-gradient(135deg, #ffffff 30%, var(--blue) 90%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #eff7f5 30%, var(--g) 85%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Pill tags */
+.type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+}
+
+.type-pill.buy {
+  background: rgba(69, 224, 173, 0.15);
+  color: var(--g);
+  border: 1px solid rgba(69, 224, 173, 0.3);
+}
+
+.type-pill.sell {
+  background: rgba(255, 113, 128, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(255, 113, 128, 0.3);
+}
+
+/* Section Shared Typography */
+.section-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--g);
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: clamp(28px, 4.2vw, 42px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+.section-desc {
+  max-width: 640px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}

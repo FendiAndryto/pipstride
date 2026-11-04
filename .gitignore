@@ -50,6 +50,8 @@ node_modules/
 out/
 .vite/
 apps/web/dist/
+apps/marketing/dist/
+apps/marketing/.astro/
 frontend/dist/
 
 # MT5 Binaries & Wine

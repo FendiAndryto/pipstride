@@ -12,13 +12,15 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - PIPSTRIDE_DOMAIN=${PIPSTRIDE_DOMAIN:-localhost}
+      - PIPSTRIDE_DOMAIN=${PIPSTRIDE_DOMAIN:-app-pipstride.homever.my.id}
+      - MARKETING_DOMAIN=${MARKETING_DOMAIN:-pipstride.homever.my.id}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - web
+      - marketing
     networks:
       - pipstride_net
 

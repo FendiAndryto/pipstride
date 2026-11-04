@@ -1,7 +1,23 @@
 # Pipstride Production Reverse Proxy (Caddy with Automatic HTTPS / Let's Encrypt)
-# Set PIPSTRIDE_DOMAIN in .env (e.g. PIPSTRIDE_DOMAIN=journal.yourdomain.com)
+# Set PIPSTRIDE_DOMAIN and MARKETING_DOMAIN in .env
 
-{$PIPSTRIDE_DOMAIN:localhost} {
+# 1. Apex Domain: Public marketing site (purely static, zero auth/cookies)
+{$MARKETING_DOMAIN:pipstride.homever.my.id} {
+    encode gzip zstd
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    }
+
+    reverse_proxy marketing:80
+}
+
+# 2. Product Subdomain: Authenticated web console & API
+{$PIPSTRIDE_DOMAIN:app-pipstride.homever.my.id} {
     encode gzip zstd
 
     header {

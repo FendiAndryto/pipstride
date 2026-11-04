@@ -112,6 +112,17 @@ services:
     networks:
       - pipstride_net
 
+  marketing:
+    build:
+      context: ../apps/marketing
+      dockerfile: Dockerfile
+    container_name: pipstride_marketing
+    restart: unless-stopped
+    ports:
+      - "${MARKETING_PORT:-3001}:80"
+    networks:
+      - pipstride_net
+
 networks:
   pipstride_net:
     name: pipstride_network

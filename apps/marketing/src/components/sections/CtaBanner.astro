@@ -1,0 +1,166 @@
+---
+// CtaBanner.astro - High-Impact Bottom Call to Action
+const appUrl = 'https://app-pipstride.homever.my.id';
+---
+
+<section class="cta-section">
+  <div class="site-container">
+    <div class="cta-box reveal-on-scroll">
+      <!-- Top edge glow line -->
+      <div class="edge-glow" aria-hidden="true"></div>
+
+      <div class="cta-inner text-center">
+        <div class="tech-pill status-live mono animate-pulse-glow">
+          <span class="radar-dot"></span>
+          <span>14-DAY RISK-FREE EARLY ACCESS</span>
+        </div>
+
+        <h2 class="cta-title">
+          Ready to eliminate manual spreadsheets forever?
+        </h2>
+
+        <p class="cta-desc mx-auto">
+          Connect your MetaTrader 5 terminal in under 2 minutes. Enjoy automated trade journaling, sub-second telemetry, and peace of mind with 100% read-only architecture.
+        </p>
+
+        <div class="cta-actions">
+          <a href={appUrl} class="btn-primary cta-btn" target="_blank" rel="noopener noreferrer">
+            <span class="btn-text-desktop">Launch Web Console & Start Free Trial</span>
+            <span class="btn-text-mobile">Start Free Trial</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="7" y1="17" x2="17" y2="7"></line>
+              <polyline points="7 7 17 7 17 17"></polyline>
+            </svg>
+          </a>
+        </div>
+
+        <div class="cta-trust mono">
+          <span>✓ NO CREDIT CARD REQUIRED</span>
+          <span class="sep">•</span>
+          <span>✓ INSTANT MT5 EA TOKEN</span>
+          <span class="sep">•</span>
+          <span>✓ 100% READ-ONLY SENSOR</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta-section {
+    padding: 70px 0 100px;
+    position: relative;
+  }
+
+  .btn-text-desktop {
+    display: inline;
+  }
+
+  .btn-text-mobile {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .cta-section {
+      padding: 40px 0 70px;
+    }
+    .cta-box {
+      padding: 36px 18px;
+    }
+    .cta-title {
+      font-size: clamp(22px, 6.5vw, 32px);
+    }
+    .cta-desc {
+      font-size: 13.5px;
+      margin-bottom: 24px;
+    }
+    .cta-btn {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
+      padding: 12px 18px;
+      font-size: 13.5px;
+    }
+    .btn-text-desktop {
+      display: none;
+    }
+    .btn-text-mobile {
+      display: inline;
+    }
+    .cta-trust {
+      font-size: 9.5px;
+      gap: 8px;
+    }
+  }
+
+  .cta-box {
+    background: linear-gradient(135deg, rgba(23, 41, 50, 0.7) 0%, rgba(13, 23, 30, 0.95) 100%);
+    border: 1px solid rgba(69, 224, 173, 0.35);
+    border-radius: var(--radius-lg);
+    padding: 60px 32px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 24px 80px -20px rgba(0, 0, 0, 0.7), 0 0 45px rgba(69, 224, 173, 0.12);
+  }
+
+  .edge-glow {
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--g), transparent);
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .cta-title {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--text);
+    margin-top: 18px;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+  }
+
+  .cta-desc {
+    max-width: 620px;
+    font-size: 15.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+  }
+
+  .cta-actions {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .cta-btn {
+    padding: 13px 28px;
+    font-size: 15px;
+  }
+
+  .cta-trust {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .sep {
+    color: rgba(41, 64, 74, 0.6);
+  }
+</style>

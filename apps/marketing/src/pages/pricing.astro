@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PricingSection from '../components/sections/PricingSection.astro';
+import FaqSection from '../components/sections/FaqSection.astro';
+import CtaBanner from '../components/sections/CtaBanner.astro';
+
+// Schema.org structured data for pricing preview
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  'name': 'Pipstride Telemetry Engine',
+  'description': 'Real-time read-only MetaTrader 5 account telemetry streaming and automated journal ledger.',
+  'offers': {
+    '@type': 'AggregateOffer',
+    'priceCurrency': 'USD',
+    'lowPrice': '0',
+    'offerCount': '3',
+  },
+};
+---
+
+<BaseLayout
+  title="Subscription Specifications & 14-Day Free Trial — Pipstride"
+  description="Compare Pipstride terminal limits, telemetry retention, and technical capacities. Enjoy an instant 14-day free trial on any MetaTrader 5 account."
+>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <div class="pricing-page-wrap">
+    <PricingSection />
+    <FaqSection />
+    <CtaBanner />
+  </div>
+</BaseLayout>
+
+<style>
+  .pricing-page-wrap {
+    padding-top: 20px;
+  }
+</style>

@@ -1,0 +1,214 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const appUrl = 'https://app-pipstride.homever.my.id';
+---
+
+<BaseLayout
+  title="Mission & Engineering Philosophy — Pipstride"
+  description="Why the separation of telemetry from execution is essential for disciplined traders. The engineering philosophy behind Pipstride's air-gapped architecture."
+>
+  <div class="site-container page-content">
+    <header class="page-header">
+      <div class="tech-pill status-live animate-pulse-glow">
+        <span class="radar-dot"></span>
+        <span>THE PIPSTRIDE MANIFESTO</span>
+      </div>
+      <h1 class="page-title">
+        Telemetry Must Be Separated From Execution.
+      </h1>
+      <p class="page-subtitle">
+        We believe serious trading infrastructure requires physical air-gapping. Here is why we built a purely passive telemetry platform.
+      </p>
+    </header>
+
+    <div class="story-grid">
+      <!-- Section 1: The Status Quo Problem -->
+      <section class="tech-card story-card">
+        <span class="story-coord mono">01 // THE STATUS QUO TRAP</span>
+        <h2 class="story-title">The Danger of All-in-One Execution Tools</h2>
+        <p class="story-text">
+          Almost every commercial trading tool today seeks to control order execution. They ask for your master trading passwords, your investor credentials, or install Expert Advisors with broad <code class="mono">OrderSend()</code> and <code class="mono">PositionClose()</code> privileges.
+        </p>
+        <p class="story-text">
+          This introduces severe, unacceptable systemic risks: rogue webhook signals, API misconfigurations, slippage during disconnects, and vulnerable cloud endpoints capable of wiping out entire accounts.
+        </p>
+      </section>
+
+      <!-- Section 2: The Pipstride Philosophy -->
+      <section class="tech-card story-card highlight-card">
+        <span class="story-coord mono text-emerald">02 // THE PASSIVE CONDUIT</span>
+        <h2 class="story-title">Physical Incapability as a Security Feature</h2>
+        <p class="story-text">
+          Pipstride was built on an uncompromising rule: <strong>a monitoring system should never have the power to touch your trades.</strong>
+        </p>
+        <p class="story-text">
+          Our MQL5 sensor (<code class="mono">PipstrideMonitor.mq5</code>) is strictly a one-way egress beacon. It has zero order-routing algorithms, zero trade execution APIs, and zero credential storage. Even if our backend servers are down or under maintenance, your MetaTrader 5 terminal continues operating without the slightest interruption or risk.
+        </p>
+      </section>
+
+      <!-- Section 3: The Three Tenets -->
+      <section class="tech-card story-card">
+        <span class="story-coord mono">03 // CORE TENETS</span>
+        <h2 class="story-title">Our Three Non-Negotiable Guarantees</h2>
+        <div class="tenets-list">
+          <div class="tenet-item">
+            <span class="tenet-num mono">A.</span>
+            <div>
+              <h3 class="tenet-heading">Zero Execution Capability (ADR 0004)</h3>
+              <p class="tenet-body">The codebase physically excludes all trade placement functions. Any route attempting order submission returns an unyielding HTTP 403 Forbidden.</p>
+            </div>
+          </div>
+          <div class="tenet-item">
+            <span class="tenet-num mono">B.</span>
+            <div>
+              <h3 class="tenet-heading">Auditable Open-Source Sensor</h3>
+              <p class="tenet-body">Our MQL5 sensor is distributed as clean, commented source code. Any trader can inspect every line in MetaEditor before compiling.</p>
+            </div>
+          </div>
+          <div class="tenet-item">
+            <span class="tenet-num mono">C.</span>
+            <div>
+              <h3 class="tenet-heading">Precision Over Hype</h3>
+              <p class="tenet-body">No "AI profit predictions", no get-rich-quick claims, and no automated copy-trading schemes. Just raw, institutional-grade telemetry and discipline analytics.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="about-footer-cta">
+      <a href="/#architecture" class="btn-secondary">
+        <span>Review System Architecture</span>
+      </a>
+      <a href={appUrl} class="btn-primary" target="_blank" rel="noopener noreferrer">
+        <span>Launch Web Console [↗]</span>
+      </a>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-content {
+    padding: 60px 24px 100px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .page-header {
+    text-align: center;
+    margin-bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--text);
+  }
+
+  .page-subtitle {
+    font-size: 16px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 640px;
+  }
+
+  .story-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+
+  .story-card {
+    padding: 32px 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .highlight-card {
+    border-color: var(--border-emerald);
+    background: linear-gradient(145deg, #13242b, #0e1920);
+    box-shadow: var(--shadow-card), var(--shadow-glow-emerald);
+  }
+
+  .story-coord {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+  }
+
+  .text-emerald {
+    color: var(--g);
+  }
+
+  .story-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .story-text {
+    font-size: 14.5px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+
+  .story-text code {
+    background: rgba(41, 64, 74, 0.4);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  .story-text strong {
+    color: var(--text);
+  }
+
+  /* Tenets */
+  .tenets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 8px;
+  }
+
+  .tenet-item {
+    display: flex;
+    gap: 16px;
+  }
+
+  .tenet-num {
+    font-size: 13px;
+    color: var(--g);
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  .tenet-heading {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .tenet-body {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .about-footer-cta {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+</style>

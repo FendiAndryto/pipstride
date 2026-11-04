@@ -1,0 +1,306 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import DashboardMockup from '../components/showcase/DashboardMockup.astro';
+import JournalAnalyticsShowcase from '../components/showcase/JournalAnalyticsShowcase.astro';
+import BrokerMarquee from '../components/sections/BrokerMarquee.astro';
+import FeatureBento from '../components/sections/FeatureBento.astro';
+import OnboardingSteps from '../components/sections/OnboardingSteps.astro';
+import MetricsStrip from '../components/sections/MetricsStrip.astro';
+import PricingSection from '../components/sections/PricingSection.astro';
+import FaqSection from '../components/sections/FaqSection.astro';
+import CtaBanner from '../components/sections/CtaBanner.astro';
+
+const appUrl = 'https://app-pipstride.homever.my.id';
+
+const softwareAppJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  'name': 'Pipstride',
+  'operatingSystem': 'MetaTrader 5, Windows, Web, iOS, Android',
+  'applicationCategory': 'FinanceApplication',
+  'offers': {
+    '@type': 'AggregateOffer',
+    'priceCurrency': 'USD',
+    'lowPrice': '0',
+    'offerCount': '3',
+  },
+};
+---
+
+<BaseLayout
+  title="Pipstride — Pure Read-Only MT5 Telemetry & Automated Journal"
+  description="Real-time MetaTrader 5 account telemetry streaming and automated trade journaling. Engineered strictly read-only with zero order execution capabilities."
+>
+  <!-- Schema.org SoftwareApplication JSON-LD -->
+  <script type="application/ld+json" set:html={JSON.stringify(softwareAppJsonLd)} />
+
+  <!-- 1. Hero Section -->
+  <section class="hero-section">
+    <!-- Localized Vignette Masked Grid (Only on Hero, Never on entire body) -->
+    <div class="hero-grid-mask" aria-hidden="true"></div>
+
+    <!-- Ambient Radial Glows -->
+    <div class="radial-glow-cyan hero-glow-1" aria-hidden="true"></div>
+    <div class="radial-glow-emerald hero-glow-2" aria-hidden="true"></div>
+
+    <div class="site-container hero-inner">
+      <!-- Status Ribbon -->
+      <div class="status-ribbon reveal-on-scroll">
+        <div class="tech-pill status-live animate-pulse-glow">
+          <span class="radar-dot"></span>
+          <span>AIR-GAPPED MT5 TELEMETRY ENGINE</span>
+        </div>
+      </div>
+
+      <!-- Main Headline -->
+      <h1 class="hero-title reveal-on-scroll stagger-1">
+        Automate Your MT5 Journal.<br />
+        <span class="gradient-text">Stream Real-Time Telemetry.</span>
+      </h1>
+
+      <!-- Subtitle -->
+      <p class="hero-subtitle reveal-on-scroll stagger-2">
+        Gain institutional-grade clarity into your trading performance with zero manual spreadsheets.
+        Purely read-only sensor architecture — physically incapable of executing, modifying, or closing trades.
+      </p>
+
+      <!-- Action Buttons -->
+      <div class="hero-actions reveal-on-scroll stagger-3">
+        <a href={appUrl} class="btn-primary hero-btn" target="_blank" rel="noopener noreferrer">
+          <span>Start 14-Day Free Trial</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="7" y1="17" x2="17" y2="7"></line>
+            <polyline points="7 7 17 7 17 17"></polyline>
+          </svg>
+        </a>
+        <a href="#features" class="btn-secondary hero-btn">
+          <span>Explore Architecture</span>
+        </a>
+      </div>
+
+      <!-- Hero Micro-Trust Strip -->
+      <div class="hero-trust-list mono reveal-on-scroll stagger-4">
+        <span class="trust-pill"><span class="text-emerald">✓</span> 14-Day Full Pro Trial</span>
+        <span class="sep">•</span>
+        <span class="trust-pill"><span class="text-emerald">✓</span> No Credit Card Required</span>
+        <span class="sep">•</span>
+        <span class="trust-pill"><span class="text-emerald">✓</span> 100% Read-Only Safety</span>
+      </div>
+
+      <!-- Real Pipstride Live Cockpit Mockup Preview -->
+      <div class="hero-mockup-wrap reveal-on-scroll stagger-4">
+        <DashboardMockup />
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Broker Compatibility Marquee -->
+  <BrokerMarquee />
+
+  <!-- 3. Core Feature Bento Grid -->
+  <FeatureBento />
+
+  <!-- 4. Interactive Journal Analytics Showcase (The user's favorite section) -->
+  <section class="section showcase-section" id="journal-analytics">
+    <div class="site-container">
+      <div class="section-header text-center reveal-on-scroll">
+        <span class="section-tag mono">JOURNAL ANALYTICS SHOWCASE</span>
+        <h2 class="section-title">Automated trade ledger & equity telemetry.</h2>
+        <p class="section-desc mx-auto">
+          Every closed trade is instantly captured, calculated, and categorized. Analyze win rates, profit factor, hold times, and pair distributions without tedious spreadsheets.
+        </p>
+      </div>
+
+      <div class="journal-showcase-wrap reveal-on-scroll stagger-1">
+        <JournalAnalyticsShowcase />
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. How It Works (3 Steps) -->
+  <OnboardingSteps />
+
+  <!-- 6. Live Metrics Strip -->
+  <MetricsStrip />
+
+  <!-- 7. Pricing Specifications with 14-Day Trial & Coming Soon Plans -->
+  <PricingSection />
+
+  <!-- 8. Interactive FAQ Accordion -->
+  <FaqSection />
+
+  <!-- 9. Final High-Impact CTA Banner -->
+  <CtaBanner />
+</BaseLayout>
+
+<style>
+  .hero-section {
+    padding: 85px 0 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    .hero-section {
+      padding: 45px 0 32px;
+    }
+  }
+
+  .hero-glow-1 {
+    top: -100px;
+    left: 20%;
+    width: 650px;
+    height: 650px;
+  }
+
+  .hero-glow-2 {
+    top: 150px;
+    right: 15%;
+    width: 550px;
+    height: 550px;
+  }
+
+  .hero-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  .status-ribbon {
+    margin-bottom: 24px;
+  }
+
+  .hero-title {
+    font-size: clamp(32px, 5.5vw, 64px);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+    margin-bottom: 22px;
+    color: var(--text);
+    max-width: 900px;
+  }
+
+  @media (max-width: 640px) {
+    .hero-title {
+      font-size: clamp(26px, 7.5vw, 36px);
+      line-height: 1.18;
+      margin-bottom: 16px;
+    }
+  }
+
+  .hero-subtitle {
+    max-width: 680px;
+    font-size: clamp(15px, 2vw, 17.5px);
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 34px;
+  }
+
+  @media (max-width: 640px) {
+    .hero-subtitle {
+      font-size: 14px;
+      line-height: 1.55;
+      margin-bottom: 24px;
+    }
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .hero-btn {
+    padding: 12px 24px;
+    font-size: 14.5px;
+  }
+
+  @media (max-width: 520px) {
+    .hero-actions {
+      flex-direction: column;
+      width: 100%;
+      gap: 10px;
+    }
+    .hero-btn {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
+    }
+  }
+
+  .hero-trust-list {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 50px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  @media (max-width: 640px) {
+    .hero-trust-list {
+      margin-bottom: 30px;
+      font-size: 10px;
+      gap: 8px;
+    }
+  }
+
+  .sep {
+    color: rgba(41, 64, 74, 0.6);
+  }
+
+  .hero-mockup-wrap {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .showcase-section {
+    padding: 95px 0;
+    position: relative;
+    background: radial-gradient(circle at 50% 20%, rgba(69, 224, 173, 0.05) 0%, transparent 60%);
+  }
+
+  @media (max-width: 640px) {
+    .showcase-section {
+      padding: 55px 0;
+    }
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .section-header {
+    margin-bottom: 50px;
+  }
+
+  @media (max-width: 640px) {
+    .section-header {
+      margin-bottom: 30px;
+    }
+  }
+
+  .journal-showcase-wrap {
+    width: 100%;
+    max-width: 1060px;
+    margin: 0 auto;
+  }
+</style>

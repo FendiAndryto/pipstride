@@ -1,0 +1,137 @@
+---
+// BrokerMarquee.astro - Compatible with Any MetaTrader 5 Broker
+const brokers = [
+  'IC MARKETS',
+  'EXNESS',
+  'PEPPERSTONE',
+  'FTMO',
+  'XM GLOBAL',
+  'RAW TRADING',
+  'VANTAGE',
+  'TICKMILL',
+  'FUSION MARKETS',
+  'FOREX.COM',
+];
+---
+
+<section class="marquee-section" aria-label="Broker Compatibility">
+  <div class="site-container">
+    <div class="marquee-label mono">
+      <span class="label-dot"></span>
+      <span>COMPATIBLE WITH ANY METATRADER 5 TERMINAL & BROKER</span>
+    </div>
+  </div>
+
+  <div class="marquee-outer">
+    <div class="animate-marquee">
+      {/* List duplicated for seamless infinite loop */}
+      {[...brokers, ...brokers].map((broker, idx) => (
+        <div class="broker-pill mono" key={`${broker}-${idx}`}>
+          <span class="broker-dot"></span>
+          <span class="broker-name">{broker}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <div class="site-container">
+    <p class="marquee-subtext mono">
+      Zero custom DLLs • Zero broker-specific restrictions • Egress via standard native MQL5 WebRequest
+    </p>
+  </div>
+</section>
+
+<style>
+  .marquee-section {
+    padding: 36px 0;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(14, 25, 33, 0.4);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .marquee-label {
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .label-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+  }
+
+  .marquee-outer {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+  }
+
+  .broker-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    margin-right: 16px;
+    background: #111e26;
+    border: 1px solid rgba(41, 64, 74, 0.6);
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+
+  .broker-pill:hover {
+    border-color: var(--g);
+    color: var(--text);
+    background: #172b35;
+  }
+
+  .broker-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--g);
+  }
+
+  .marquee-subtext {
+    text-align: center;
+    font-size: 10.5px;
+    color: var(--muted);
+    margin-top: 18px;
+  }
+
+  @media (max-width: 640px) {
+    .marquee-section {
+      padding: 24px 0;
+    }
+    .marquee-label {
+      font-size: 10px;
+      margin-bottom: 14px;
+    }
+    .broker-pill {
+      padding: 6px 14px;
+      font-size: 11px;
+      margin-right: 12px;
+    }
+    .marquee-subtext {
+      font-size: 9.5px;
+      margin-top: 14px;
+      line-height: 1.5;
+    }
+  }
+</style>

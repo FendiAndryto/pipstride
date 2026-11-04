@@ -54,7 +54,7 @@ export default function Mt5ConnectModal({
 
   if (!isOpen) return null;
 
-  const bridgeUrl = typeof window !== 'undefined' ? window.location.origin : 'https://pipstride.app';
+  const bridgeUrl = typeof window !== 'undefined' ? window.location.origin : 'https://app-pipstride.homever.my.id';
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
