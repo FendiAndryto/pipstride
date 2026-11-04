@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "change_this_password"
 
     # Single-source plan catalogue (ADR 0007). Relative paths resolve from the
-    # repository root; production images set an absolute path.
+    # repository root; the production image keeps the same layout under /repo.
     PRICING_CATALOG_PATH: str = "packages/pricing/catalog.json"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_ALGORITHM: str = "HS256"
@@ -76,7 +76,8 @@ class Settings(BaseSettings):
 
     # Only requests from these peers may supply X-Real-IP. Defaults cover
     # loopback and Docker's private ranges; override if the proxy network uses
-    # different addresses.
+    # different addresses. The public path is Cloudflare -> Caddy -> nginx, so
+    # in practice only the nginx container address is ever exercised.
     TRUSTED_PROXY_IPS: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     
     # Risk Watchdog & Account Safeguard Defaults

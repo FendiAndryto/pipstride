@@ -11,6 +11,7 @@ import ipaddress
 import logging
 import threading
 import time
+from functools import lru_cache
 from typing import Optional, Tuple
 from starlette.requests import Request
 
@@ -151,20 +152,27 @@ def clear(key: str) -> None:
             continue
 
 
-def _is_trusted_proxy(peer: str) -> bool:
-    for entry in settings.TRUSTED_PROXY_IPS.split(","):
+@lru_cache(maxsize=8)
+def _trusted_networks(spec: str) -> Tuple:
+    """Parse the trusted-proxy spec once per distinct value."""
+    networks = []
+    for entry in spec.split(","):
         entry = entry.strip()
         if not entry:
             continue
         try:
-            if "/" in entry:
-                if ipaddress.ip_address(peer) in ipaddress.ip_network(entry, strict=False):
-                    return True
-            elif peer == entry:
-                return True
+            networks.append(ipaddress.ip_network(entry, strict=False))
         except ValueError:
             continue
-    return False
+    return tuple(networks)
+
+
+def _is_trusted_proxy(peer: str) -> bool:
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(address in network for network in _trusted_networks(settings.TRUSTED_PROXY_IPS))
 
 
 def get_client_ip(request: Request) -> str:

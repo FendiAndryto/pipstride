@@ -65,7 +65,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
 
   const isPositive = activeQuote.daily_change_pct >= 0;
 
-  // Calculate dynamic timeframe metrics based on selected activeTf (M5, M15, H1, H4)
+  // Calculate dynamic timeframe metrics from real candles (M5, M15)
   const tfMetrics = useMemo(() => {
     const rawCandlesM5 = bridgeStatus?.metrics?.candles_m5 || [];
     const rawCandlesM15 = bridgeStatus?.metrics?.candles || [];
@@ -121,12 +121,26 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
     const high = Math.max(...highs);
     const low = Math.min(...lows);
     const open = Number(activeSubset[activeSubset.length - 1]?.open) || 0;
-    const close = Number(activeSubset[0]?.close) || activeQuote.bid;
+    const close = Number(activeSubset[0]?.close) || 0;
 
-    let changePct = 0;
-    if (open > 0 && close > 0) {
-      changePct = ((close - open) / open) * 100;
+    // Without a usable open/close pair there is no honest change to report.
+    if (open <= 0 || close <= 0) {
+      return {
+        tf: activeTf,
+        hasData: false,
+        high: null,
+        low: null,
+        trend: null,
+        trendLabel: null,
+        changePct: null,
+        structureLabel: null,
+        pricePositionPct: 50,
+        rangeSpan: null,
+        avgRange: null
+      };
     }
+
+    const changePct = ((close - open) / open) * 100;
     const trend = changePct >= 0 ? 'BULLISH' : 'BEARISH';
     const trendLabel = trend === 'BULLISH' ? t('market_trend_bullish') : t('market_trend_bearish');
 
@@ -307,7 +321,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
             {tfMetrics.hasData && <div className="tiny">{tfMetrics.structureLabel}</div>}
           </div>
           <div style={{ display: 'flex', gap: '4px', background: '#0a1419', padding: '3px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-            {['M5', 'M15', 'H1', 'H4'].map((tf) => (
+            {['M5', 'M15'].map((tf) => (
               <button
                 key={tf}
                 type="button"

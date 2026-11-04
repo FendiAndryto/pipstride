@@ -1,32 +1,32 @@
 ---
-// MetricsStrip.astro - Live Performance Metrics Strip
+// MetricsStrip.astro - Architectural facts, not measured SLOs
 ---
 
-<section class="metrics-strip-section" aria-label="System Metrics">
+<section class="metrics-strip-section" aria-label="Architecture Facts">
   <div class="site-container">
     <div class="metrics-strip-grid reveal-on-scroll">
       <div class="stat-box">
-        <div class="stat-number mono text-emerald font-bold">&lt; 8ms</div>
-        <div class="stat-label">INGEST LATENCY</div>
-        <div class="stat-sub text-muted">Sub-second Redis live state</div>
+        <div class="stat-number mono text-emerald font-bold">0</div>
+        <div class="stat-label">EXECUTION PRIVILEGE</div>
+        <div class="stat-sub text-muted">No order, modify, or close calls</div>
       </div>
 
       <div class="stat-box">
-        <div class="stat-number mono text-emerald font-bold">0</div>
-        <div class="stat-label">EXECUTION PRIVILEGE</div>
-        <div class="stat-sub text-muted">Zero risk of order execution</div>
+        <div class="stat-number mono text-emerald font-bold">5s</div>
+        <div class="stat-label">DEFAULT HEARTBEAT</div>
+        <div class="stat-sub text-muted">Configurable in the EA inputs</div>
       </div>
 
       <div class="stat-box">
         <div class="stat-number mono text-cyan font-bold">100%</div>
-        <div class="stat-label">AUTOMATIC SYNC</div>
-        <div class="stat-sub text-muted">Zero manual journal entry</div>
+        <div class="stat-label">READ-ONLY SENSOR</div>
+        <div class="stat-sub text-muted">Telemetry only, by design</div>
       </div>
 
       <div class="stat-box">
-        <div class="stat-number mono text-cyan font-bold">99.9%</div>
-        <div class="stat-label">SYSTEM UPTIME</div>
-        <div class="stat-sub text-muted">24/5 global terminal coverage</div>
+        <div class="stat-number mono text-cyan font-bold">0</div>
+        <div class="stat-label">BROKER PASSWORDS</div>
+        <div class="stat-sub text-muted">Revocable bridge tokens instead</div>
       </div>
     </div>
   </div>

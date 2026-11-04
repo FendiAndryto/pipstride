@@ -9,10 +9,11 @@ import MetricsStrip from '../components/sections/MetricsStrip.astro';
 import PricingSection from '../components/sections/PricingSection.astro';
 import FaqSection from '../components/sections/FaqSection.astro';
 import CtaBanner from '../components/sections/CtaBanner.astro';
-import { publicPlans } from '../lib/pricing.js';
+import { priceRange, publicPlans } from '../lib/pricing.js';
 
 const appUrl = 'https://app-pipstride.homever.my.id';
 
+// Billing is not implemented: prices are published as pre-order targets only.
 const softwareAppJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -22,9 +23,16 @@ const softwareAppJsonLd = {
   'offers': {
     '@type': 'AggregateOffer',
     'priceCurrency': 'IDR',
-    'lowPrice': String(publicPlans[0].price_cents / 100),
-    'highPrice': String(publicPlans[publicPlans.length - 1].price_cents / 100),
-    'offerCount': String(publicPlans.length),
+    'lowPrice': String(priceRange.low),
+    'highPrice': String(priceRange.high),
+    'offerCount': String(priceRange.count),
+    'offers': publicPlans.map((plan) => ({
+      '@type': 'Offer',
+      'name': plan.name,
+      'price': String(plan.price_cents / 100),
+      'priceCurrency': 'IDR',
+      'availability': 'https://schema.org/PreOrder',
+    })),
   },
 };
 ---
