@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -97,6 +98,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.trusted_hosts,
+    # An API must not 307 to a www. host; a wrong Host is simply a bad request.
+    www_redirect=False,
+)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,

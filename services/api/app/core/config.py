@@ -131,6 +131,24 @@ class Settings(BaseSettings):
             )
 
     @property
+    def trusted_hosts(self) -> List[str]:
+        """Host header allow-list enforced by ``TrustedHostMiddleware``.
+
+        ``*`` disables enforcement (development only; refused in production by
+        :meth:`validate_runtime`). Loopback entries are always appended because
+        the container healthcheck probes ``http://127.0.0.1:8000/health``, and
+        rejecting that Host header would mark a healthy container unhealthy.
+        """
+        entries = [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
+        if "*" in entries:
+            return ["*"]
+
+        for probe in ("localhost", "127.0.0.1", "[::1]"):
+            if probe not in entries:
+                entries.append(probe)
+        return entries
+
+    @property
     def cors_origins(self) -> List[str]:
         origins: list[str] = []
 

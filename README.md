@@ -185,6 +185,7 @@ Every request is logged as one JSON line on stdout with `request_id`, `method`, 
 ## Production notes
 
 - `ENVIRONMENT=production` enables fail-fast config validation: insecure `SECRET_KEY`/`ADMIN_PASSWORD`, unrestricted `ALLOWED_HOSTS`, or a SQLite `DATABASE_URL` abort startup.
+- `ALLOWED_HOSTS` is enforced on every request by `TrustedHostMiddleware`; a `Host` outside the list gets `400 Invalid host header`. `localhost`, `127.0.0.1`, and `[::1]` are always allowed so the container healthcheck keeps working. List public domains comma-separated, e.g. `app-pipstride.homever.my.id`.
 - API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled in production.
 - Run schema changes with `alembic revision --autogenerate` + `alembic upgrade head`; the app never calls `create_all` outside SQLite dev/test.
 - The API container runs as a non-root user.
