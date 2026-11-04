@@ -14,11 +14,14 @@ import {
   Download,
   Plus,
   RotateCw,
-  Trash2
+  Trash2,
+  Info
 } from 'lucide-react';
 import { api, downloadPreset } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import RichText from './RichText';
+
+const EA_SHA256 = '07aeb16c81dd52a6dbde996ac54a9ae24aea99ff835dbfba92475c16525ff0db';
 
 export default function Mt5ConnectModal({
   isOpen,
@@ -39,6 +42,7 @@ export default function Mt5ConnectModal({
   const [revealedToken, setRevealedToken] = useState('');
   const [presetFile, setPresetFile] = useState(null);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedHash, setCopiedHash] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [newLabel, setNewLabel] = useState('');
@@ -49,6 +53,7 @@ export default function Mt5ConnectModal({
     setError('');
     setNewLabel('');
     setCopiedToken(false);
+    setCopiedHash(false);
     if (onClose) onClose();
   };
 
@@ -77,6 +82,12 @@ export default function Mt5ConnectModal({
     navigator.clipboard.writeText(revealedToken);
     setCopiedToken(true);
     setTimeout(() => setCopiedToken(false), 2000);
+  };
+
+  const handleCopyHash = () => {
+    navigator.clipboard.writeText(EA_SHA256);
+    setCopiedHash(true);
+    setTimeout(() => setCopiedHash(false), 2000);
   };
 
   const runAction = async (action) => {
@@ -207,6 +218,24 @@ export default function Mt5ConnectModal({
             </div>
             <div style={{ color: 'var(--text-main, #e2e8f0)', lineHeight: 1.4 }}>
               <RichText text={t('modal_private_desc')} />
+            </div>
+            <div
+              style={{
+                marginTop: '4px',
+                paddingTop: '8px',
+                borderTop: '1px solid rgba(69, 224, 173, 0.15)',
+                color: '#94a3b8',
+                fontSize: '0.78rem',
+                lineHeight: 1.45,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '7px'
+              }}
+            >
+              <Info size={14} style={{ color: '#45e0ad', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <RichText text={t('modal_demo_tip')} />
+              </div>
             </div>
           </div>
 
@@ -492,6 +521,69 @@ export default function Mt5ConnectModal({
                 <span>{t('modal_preset')}</span>
               </button>
             </div>
+
+            {/* SHA-256 Checksum Chip */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: '6px 8px',
+                background: 'rgba(5, 12, 18, 0.65)',
+                border: '1px solid rgba(69, 224, 173, 0.25)',
+                borderRadius: '6px',
+                fontSize: '11px'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  minWidth: 0,
+                  overflow: 'hidden'
+                }}
+              >
+                <ShieldCheck size={13} style={{ color: '#45e0ad', flexShrink: 0 }} />
+                <span style={{ color: '#8899a6', fontWeight: 600, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                  {t('modal_checksum_label')}:
+                </span>
+                <code
+                  style={{
+                    fontFamily: 'monospace',
+                    color: '#45e0ad',
+                    fontSize: '10px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title={EA_SHA256}
+                >
+                  {EA_SHA256}
+                </code>
+              </div>
+              <button
+                type="button"
+                className="btn alt"
+                onClick={handleCopyHash}
+                id="btn-copy-ea-checksum"
+                title={copiedHash ? t('common_copied') : t('common_copy')}
+                aria-label={`${t('common_copy')} ${t('modal_checksum_label')}`}
+                style={{
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  flexShrink: 0
+                }}
+              >
+                {copiedHash ? <Check size={12} style={{ color: '#45e0ad' }} /> : <Copy size={12} />}
+                <span>{copiedHash ? t('common_copied') : t('common_copy')}</span>
+              </button>
+            </div>
+
             <span style={{ fontSize: '10px', color: '#8899a6', lineHeight: 1.4 }}>
               <RichText text={t('modal_preset_note')} />
             </span>
