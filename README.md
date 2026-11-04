@@ -176,6 +176,11 @@ python scripts/backup_db.py                      # creates gzip dump in backups/
 python scripts/backup_db.py --list               # list existing backup archives
 python scripts/backup_db.py --verify <file.gz>   # test gzip and checksum integrity
 python scripts/backup_db.py --restore <file.gz>  # restore dump with interactive confirmation
+
+# Admin lockout recovery: writes a fresh bcrypt hash with no login required.
+# Takes the password from ADMIN_PASSWORD, or prompts when that is the default.
+docker exec pipstride_api python scripts/reset_admin_password.py --dry-run
+docker exec pipstride_api python scripts/reset_admin_password.py
 ```
 
 Every request is logged as one JSON line on stdout with `request_id`, `method`, `path`, `status_code`, and `duration_ms`; the same id is returned in the `X-Request-ID` header. Set `LOG_LEVEL` to change verbosity.
@@ -192,7 +197,8 @@ Every request is logged as one JSON line on stdout with `request_id`, `method`, 
 - Set `PUBLIC_BASE_URL` to the public origin so generated presets contain the URL the EA should actually reach, especially behind a proxy or CDN. Set `PUBLIC_APP_URL` to the dashboard origin used in emailed links (defaults to `PUBLIC_BASE_URL`, then the request origin).
 - Configure `SMTP_HOST`/`SMTP_FROM` before launch: password reset and verification links are only logged when SMTP is unset, and production deliberately omits the link from logs. Rotate `SECRET_KEY` invalidates all JWTs, equivalent to a global sign-out.
 - Schedule `scripts/prune_snapshots.py` daily; raw telemetry is capped at `SNAPSHOT_RETENTION_DAYS` (default 180), while trades are kept indefinitely.
+- Schedule `scripts/backup_db.py` in daily cron on the server to preserve automated gzipped PostgreSQL snapshots. `infra/cron/pipstride-crontab` is the checked-in reference crontab (snapshot prune at 03:15, DB dump at 03:45, both UTC) — install it with `crontab infra/cron/pipstride-crontab`. Keep the dump directory outside the repository so `docker compose down -v` and `git clean` cannot reach it.
+- `ADMIN_PASSWORD` in `.env` only seeds the admin account the first time. Rotating it there does **not** change an existing admin's password by design; use `scripts/reset_admin_password.py`, which also signs out every existing session and repairs a deactivated or demoted admin row.
 - Login and heartbeat rate limiting share Redis when `REDIS_URL` is set, so limits hold across all API workers.
 - Automatic HTTPS with Caddy: set `PIPSTRIDE_DOMAIN` in `.env` and start with `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`. Caddy automatically handles Let's Encrypt certificates and adds HSTS.
 - Use `GET /health` for container liveness and `GET /ready` for readiness probes behind load balancers.
-- Schedule `scripts/backup_db.py` in daily cron on the server to preserve automated gzipped PostgreSQL snapshots.

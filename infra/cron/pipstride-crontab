@@ -1,0 +1,21 @@
+# Pipstride host crontab (homeserver).
+#
+# Install / refresh with:
+#   crontab infra/cron/pipstride-crontab
+# Inspect with:
+#   crontab -l
+#
+# Both jobs run from the host as the deploy user and shell out to `docker`
+# (the API image ships scripts/ but the host owns scheduling). Keep the
+# `#Ansible:` markers: they are what a config-management run keys on.
+
+# Raw telemetry retention (docs/adr/0005). Trades are never pruned.
+#Ansible: Pipstride snapshot prune
+15 3 * * * /usr/bin/docker exec pipstride_api python scripts/prune_snapshots.py >> /home/fendi/my-apps/pipstride-backups/prune_snapshots.log 2>&1
+
+# Daily PostgreSQL dump, verified by the `migrations` CI job on every push.
+# Runs 30 min after the prune so the two jobs never overlap. Writes to
+# pipstride-backups/ (outside the repo) with 30-day retention; the script
+# deletes its own file and exits non-zero if pg_dump fails or the dump is empty.
+#Ansible: Pipstride database backup
+45 3 * * * cd /home/fendi/my-apps/pipstride/services/api && set -a && . /home/fendi/my-apps/pipstride/.env && set +a && /usr/bin/python3 scripts/backup_db.py --dir /home/fendi/my-apps/pipstride-backups >> /home/fendi/my-apps/pipstride-backups/backup_db.log 2>&1
