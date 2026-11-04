@@ -40,3 +40,11 @@ None
 
 ## Status
 done
+
+## Catatan audit (2026-11-05)
+Angka di `catalog.json` **berbeda** dari contoh JSON di scope tiket ini: nilai di sana 1000× lebih
+kecil. Perubahan itu disengaja di commit `bcc6332` ("harden proxy trust and single-source pricing")
+dan benar: `price_cents` menyimpan **minor unit IDR**, jadi 5.900.000 sen = Rp59.000.
+`apps/marketing/src/lib/pricing.js` membaginya dengan 100 saat menampilkan harga. Scope di atas
+dibiarkan apa adanya sebagai catatan sejarah; sumber kebenaran angkanya adalah `catalog.json`.
+

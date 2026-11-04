@@ -63,9 +63,9 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **02-profile-avatar-status-dot.md** (`done`): Avatar status dot indikator koneksi di mobile.
 - [x] **03-mobile-header-responsive-styling.md** (`done`): Penyesuaian responsif header mobile.
 
-### Fase 002: Pricing Single Source (Belum Diimplementasikan)
-- [ ] **01-create-pricing-catalog.md** (`todo`): Buat katalog tunggal `packages/pricing/catalog.json` (free/core/plus/pro).
-- [ ] **02-api-seed-from-catalog.md** (`todo`): Sinkronisasi seed tabel `plans` backend dari `catalog.json` saat startup.
+### Fase 002: Pricing Single Source (Selesai)
+- [x] **01-create-pricing-catalog.md** (`done`): Buat katalog tunggal `packages/pricing/catalog.json` (free/core/plus/pro).
+- [x] **02-api-seed-from-catalog.md** (`done`): Sinkronisasi seed tabel `plans` backend dari `catalog.json` saat startup.
 
 ### Fase 003: Architecture Gates (Belum Diimplementasikan)
 - [ ] **01-python-import-linter.md** (`todo`): Enforcement layering arsitektur backend Python via `import-linter`.

@@ -46,4 +46,27 @@ Expected: `{"database":"ok","redis":"ok","status":"ready"}`.
   tiket ini**; jangan dikerjakan di sini. Lihat fase 005.
 
 ## Status
-todo
+done
+
+## Catatan audit (2026-11-05)
+Semua scope terpasang dan diverifikasi ulang terhadap kode hari ini, bukan sekadar diwarisi:
+
+| Scope | Bukti |
+|---|---|
+| `PRICING_CATALOG_PATH` di `config.py` | `config.py:26`, diresolusi dari root repo di `pricing_catalog.py:31-35` |
+| Loader `pricing_catalog.py` | Validasi tipe per field; `PricingCatalogError` untuk file hilang, JSON rusak, versi salah, list kosong, `code` duplikat, tipe salah |
+| `_seed_defaults()` pakai loader | `main.py:36` `plans = load_plans()`; literal tuple sudah tidak ada |
+| Test seed == catalog | `tests/test_pricing_catalog.py::test_seeded_plans_match_catalog` |
+
+Uji startup gagal (dijalankan manual, bukan hanya lewat unit test): catalog hilang, JSON terpotong,
+`price_cents: "free"`, dan `code` duplikat — keempatnya menggagalkan boot dengan pesan yang
+menyebut field bermasalah, mis. `plans[0].price_cents must be an integer >= 0`.
+
+**Sisa temuan (di luar lingkup tiket ini, kandidat tiket baru):** dua literal masih menyalin
+`max_connections` dari catalog, jadi mengubah catalog tidak ikut mengubahnya:
+- `main.py:65` — entitlement admin di-seed sebagai `plan_code="pro", max_connections=5`
+- `user_service.py:99` — user baru di-seed sebagai `plan_code="free", max_connections=1`
+
+Keduanya bukan harga, jadi tidak melanggar gate fase ini, tapi kelas drift-nya sama dengan yang
+ingin ditutup ADR 0007.
+

@@ -374,13 +374,13 @@ Three identical/overlapping implementations of the same timezone rule in the sam
 HTTP, no business rules.** Good.
 
 #### 1.4.1 Schema-level business rules live in `main.py`, not in migrations
-`services/api/app/main.py:26-50`
+`services/api/app/main.py:29-72` (before Fase 002; see the note below)
 ```python
 def _seed_defaults() -> None:
     """Seed the plan catalogue and the initial admin account."""
     with SessionLocal() as db:
         for code, name, max_conn, price in (
-            ("free", "Free", 1, 0), ("core", "Core", 1, 5900), ("plus", "Plus", 3, 12900), ("pro", "Pro", 5, 19900),
+            ("free", "Free", 1, 0), ("core", "Core", 1, 5900000), ("plus", "Plus", 3, 12900000), ("pro", "Pro", 5, 19900000),
         ):
             if db.get(Plan, code) is None:
                 db.add(Plan(code=code, name=name, max_connections=max_conn, price_cents=price))
@@ -391,6 +391,14 @@ def _seed_defaults() -> None:
 Pricing/product catalogue (`price_cents`) and default entitlements are **domain data hard-coded inside the ASGI app
 module**. It also opens a second, independent session (`SessionLocal()`) instead of the request-scoped `get_db`.
 The migration `migrations/versions/0001_initial.py` is the correct place (or a dedicated seeder).
+
+> **Resolved in part (Fase 002, 2026-11-05).** The plan tuple is gone: `_seed_defaults()` now calls
+> `load_plans()` from `app/services/pricing_catalog.py`, which reads `packages/pricing/catalog.json` and
+> fails startup on a missing or malformed catalogue. The `price_cents` values above are the correct
+> IDR minor units (5,900,000 = Rp59,000); this audit originally quoted figures 1000x smaller, which was
+> wrong. Two literal `max_connections` copies remain (`main.py:65`, `user_service.py:99`) — same drift
+> class, still open. The seeding-inside-the-app-factory and `SessionLocal()` criticisms are untouched
+> and belong to Fase 005.
 
 #### 1.4.2 Readiness probe bypasses the DB layer
 `services/api/app/main.py:117-151`

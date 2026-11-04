@@ -31,11 +31,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 
 ### Ringkasan Status
 - **Total Tiket:** 25 tiket
-- **Selesai (`done`):** 3 tiket (Fase 001)
-- **Belum Diimplementasikan (`todo`):** 22 tiket (Fase 002 s/d Fase 007)
+- **Selesai (`done`):** 10 tiket (Fase 001, 002, 004)
+- **Belum Diimplementasikan (`todo`):** 15 tiket (Fase 003, 005, 006, 007)
 
 ```
-[=================================>------------------------] 12% Selesai
+[===================>---------------------------------------] 40% Selesai
 ```
 
 ---
@@ -47,15 +47,15 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **02-profile-avatar-status-dot.md** (`done`): Status dot indikator koneksi MT5 pada avatar profil mobile header.
 - [x] **03-mobile-header-responsive-styling.md** (`done`): Polish CSS responsif header mobile.
 
-#### Fase 002: Pricing Single Source (Belum Diimplementasikan)
-- [ ] **01-create-pricing-catalog.md** (`todo`): Inisialisasi `packages/pricing/catalog.json` (free/core/plus/pro).
-- [ ] **02-api-seed-from-catalog.md** (`todo`): Sinkronisasi seed database `plans` saat API startup dari file katalog JSON.
+#### Fase 002: Pricing Single Source (SELESAI)
+- [x] **01-create-pricing-catalog.md** (`done`): Inisialisasi `packages/pricing/catalog.json` (free/core/plus/pro).
+- [x] **02-api-seed-from-catalog.md** (`done`): Sinkronisasi seed database `plans` saat API startup dari file katalog JSON.
 
 #### Fase 003: Architecture Gates (Belum Diimplementasikan)
 - [ ] **01-python-import-linter.md** (`todo`): Proteksi CI import linter backend Python (mencegah leak ke framework layer).
 - [ ] **02-ts-boundaries-and-api-drift.md** (`todo`): Proteksi CI `dependency-cruiser` untuk batas antar-aplikasi frontend.
 
-#### Fase 004: Marketing Site / Landing Page (PRIORITAS SAAT INI)
+#### Fase 004: Marketing Site / Landing Page (SELESAI)
 > **Catatan Khusus Pengembang & Arahan Desain:**
 > - Bahasa default: **English (EN)** untuk seluruh copy, heading, dan metadata.
 > - Gaya visual: **Precision Telemetry Console** (dark obsidian `#080f14`, hairline gridlines, **zero generic icons** digantikan dengan bespoke **vector schematics & blueprints**).
@@ -63,11 +63,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 > - Price list diberi penanda **Coming Soon** dalam bentuk **Technical Specification Matrix** (kerangka UI preview, tanpa checkout/payment gateway).
 > - Telegram alert ditiadakan.
 > - Target domain: `pipstride.homever.my.id` (apex publik) ──► CTA ke `app-pipstride.homever.my.id` (dashboard).
-- [ ] **01-scaffold-astro-app.md** (`todo`): Inisialisasi project `apps/marketing` Astro + token visual presisi + stylesheet animasi CSS (`motion.css`).
-- [ ] **02-landing-and-company-pages.md** (`todo`): Halaman landing utama ber-Bahasa Inggris dengan 3 vektor teknis: `VectorPipeline`, `VectorCodeAudit`, dan `VectorJournalLedger`.
-- [ ] **03-pricing-page-from-catalog.md** (`todo`): Tabel matriks spesifikasi teknis 4 tier (Free/Core/Plus/Pro) terhubung single-source katalog bertanda Coming Soon.
-- [ ] **04-seo-and-structured-data.md** (`todo`): Konfigurasi SEO English, sitemap.xml, robots.txt, dan schema.org `SoftwareApplication` & `Product`.
-- [ ] **05-infra-and-ci.md** (`todo`): Multi-stage Dockerfile Astro, konfigurasi routing domain apex pada Caddy/Nginx, dan pipeline build CI.
+- [x] **01-scaffold-astro-app.md** (`done`): Inisialisasi project `apps/marketing` Astro + token visual presisi + stylesheet animasi CSS (`motion.css`).
+- [x] **02-landing-and-company-pages.md** (`done`): Halaman landing utama ber-Bahasa Inggris dengan 3 vektor teknis: `VectorPipeline`, `VectorCodeAudit`, dan `VectorJournalLedger`.
+- [x] **03-pricing-page-from-catalog.md** (`done`): Tabel matriks spesifikasi teknis 4 tier (Free/Core/Plus/Pro) terhubung single-source katalog bertanda Coming Soon.
+- [x] **04-seo-and-structured-data.md** (`done`): Konfigurasi SEO English, sitemap.xml, robots.txt, dan schema.org `SoftwareApplication` & `Product`.
+- [x] **05-infra-and-ci.md** (`done`): Multi-stage Dockerfile Astro, konfigurasi routing domain apex pada Caddy/Nginx, dan pipeline build CI.
 
 #### Fase 005: Backend Domain Layer (Belum Diimplementasikan)
 - [ ] **01-extract-domain-metrics-policies.md** (`todo`): Ekstraksi core business logic drawdown & metrik jurnal murni.
