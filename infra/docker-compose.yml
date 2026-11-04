@@ -107,8 +107,9 @@ services:
     container_name: pipstride_web
     restart: unless-stopped
     ports:
-      # Loopback only: public traffic must go through Caddy.
-      - "127.0.0.1:${WEB_PORT:-3000}:80"
+      # Loopback by default; the public proxy reaches this container over the
+      # address in WEB_BIND_IP (set it when the proxy lives outside the network).
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-3000}:80"
     depends_on:
       - api
     networks:
@@ -121,8 +122,8 @@ services:
     container_name: pipstride_marketing
     restart: unless-stopped
     ports:
-      # Loopback only: public traffic must go through Caddy.
-      - "127.0.0.1:${MARKETING_PORT:-3001}:80"
+      # Loopback by default; see WEB_BIND_IP above.
+      - "${MARKETING_BIND_IP:-127.0.0.1}:${MARKETING_PORT:-3001}:80"
     networks:
       - pipstride_net
 
