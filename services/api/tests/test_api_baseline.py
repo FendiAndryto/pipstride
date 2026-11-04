@@ -75,13 +75,13 @@ def test_logout_revokes_existing_token(client, account):
     assert client.get("/api/v1/auth/me", headers=account["headers"]).status_code == 401
 
 
-def test_telegram_toggle_requires_admin(client, account, auth_headers):
+def test_telegram_toggle_requires_admin(client, account, admin_headers):
     # Trader account is rejected with 403 Forbidden
     res = client.post("/api/v1/telegram/toggle", json={"enabled": True}, headers=account["headers"])
     assert res.status_code == 403
 
     # Admin user can toggle
-    admin_res = client.post("/api/v1/telegram/toggle", json={"enabled": True}, headers=auth_headers)
+    admin_res = client.post("/api/v1/telegram/toggle", json={"enabled": True}, headers=admin_headers)
     assert admin_res.status_code == 200
     assert admin_res.json()["status"] == "success"
 

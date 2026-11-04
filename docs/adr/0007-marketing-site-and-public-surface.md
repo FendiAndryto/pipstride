@@ -11,7 +11,7 @@ Pipstride needs a public surface — company profile, feature overview, and subs
 Three facts constrain the options:
 
 1. **`apps/web` is a client-rendered Vite SPA.** Its HTML shell is empty; content only appears once JavaScript runs. That is fine for an authenticated, high-interaction dashboard behind a login, but poor for a public, indexable marketing surface where organic search is the acquisition channel.
-2. **Pricing already exists as data.** `plans` (`free`/`core`/`plus`/`pro`) is seeded in `app/main.py:26-50` with `price_cents`, and `Entitlement` assigns a plan to a user. Billing is not implemented (`GLOSSARY.md`), but the catalogue is real. A marketing page that hard-codes prices independently would drift from what the system enforces.
+2. **Pricing already exists as data.** `plans` (`free`/`core`/`plus`/`pro`) is seeded in `app/main.py:26-50` with `price_cents`, and `Entitlement` assigns a plan to a user. `price_cents` holds IDR minor units: `5900000` renders as `IDR 59,000`. Billing is not implemented (`GLOSSARY.md`), but the catalogue is real. A marketing page that hard-codes prices independently would drift from what the system enforces.
 3. **The product is SaaS.** Domain layout, SEO, and pricing honesty are first-class concerns, not afterthoughts.
 
 The repository has no `packages/` directory and no root workspace tooling today. This decision must not assume one.
@@ -36,13 +36,15 @@ The repository has no `packages/` directory and no root workspace tooling today.
    - `apps/marketing` imports it **at build time** through a relative path; prices are baked into static HTML (good SEO, no client fetch, no flash of unstyled content).
    - `apps/admin` imports the same file through a relative path.
 
-   No npm-workspace tooling is required for this file. Defining prices in more than one place is prohibited.
+   No npm-workspace tooling is required for this file. Defining prices in more than one place is prohibited. The API fails to start if the file is missing or malformed; the marketing build imports it through `apps/marketing/src/lib/pricing.js`, so no copied catalog lives inside the app.
 
-4. **Never advertise a price the system cannot enforce.** While billing is unimplemented, the page presents the tiers and their limits honestly, rather than promising checkout that does not exist.
+4. **Never advertise a price the system cannot enforce.** Billing is unimplemented, so the public page shows the three paid tiers (`core`, `plus`, `pro`) with their catalog prices and `max_connections`, explicitly labelled **Coming Soon**, and offers no checkout. The internal `free` plan is not advertised because registration assigns it directly. No free trial is advertised until trial provisioning exists.
 
-5. **SEO is part of the deliverable**, not a follow-up: `sitemap.xml`, `robots.txt`, and `schema.org` `Product`/`Offer` structured data on the pricing page.
+5. **Money representation.** Catalog prices are integers in IDR minor units, named `price_cents` for historical reasons (IDR has two decimal places: `5900000` = `IDR 59,000`). Floats may appear only in telemetry/analytics aggregates and must be documented as such; persisted prices and billing amounts stay integer minor units.
 
-6. **`apps/marketing` is content-first and is explicitly exempt from the feature/domain layout of ADR 0009 §2.** A static content site has no business-rule layer and no per-feature verticals, so it uses Astro's idiomatic structure (`pages/ layouts/ components/ content/ lib/ styles/`). ADR 0009 records this exception.
+6. **SEO is part of the deliverable**, not a follow-up: `sitemap.xml`, `robots.txt`, and `schema.org` `Product`/`Offer` structured data on the pricing page.
+
+7. **`apps/marketing` is content-first and is explicitly exempt from the feature/domain layout of ADR 0009 §2.** A static content site has no business-rule layer and no per-feature verticals, so it uses Astro's idiomatic structure (`pages/ layouts/ components/ content/ lib/ styles/`). ADR 0009 records this exception.
 
 ## Consequences
 

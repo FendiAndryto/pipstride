@@ -54,6 +54,7 @@ _Avoid_: Cache table, session payload
 
 **Plan / Entitlement**:
 A plan is a product tier (free, core, plus, pro) defining `max_connections`. An entitlement is a user's current assignment to a plan. Billing is not implemented yet; the schema is ready for it.
+_Money_: `price_cents` is an integer in IDR minor units (IDR has two decimals): `5900000` = `IDR 59,000`. Floats are acceptable for telemetry/analytics aggregates only, never for persisted prices or billing amounts.
 _Avoid_: Subscription record, licence key
 
 **PipstrideMonitor**:

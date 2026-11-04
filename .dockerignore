@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+**/node_modules
+**/dist
+**/.astro
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+backups
+*.log

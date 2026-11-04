@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "plans": [
-    { "code": "free", "name": "Free", "max_connections": 1, "price_cents": 0 },
-    { "code": "core", "name": "Core", "max_connections": 1, "price_cents": 5900 },
-    { "code": "plus", "name": "Plus", "max_connections": 3, "price_cents": 12900 },
-    { "code": "pro",  "name": "Pro",  "max_connections": 5, "price_cents": 19900 }
-  ]
-}

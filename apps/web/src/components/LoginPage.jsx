@@ -156,6 +156,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
   };
 
   const handleOfflineDevBypass = () => {
+    if (!import.meta.env.DEV) return;
     setToken('dev-demo-token-offline', rememberMe);
     if (onLoginSuccess) {
       onLoginSuccess({ username: username || 'Admin', is_authenticated: true });
@@ -499,7 +500,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                   <Sparkles size={11} />
                   <span>{t('auth_demo_fill')}</span>
                 </button>
-                {error && (
+                {import.meta.env.DEV && error && (
                   <button
                     type="button"
                     className="btn ghost"

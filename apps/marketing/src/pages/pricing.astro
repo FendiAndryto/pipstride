@@ -3,8 +3,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PricingSection from '../components/sections/PricingSection.astro';
 import FaqSection from '../components/sections/FaqSection.astro';
 import CtaBanner from '../components/sections/CtaBanner.astro';
+import { publicPlans } from '../lib/pricing.js';
 
-// Schema.org structured data for pricing preview
+// Schema.org structured data for the pricing preview
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Product',
@@ -12,16 +13,17 @@ const jsonLd = {
   'description': 'Real-time read-only MetaTrader 5 account telemetry streaming and automated journal ledger.',
   'offers': {
     '@type': 'AggregateOffer',
-    'priceCurrency': 'USD',
-    'lowPrice': '0',
-    'offerCount': '3',
+    'priceCurrency': 'IDR',
+    'lowPrice': String(publicPlans[0].price_cents / 100),
+    'highPrice': String(publicPlans[publicPlans.length - 1].price_cents / 100),
+    'offerCount': String(publicPlans.length),
   },
 };
 ---
 
 <BaseLayout
-  title="Subscription Specifications & 14-Day Free Trial — Pipstride"
-  description="Compare Pipstride terminal limits, telemetry retention, and technical capacities. Enjoy an instant 14-day free trial on any MetaTrader 5 account."
+  title="Pricing & Early Access Preview — Pipstride"
+  description="Compare Pipstride terminal limits and target subscription prices in IDR. Early access is free while billing is under construction — no checkout."
 >
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 

@@ -18,6 +18,7 @@ from app.core.logging import RequestContextMiddleware, configure_logging
 from app.core.security import hash_password
 from app.db.base import SessionLocal, engine, init_db
 from app.db.models import Base, Entitlement, Plan, User
+from app.services.pricing_catalog import load_plans
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +32,25 @@ def _seed_defaults() -> None:
     partial inserts are rolled back and the next attempt sees the rows that
     the winning worker committed.
     """
+    plans = load_plans()
     for attempt in range(3):
         try:
             with SessionLocal() as db:
-                for code, name, max_conn, price in (
-                    ("free", "Free", 1, 0),
-                    ("core", "Core", 1, 5900),
-                    ("plus", "Plus", 3, 12900),
-                    ("pro", "Pro", 5, 19900),
-                ):
-                    if db.get(Plan, code) is None:
-                        db.add(Plan(code=code, name=name, max_connections=max_conn, price_cents=price))
+                for plan in plans:
+                    row = db.get(Plan, plan.code)
+                    if row is None:
+                        db.add(
+                            Plan(
+                                code=plan.code,
+                                name=plan.name,
+                                max_connections=plan.max_connections,
+                                price_cents=plan.price_cents,
+                            )
+                        )
+                    else:
+                        row.name = plan.name
+                        row.max_connections = plan.max_connections
+                        row.price_cents = plan.price_cents
 
                 admin = db.scalar(select(User).where(User.username == settings.ADMIN_USERNAME.strip()))
                 if admin is None:

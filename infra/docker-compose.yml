@@ -39,8 +39,8 @@ services:
 
   api:
     build:
-      context: ../services/api
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/api/Dockerfile
     container_name: pipstride_api
     restart: unless-stopped
     ports:
@@ -78,6 +78,7 @@ services:
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - HEARTBEAT_RATE_LIMIT=${HEARTBEAT_RATE_LIMIT:-120}
       - HEARTBEAT_RATE_WINDOW_SECONDS=${HEARTBEAT_RATE_WINDOW_SECONDS:-10}
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
       - LAST_SEEN_FLUSH_SECONDS=${LAST_SEEN_FLUSH_SECONDS:-10}
       - SNAPSHOT_MIN_INTERVAL_SECONDS=${SNAPSHOT_MIN_INTERVAL_SECONDS:-30}
       - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
@@ -106,7 +107,8 @@ services:
     container_name: pipstride_web
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-3000}:80"
+      # Loopback only: public traffic must go through Caddy.
+      - "127.0.0.1:${WEB_PORT:-3000}:80"
     depends_on:
       - api
     networks:
@@ -114,12 +116,13 @@ services:
 
   marketing:
     build:
-      context: ../apps/marketing
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/marketing/Dockerfile
     container_name: pipstride_marketing
     restart: unless-stopped
     ports:
-      - "${MARKETING_PORT:-3001}:80"
+      # Loopback only: public traffic must go through Caddy.
+      - "127.0.0.1:${MARKETING_PORT:-3001}:80"
     networks:
       - pipstride_net
 

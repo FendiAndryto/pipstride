@@ -1,6 +1,7 @@
+# Build context is the repository root so the shared pricing catalog is available.
 FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /repo/services/api
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -10,20 +11,21 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY services/api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # pytest is dev-only; not installed in the production image.
 
-COPY app/ ./app/
-COPY migrations/ ./migrations/
-COPY scripts/ ./scripts/
-COPY alembic.ini .
-COPY docker-entrypoint.sh .
+COPY services/api/app/ ./app/
+COPY services/api/migrations/ ./migrations/
+COPY services/api/scripts/ ./scripts/
+COPY services/api/alembic.ini .
+COPY services/api/docker-entrypoint.sh .
+COPY packages/pricing /repo/packages/pricing
 
 RUN chmod +x docker-entrypoint.sh \
     && adduser --disabled-password --gecos "" --uid 10001 pipstride \
-    && chown -R pipstride:pipstride /app
+    && chown -R pipstride:pipstride /repo
 
 USER pipstride
 

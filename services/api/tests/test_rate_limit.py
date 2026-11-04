@@ -100,6 +100,29 @@ def test_heartbeat_rejects_oversized_candles():
         )
 
 
+def test_forgot_password_limit_is_per_client_ip(client, monkeypatch):
+    from app.api.v1 import auth as auth_module
+
+    ips = iter(["203.0.113.10"] * 6 + ["203.0.113.11"])
+    monkeypatch.setattr(auth_module, "_client_ip", lambda request: next(ips))
+
+    for i in range(5):
+        res = client.post(
+            "/api/v1/auth/forgot-password", json={"email": f"nobody{i}@example.com"}
+        )
+        assert res.status_code == 202
+
+    blocked = client.post(
+        "/api/v1/auth/forgot-password", json={"email": "nobody5@example.com"}
+    )
+    assert blocked.status_code == 429
+
+    other_ip = client.post(
+        "/api/v1/auth/forgot-password", json={"email": "nobody6@example.com"}
+    )
+    assert other_ip.status_code == 202
+
+
 def test_unauthenticated_heartbeat_is_rate_limited(client):
     rate_limit.clear("hb_anon:testclient")
     rate_limit.clear("hb_ip:testclient")

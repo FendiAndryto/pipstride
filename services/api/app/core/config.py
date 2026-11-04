@@ -20,6 +20,10 @@ class Settings(BaseSettings):
 
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "change_this_password"
+
+    # Single-source plan catalogue (ADR 0007). Relative paths resolve from the
+    # repository root; production images set an absolute path.
+    PRICING_CATALOG_PATH: str = "packages/pricing/catalog.json"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_ALGORITHM: str = "HS256"
     
@@ -69,6 +73,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     HEARTBEAT_RATE_LIMIT: int = 120
     HEARTBEAT_RATE_WINDOW_SECONDS: int = 10
+
+    # Only requests from these peers may supply X-Real-IP. Defaults cover
+    # loopback and Docker's private ranges; override if the proxy network uses
+    # different addresses.
+    TRUSTED_PROXY_IPS: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     
     # Risk Watchdog & Account Safeguard Defaults
     DEFAULT_RISK_PER_TRADE_PERCENT: float = 1.0

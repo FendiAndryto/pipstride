@@ -7,6 +7,7 @@ instead of rejecting requests.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import threading
 import time
@@ -150,22 +151,40 @@ def clear(key: str) -> None:
             continue
 
 
-def get_client_ip(request: Request) -> str:
-    """Safely extract client IP address.
+def _is_trusted_proxy(peer: str) -> bool:
+    for entry in settings.TRUSTED_PROXY_IPS.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            if "/" in entry:
+                if ipaddress.ip_address(peer) in ipaddress.ip_network(entry, strict=False):
+                    return True
+            elif peer == entry:
+                return True
+        except ValueError:
+            continue
+    return False
 
-    Prioritizes headers set by trusted upstream reverse proxies (Nginx / Caddy),
-    falling back to Starlette's client.host.
+
+def get_client_ip(request: Request) -> str:
+    """Return the client IP, trusting X-Real-IP only from a trusted proxy.
+
+    The public chain is Cloudflare -> Caddy -> nginx -> API. Caddy resolves the
+    real client and nginx forwards it as X-Real-IP. Header values from any other
+    peer are ignored, so a direct client cannot choose its own rate-limit bucket.
     """
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    cf_ip = request.headers.get("cf-connecting-ip")
-    if cf_ip:
-        return cf_ip.strip()
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+    peer = request.client.host if request.client else "127.0.0.1"
+    if not _is_trusted_proxy(peer):
+        return peer
+
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if not real_ip:
+        return peer
+    try:
+        return str(ipaddress.ip_address(real_ip))
+    except ValueError:
+        return peer
 
 
 class LoginRateLimiter:

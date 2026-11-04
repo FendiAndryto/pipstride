@@ -1,33 +1,16 @@
 ---
-// PricingSection.astro - Pricing Specifications with 14-Day Trial & Coming Soon Subscriptions
+// PricingSection.astro - early-access preview with target tiers from the single-source catalog.
+import { formatPrice, formatTerminals, publicPlans } from '../../lib/pricing.js';
+
 const appUrl = 'https://app-pipstride.homever.my.id';
 
-const plans = [
-  {
-    code: 'core',
-    name: 'Core',
-    terminals: '1 MT5 Terminal',
-    description: '',
-    features: [],
-    highlight: false,
-  },
-  {
-    code: 'plus',
-    name: 'Plus',
-    terminals: '3 MT5 Terminals',
-    description: '',
-    features: [],
-    highlight: true,
-  },
-  {
-    code: 'pro',
-    name: 'Pro',
-    terminals: '5 MT5 Terminals',
-    description: '',
-    features: [],
-    highlight: false,
-  },
-];
+const plans = publicPlans.map((plan) => ({
+  code: plan.code,
+  name: plan.name,
+  terminals: formatTerminals(plan.max_connections),
+  price: formatPrice(plan.price_cents),
+  highlight: plan.code === 'plus',
+}));
 ---
 
 <section class="section pricing-section" id="pricing">
@@ -35,29 +18,29 @@ const plans = [
     <!-- Header -->
     <div class="section-header text-center reveal-on-scroll">
       <span class="section-tag mono">SUBSCRIPTION TIERS & ACCESS</span>
-      <h2 class="section-title">Transparent specifications. Instant trial.</h2>
+      <h2 class="section-title">Transparent specifications. Honest early access.</h2>
       <p class="section-desc mx-auto">
-        Subscription tiers are currently in early access preview. Every trader can get started immediately with a full-featured trial.
+        Paid tiers are target specifications for when billing ships. Until then the console is free to use — no checkout, no card, no automatic charges.
       </p>
     </div>
 
-    <!-- Trial Announcement Hero Banner (Fully Responsive) -->
-    <div class="trial-hero-card reveal-on-scroll">
-      <div class="trial-content">
-        <div class="trial-badge mono">
+    <!-- Early Access Preview Banner (Fully Responsive) -->
+    <div class="preview-hero-card reveal-on-scroll">
+      <div class="preview-content">
+        <div class="preview-badge mono">
           <span class="pulse-indicator"></span>
-          <span>EARLY ACCESS BETA TRIAL</span>
+          <span>EARLY ACCESS PREVIEW</span>
         </div>
-        <h3 class="trial-heading">
-          Get <span class="gradient-text">14 Days of Full Pro Access</span> on Any MT5 Account
+        <h3 class="preview-heading">
+          Full telemetry access, <span class="gradient-text">free while billing is under construction</span>
         </h3>
-        <p class="trial-sub">
-          Test drive high-frequency telemetry streaming, multi-symbol performance breakdowns, and automated journaling risk-free. No credit card required, zero automated billing surprises.
+        <p class="preview-sub">
+          Connect your MT5 terminal, stream telemetry, and keep every journal record. Paid plans below are shown for planning only and cannot be purchased yet.
         </p>
       </div>
-      <div class="trial-action">
-        <a href={appUrl} class="btn-primary trial-btn" target="_blank" rel="noopener noreferrer">
-          <span>Start 14-Day Free Trial</span>
+      <div class="preview-action">
+        <a href={appUrl} class="btn-primary preview-btn" target="_blank" rel="noopener noreferrer">
+          <span>Open Web Console</span>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="7" y1="17" x2="17" y2="7"></line>
             <polyline points="7 7 17 7 17 17"></polyline>
@@ -66,12 +49,12 @@ const plans = [
       </div>
     </div>
 
-    <!-- 3 Plan Cards (Free removed, descriptions emptied, Coming Soon pricing) -->
+    <!-- 3 target plan cards from the catalog (Free tier stays internal) -->
     <div class="pricing-grid">
       {plans.map((plan, index) => (
         <div class:list={["pricing-card", `reveal-on-scroll stagger-${index + 1}`, { popular: plan.highlight }]}>
           {plan.highlight && (
-            <div class="popular-ribbon mono">BETA FAVORITE // RECOMMENDED</div>
+            <div class="popular-ribbon mono">EARLY ACCESS // RECOMMENDED</div>
           )}
 
           <div class="plan-header">
@@ -79,35 +62,21 @@ const plans = [
             <span class="plan-capacity mono text-cyan">{plan.terminals}</span>
           </div>
 
-          <!-- Coming Soon Price Box -->
+          <!-- Target price from the catalog, clearly marked as not purchasable -->
           <div class="price-box">
+            <div class="price-value">{plan.price}<span class="price-period"> / month</span></div>
             <div class="coming-soon-pill mono">
               <span class="cs-dot"></span>
               <span>COMING SOON</span>
             </div>
-            <div class="price-subtext mono text-muted">Subscription pricing unlocks soon</div>
           </div>
 
-          <!-- Feature List / Specifications -->
-          {plan.features && plan.features.length > 0 ? (
-            <ul class="feature-list">
-              {plan.features.map((feat) => (
-                <li class="feature-item">
-                  <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                  <span>{feat}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div class="specs-placeholder">
-              <div class="specs-badge mono">
-                <span class="specs-dot"></span>
-                <span>Specifications coming soon</span>
-              </div>
+          <div class="specs-placeholder">
+            <div class="specs-badge mono">
+              <span class="specs-dot"></span>
+              <span>Specifications coming soon</span>
             </div>
-          )}
+          </div>
 
           <div class="card-action">
             <a
@@ -116,7 +85,7 @@ const plans = [
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span>Start 14-Day Free Trial</span>
+              <span>Open Web Console</span>
             </a>
           </div>
         </div>
@@ -127,11 +96,11 @@ const plans = [
     <div class="trust-assurances mono">
       <span class="assurance-item"><span class="text-emerald">✓</span> NO CREDIT CARD REQUIRED</span>
       <span class="assurance-sep">•</span>
-      <span class="assurance-item"><span class="text-emerald">✓</span> INSTANT EA TOKEN ACTIVATION</span>
+      <span class="assurance-item"><span class="text-emerald">✓</span> FREE DURING EARLY ACCESS</span>
       <span class="assurance-sep">•</span>
-      <span class="assurance-item"><span class="text-emerald">✓</span> PRESERVE ALL JOURNAL HISTORY</span>
+      <span class="assurance-item"><span class="text-emerald">✓</span> 100% READ-ONLY SENSOR</span>
       <span class="assurance-sep">•</span>
-      <span class="assurance-item"><span class="text-emerald">✓</span> CANCEL IN 1 CLICK</span>
+      <span class="assurance-item"><span class="text-emerald">✓</span> JOURNAL HISTORY PRESERVED</span>
     </div>
   </div>
 </section>
@@ -161,8 +130,8 @@ const plans = [
     margin-bottom: 44px;
   }
 
-  /* Trial Hero Card */
-  .trial-hero-card {
+  /* Early Access Preview Card */
+  .preview-hero-card {
     background: linear-gradient(135deg, rgba(23, 41, 50, 0.8) 0%, rgba(13, 23, 30, 0.95) 100%);
     border: 1px solid rgba(69, 224, 173, 0.4);
     border-radius: var(--radius-lg);
@@ -177,7 +146,7 @@ const plans = [
     overflow: hidden;
   }
 
-  .trial-hero-card::before {
+  .preview-hero-card::before {
     content: '';
     position: absolute;
     top: 0;
@@ -187,14 +156,14 @@ const plans = [
     background: linear-gradient(90deg, transparent, var(--g), transparent);
   }
 
-  .trial-content {
+  .preview-content {
     max-width: 650px;
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
 
-  .trial-badge {
+  .preview-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -212,7 +181,7 @@ const plans = [
     animation: pulse-dot 2s infinite;
   }
 
-  .trial-heading {
+  .preview-heading {
     font-size: clamp(20px, 2.5vw, 26px);
     font-weight: 700;
     color: var(--text);
@@ -220,29 +189,29 @@ const plans = [
     letter-spacing: -0.01em;
   }
 
-  .trial-sub {
+  .preview-sub {
     font-size: 14px;
     line-height: 1.6;
     color: var(--text-secondary);
   }
 
-  .trial-btn {
+  .preview-btn {
     padding: 12px 24px;
     font-size: 14.5px;
     white-space: nowrap;
   }
 
   @media (max-width: 800px) {
-    .trial-hero-card {
+    .preview-hero-card {
       padding: 24px 20px;
       flex-direction: column;
       align-items: stretch;
       gap: 20px;
     }
-    .trial-action {
+    .preview-action {
       width: 100%;
     }
-    .trial-btn {
+    .preview-btn {
       width: 100%;
       text-align: center;
       justify-content: center;
@@ -336,15 +305,30 @@ const plans = [
     text-align: center;
   }
 
+  .price-value {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .price-period {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
   .coming-soon-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 14px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.1em;
     color: var(--blue);
-    margin-bottom: 2px;
+    margin-top: 6px;
   }
 
   .cs-dot {
@@ -352,10 +336,6 @@ const plans = [
     height: 6px;
     border-radius: 50%;
     background: var(--blue);
-  }
-
-  .price-subtext {
-    font-size: 11px;
   }
 
   .specs-placeholder {
@@ -396,32 +376,6 @@ const plans = [
       padding: 16px 12px;
       margin-bottom: 22px;
     }
-  }
-
-  .feature-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 28px;
-    flex: 1;
-  }
-
-  .feature-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.4;
-  }
-
-  .check-icon {
-    color: var(--g);
-    flex-shrink: 0;
-    margin-top: 1px;
   }
 
   .card-action {

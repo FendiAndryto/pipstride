@@ -27,5 +27,7 @@ Referensi: `docs/adr/0009-layered-architecture-and-dependency-rule.md` §6.
 
 ## Catatan lingkup
 - **Jangan** memindahkan kode di fase ini. Hanya memasang penjaga. Pindah kode = fase 005/006.
+- Penjaga hanya menegakkan batas yang **sudah ada hari ini**; jangan membuat package/layer baru agar gate
+  bisa dipasang. Lapisan yang belum ada ditegakkan saat lapisan itu lahir (005/006/007).
 - Untuk kode yang sudah melanggar hari ini, pakai baseline/allowlist eksplisit yang menyusut tiap
   fase — jangan matikan rule-nya.
