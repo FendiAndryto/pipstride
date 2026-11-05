@@ -267,16 +267,20 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
               : t('market_waiting_price')}
           </h2>
           <p className="sub" style={{ lineHeight: 1.5, marginBottom: '14px' }}>
-            {isPositive
-              ? t('market_up_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread })
-              : t('market_down_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread })}
+            {quotes.length > 0
+              ? (isPositive
+                ? t('market_up_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread })
+                : t('market_down_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread }))
+              : t('market_waiting_price')}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--line)', paddingTop: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
               <span style={{ color: 'var(--muted)' }}>{t('market_live_bid_ask')}</span>
               <b style={{ fontFamily: 'monospace' }}>
-                {activeQuote.bid.toFixed(activeQuote.digits)} / {activeQuote.ask.toFixed(activeQuote.digits)}
+                {activeQuote.bid > 0
+                  ? `${activeQuote.bid.toFixed(activeQuote.digits)} / ${activeQuote.ask.toFixed(activeQuote.digits)}`
+                  : '—'}
               </b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>

@@ -37,4 +37,18 @@ Expected: lint/build exit 0; `Select-String` **tidak** menemukan token bypass di
 - (menyelesaikan gate fase 006)
 
 ## Status
-todo
+done
+
+**Catatan implementasi (2026-11-05):**
+- `PositionsTable.jsx` & `MetricCard.jsx` sudah tidak ada di `components/` (audit lawas; terverifikasi ulang).
+- `BucketBars` di `JournalAnalytics.jsx` **dipertahankan** — klaim "never rendered" audit:
+  SALAH; bucket diklaim `by_weekday` sekarang (bukan dead code), hanya path tak berisi datanya.
+- Dev bypass: `handleOfflineDevBypass` + string `dev-demo-token-offline` dibungkus
+  `import.meta.env.DEV` (kondisional ternary), blok demo credentials juga DEV-gated →
+  bundel produksi diverifikasi BEBAS dari keduanya (`Select-String dist/assets *.js` 0 hit).
+- MarketTab (audit `:123-148`): sudah ditulis ulang menjadi state jujur (`hasData:false`,
+  bid>0 guard, `market_waiting_price`); sisanya yang diperbaiki kini: baris bid/ask
+  `0.000 / 0.000` → `—`, kalimat naik/turun hanya saat feed tersedia. Klaim "H1 memakai
+  candle M15" tua: timeframe H1 sudah tidak ada (M5/M15 dari array masing-masing).
+- `fetch(` mentah di `components/`: 0.
+- Dead style `index.css`: tidak ada (Check-Grepped).

@@ -157,13 +157,16 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
     setError('');
   };
 
-  const handleOfflineDevBypass = () => {
-    if (!import.meta.env.DEV) return;
-    setToken('dev-demo-token-offline', rememberMe);
-    if (onLoginSuccess) {
-      onLoginSuccess({ username: username || 'Admin', is_authenticated: true });
-    }
-  };
+  // Dev-only offline sign-in. DEV-gated at compile time so the demo token and
+  // handler are eliminated from production bundles.
+  const handleOfflineDevBypass = import.meta.env.DEV
+    ? () => {
+        setToken('dev-demo-token-offline', rememberMe);
+        if (onLoginSuccess) {
+          onLoginSuccess({ username: username || 'Admin', is_authenticated: true });
+        }
+      }
+    : null;
 
   return (
     <div
@@ -475,7 +478,8 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               )}
             </button>
 
-            {/* Demo Quick Credentials */}
+            {/* Demo Quick Credentials (dev only — compiled out of production) */}
+            {import.meta.env.DEV && (
             <div
               style={{
                 marginTop: '16px',
@@ -515,6 +519,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
                 )}
               </div>
             </div>
+            )}
           </form>
         ) : activeTab === 'register' ? (
           /* Form 2: Sign Up / Register */
