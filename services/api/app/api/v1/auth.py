@@ -236,8 +236,8 @@ def verify_email(req: VerifyEmailRequest, db: Session = Depends(get_db)):
 
     if user.email_verified_at is None:
         user_service.mark_email_verified(db, user)
-    else:
-        db.commit()
+    # Nothing to persist: consume() already burned the token inside its own
+    # unit of work, and the address is already verified. No route-level commit.
 
     return EmailStatusResponse(
         email=user.email,

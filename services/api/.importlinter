@@ -12,19 +12,21 @@ include_external_packages = true
 #                         app/core/live_state.py, app/core/logging.py,
 #                         app/core/rate_limit.py, app/services/email_service.py,
 #                         app/services/telegram_service.py)
-#   app/domain/        -> pure business rules (not created yet; Fase 005)
+#   app/domain/        -> pure business rules (landed in Fase 005)
 #
-# Because the target layers do not exist, this contract enforces the import
-# direction that is already true today and must stay true as code moves:
+# Fase 005 created app/domain and app/infrastructure/db/repositories; the
+# legacy app.services/app.db/app.models folders still hold boundary code that
+# has not been physically moved yet. The contracts below enforce the import
+# direction that must stay true as that code migrates:
 #   * app.services may not import app.api.v1 (the HTTP layer).
 #   * app.db (persistence models) may not import app.services or app.api.v1.
 #   * app.models (Pydantic DTOs) may not import app.db, app.services or app.api.v1.
-#   * app.services.bridge_service is the only service that currently imports
-#     fastapi; the contract below flags it as a baseline to remove in Fase 005.
+#   * app.domain imports no framework, ORM or cache client.
 #   * SQLAlchemy/redis are allowed in the boundary modules listed below.
 #
-# TODO(Fase 005): replace these path-based contracts with explicit
-#   domain / infrastructure / interfaces packages once they are created.
+# TODO(Fase 007): replace these path-based contracts with explicit
+#   domain / infrastructure / interfaces packages once the legacy folders are
+#   renamed, and add a forbidden contract for app.infrastructure -> app.api.v1.
 # ---------------------------------------------------------------------------
 
 [importlinter:contract:no-services-import-api]
@@ -93,7 +95,7 @@ forbidden_modules =
 # baseline: app.core owns redis, and no module outside app.core imports redis
 # directly. A custom contract type is not available, so this is enforced by the
 # code review / CI baseline rather than by import-linter directly.
-# TODO(Fase 005): move redis adapters to app.infrastructure/ and restore a
+# TODO(Fase 007): move redis adapters to app.infrastructure/ and restore a
 # strict forbidden contract from app.domain/app.services/app.api.v1 to redis.
 
 # Operational scripts live under the top-level scripts/ directory, not app.scripts.

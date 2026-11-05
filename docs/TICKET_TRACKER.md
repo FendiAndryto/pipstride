@@ -86,7 +86,8 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 > - `bridge_service.py`/`journal_service.py` dihapus, diganti `telemetry_ingest_service`,
 >   `bridge_status_service`, `account_settings_service`.
 > - `session_scope(db)` menjadi unit-of-work; `grep "db.commit(" services/` → 0; `HTTPException` di
->   `services/` → 0; `core/deps.py` memakai repository (Dep-1); heartbeat menerima `connection` (Dep-2).
+>   `services/` → 0; `core/deps.py` memakai repository (Dep-1); heartbeat menerima `connection`
+>   hasil resolve route (Dep-2); `bind_account` tetap didelegasikan ke `connection_service`.
 > - Verifikasi: pytest `104 passed`; `lint-imports` `6 kept, 0 broken`.
 - [x] **01-extract-domain-metrics-policies.md** (`done`): Ekstraksi core business logic drawdown & metrik jurnal murni.
 - [x] **02-repositories-and-route-thinning.md** (`done`): Implementasi repository pattern dan perampingan router FastAPI.

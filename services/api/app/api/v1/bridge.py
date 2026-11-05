@@ -23,7 +23,7 @@ from app.models.bridge import (
     TradeHistoryResponse,
 )
 from app.models.risk import RiskWatchdogStatusResponse
-from app.domain.errors import ConnectionBindingError as _ConnectionBindingError
+from app.domain.errors import ConnectionBindingError
 from app.domain.policies import evaluate_daily_drawdown
 from app.services.account_settings_service import account_settings_service
 from app.services.bridge_status_service import bridge_status_service
@@ -98,7 +98,7 @@ def receive_heartbeat(
 
     try:
         return telemetry_ingest_service.process_heartbeat(db, connection, payload)
-    except _ConnectionBindingError as exc:
+    except ConnectionBindingError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password, verify_password
 from app.db.base import session_scope
 from app.db.models import Entitlement, User
+from app.infrastructure.db.repositories import user_repository
 
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{3,32}$")
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -46,10 +47,7 @@ def normalize_email(email: Optional[str]) -> Optional[str]:
 
 class UserService:
     def get_user(self, db: Session, username: str) -> Optional[User]:
-        cleaned = (username or "").strip()
-        if not cleaned:
-            return None
-        return db.scalar(select(User).where(User.username == cleaned))
+        return user_repository.get_by_username(db, username)
 
     def get_user_by_id(self, db: Session, user_id: str) -> Optional[User]:
         return db.get(User, user_id)

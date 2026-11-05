@@ -37,7 +37,8 @@ Referensi: `docs/audits/pilar1-clean-architecture.md` §1.2-1.3, §2.4-2.5;
 - `db.base.session_scope(db)` menjadi unit-of-work: menerima session request-scoped dan memiliki
   commit; `grep "db.commit(" services/` → 0.
 - `core/deps.py` memakai repository langsung (Dep-1); heartbeat menerima `connection` hasil resolve
-  route, bukan lookup di dalam service (Dep-2).
+  route, bukan membuat instance service lain di dalam service (Dep-2). `bind_account` tetap
+  didelegasikan ke `connection_service` (owned binding lock), bukan lookup token.
 - Verifikasi: `104 passed` (termasuk `tests/test_domain_metrics.py`), `lint-imports` **6 kept, 0 broken**
   (termasuk dua contract baru: `no-frameworks-in-domain`, `domain-imports-no-app-layer`).
 
