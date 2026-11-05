@@ -49,7 +49,8 @@ export default function Mt5ConnectModal({
   const manager = useConnectionManager({
     onChanged: onConnectionsChanged,
     onSelect: onSelectConnection,
-    onError: setError
+    onError: setError,
+    onClearError: () => setError('')
   });
   const {
     isBusy,

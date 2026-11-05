@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { api } from '../../services/api';
 import { useLanguage } from '../../context/LanguageContext';
 
-export function useConnectionManager({ onChanged, onSelect, onError } = {}) {
+export function useConnectionManager({ onChanged, onSelect, onError, onClearError } = {}) {
   const { t } = useLanguage();
   const [isBusy, setIsBusy] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -21,6 +21,10 @@ export function useConnectionManager({ onChanged, onSelect, onError } = {}) {
   const runAction = async (action, successText) => {
     setIsBusy(true);
     setFeedback(null);
+    // Clear any previous error at the start of every action, so a stale banner
+    // from an earlier failure cannot survive a later success (pre-split
+    // behaviour in both ProfileTab and Mt5ConnectModal).
+    if (onClearError) onClearError();
     try {
       const result = await action();
       if (onChanged) await onChanged();
