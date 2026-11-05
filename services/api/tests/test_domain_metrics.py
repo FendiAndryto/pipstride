@@ -9,7 +9,11 @@ from app.domain.policies import (
     evaluate_drawdown,
     evaluate_overall_drawdown,
 )
-from app.domain.time import broker_day_start_utc, broker_utc_offset_seconds
+from app.domain.time import (
+    broker_day_start_utc,
+    broker_offset_from_bars,
+    broker_utc_offset_seconds,
+)
 
 
 def test_profit_factor_is_none_when_gross_loss_is_zero():
@@ -132,3 +136,40 @@ def test_broker_day_start_handles_a_half_hour_offset():
     boundary = broker_day_start_utc(now, 19_800)  # UTC+5:30
 
     assert boundary == datetime(2026, 1, 1, 18, 30, tzinfo=timezone.utc)
+
+
+def test_broker_offset_from_bars_reads_the_server_clock():
+    now = datetime(2026, 1, 2, 1, 0, tzinfo=timezone.utc)
+    # The newest M5 bar opened at 03:00 server time, i.e. UTC+2.
+    candles = [{"time": int(now.timestamp()) + 7200 - 60}]
+
+    assert broker_offset_from_bars(candles, now) == 7200
+
+
+def test_broker_offset_from_bars_uses_the_newest_bar_and_accepts_models():
+    now = datetime(2026, 1, 2, 1, 0, tzinfo=timezone.utc)
+    older = int(now.timestamp()) - 3600
+    newest = int(now.timestamp()) + 3600
+
+    class Bar:
+        def __init__(self, time):
+            self.time = time
+
+    # Dicts and model-shaped candles are both accepted; only the newest counts.
+    candles = [{"time": older}, Bar(newest)]
+    assert broker_offset_from_bars(candles, now) == 3600
+
+
+def test_broker_offset_from_bars_returns_none_without_bars():
+    now = datetime(2026, 1, 2, 1, 0, tzinfo=timezone.utc)
+
+    assert broker_offset_from_bars([], now) is None
+    assert broker_offset_from_bars(None, now) is None
+    assert broker_offset_from_bars([{"time": 0}], now) is None
+
+
+def test_broker_offset_from_bars_is_clamped():
+    now = datetime(2026, 1, 2, 1, 0, tzinfo=timezone.utc)
+    candles = [{"time": int(now.timestamp()) + 20 * 3600}]
+
+    assert broker_offset_from_bars(candles, now) == 14 * 3600

@@ -17,7 +17,13 @@ from app.core import live_state
 from app.core.config import settings
 from app.db.models import Mt5Connection, Trade
 from app.domain.metrics import profit_factor, win_rate
-from app.domain.time import as_utc, broker_day_start_utc, broker_utc_offset_seconds, to_unix
+from app.domain.time import (
+    as_utc,
+    broker_day_start_utc,
+    broker_offset_from_bars,
+    broker_utc_offset_seconds,
+    to_unix,
+)
 from app.infrastructure.db.repositories import telemetry_repository, trade_repository
 from app.models.bridge import (
     BridgeStatusResponse,
@@ -314,25 +320,48 @@ class BridgeStatusService:
     def broker_offset(self, connection: Mt5Connection, metrics: Optional[HeartbeatPayload]) -> int:
         """Broker-minus-UTC offset in seconds, cached per connection.
 
-        Derived from the EA's own ``timestamp`` (server clock) so the day rolls
-        over at the broker's midnight, not UTC's (spec 003, ticket 09-01).
+        The trading day rolls over at the broker's midnight, so the offset has to
+        come from a *server* clock. Two sources qualify, in order:
+
+        ``broker_time``
+            ``TimeCurrent()``, sent explicitly by the current EA build. Exact.
+
+        candle open times
+            ``MqlRates.time`` is server-stamped too. This is what keeps an older
+            EA build (which sends no ``broker_time``) on the right day.
+
+        The payload's ``timestamp`` is deliberately *not* used: it is
+        ``TimeLocal()``, the trader's PC clock. Trusting it put the boundary at
+        the PC's midnight — 7 hours off for a UTC+7 trader on a UTC server —
+        which is the exact failure this module exists to prevent.
+
+        The cache covers the stale case: ``get_status`` returns ``metrics=None``
+        once the bridge goes quiet, and without it the offset would fall back to
+        UTC and move the day boundary by hours exactly when nobody is watching.
         """
         cached = live_state.load_broker_offset(connection.id)
-        payload_ts = getattr(metrics, "timestamp", None) if metrics else None
-        derived = broker_utc_offset_seconds(payload_ts, _now())
+        now = _now()
 
-        # A fresh heartbeat is authoritative: it carries the terminal's own clock,
-        # so recompute and refresh the cache. The cache exists for the stale case
-        # below — ``get_status`` returns ``metrics=None`` once the bridge goes
-        # quiet, and without it the offset would fall back to UTC and move the day
-        # boundary by 2-3 hours exactly when nobody is watching.
-        if payload_ts:
+        broker_time = getattr(metrics, "broker_time", None) if metrics else None
+        if broker_time:
+            derived = broker_utc_offset_seconds(broker_time, now)
             live_state.save_broker_offset(
                 connection.id, derived, settings.BROKER_OFFSET_CACHE_SECONDS
             )
             return derived
 
-        return cached if cached is not None else derived
+        if metrics is not None:
+            bars = list(getattr(metrics, "candles_m5", None) or []) or list(
+                getattr(metrics, "candles", None) or []
+            )
+            from_bars = broker_offset_from_bars(bars, now)
+            if from_bars is not None:
+                live_state.save_broker_offset(
+                    connection.id, from_bars, settings.BROKER_OFFSET_CACHE_SECONDS
+                )
+                return from_bars
+
+        return cached if cached is not None else 0
 
     def get_daily_anchor(
         self,

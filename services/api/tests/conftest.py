@@ -137,10 +137,13 @@ def heartbeat_payload(account_number: int, **overrides) -> dict:
             },
         ],
         "chart_symbol": "EURUSD",
-        # Must be "now": the API derives the broker clock offset from this value
-        # minus its own UTC clock, so a frozen past timestamp would be clamped to
-        # the +-14h limit and move the broker day boundary (spec 003, ticket 09-01).
+        # Both clocks must be "now": the API derives the broker clock offset
+        # from `broker_time` (TimeCurrent) minus its own UTC clock, so a frozen
+        # past timestamp would be clamped to the +-14h limit and move the broker
+        # day boundary. `timestamp` is the terminal's local clock and is
+        # deliberately kept separate (spec 003, ticket 09-01).
         "timestamp": int(time.time()),
+        "broker_time": int(time.time()),
     }
     payload.update(overrides)
     return payload

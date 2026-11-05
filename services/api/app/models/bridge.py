@@ -104,6 +104,12 @@ class HeartbeatPayload(BaseModel):
     bridge_token: Optional[str] = Field(None, description="Pipstride User Bridge Token")
     host_type: Optional[str] = Field("local", description="Terminal host environment: local or vps")
     timestamp: int = Field(..., description="Unix timestamp sent from terminal")
+    # TimeCurrent() — the *trade server* clock. ``timestamp`` is the terminal's
+    # local wall clock (TimeLocal()), which is the trader's PC, not the broker's
+    # day boundary. Optional so an older EA build keeps posting.
+    broker_time: Optional[int] = Field(
+        None, description="Broker server clock (TimeCurrent()) as a Unix timestamp"
+    )
 
 
 class HeartbeatResponse(BaseModel):

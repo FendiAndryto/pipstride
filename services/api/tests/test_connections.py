@@ -237,6 +237,69 @@ def test_daily_drawdown_uses_broker_day_anchor(client, account):
     assert data["daily_starting_equity"] == 12_000.0
 
 
+def test_daily_anchor_ignores_the_terminals_local_clock(client, account):
+    """``timestamp`` is TimeLocal(); it must not move the broker day boundary.
+
+    A UTC+7 trader runs the terminal against a UTC server: ``timestamp`` reads 7
+    hours ahead of UTC while both the broker clock and ``broker_time``
+    (``TimeCurrent()``) are UTC. Deriving the offset from the local clock put the
+    anchor at 17:00 UTC — midnight in Jakarta — instead of 00:00 UTC, which is
+    the production bug this test pins down (spec 003, ticket 09-01).
+    """
+    created = create_connection(client, account)
+    now = int(time.time())
+    utc_midnight = int(
+        datetime.now(timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            777001,
+            timestamp=now + 7 * 3600,  # TimeLocal() of a UTC+7 machine
+            broker_time=now,  # TimeCurrent() of a UTC server
+            closed_trades=[],
+        ),
+    )
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["daily_anchor_at"] == utc_midnight
+
+
+def test_daily_anchor_falls_back_to_candle_times_without_broker_time(client, account):
+    """An older EA build sends no ``broker_time``; the bars still carry server time.
+
+    ``MqlRates.time`` is stamped by the trade server, so the newest bar recovers
+    the same offset the explicit field would have given — the local PC clock in
+    ``timestamp`` is ignored either way.
+    """
+    created = create_connection(client, account)
+    now = int(time.time())
+    utc_midnight = int(
+        datetime.now(timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            777002,
+            timestamp=now + 7 * 3600,  # TimeLocal(), still wrong
+            broker_time=None,  # pre-fix EA build
+            candles_m5=[{"time": now - 60, "open": 1.08, "close": 1.09}],
+            closed_trades=[],
+        ),
+    )
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["daily_anchor_at"] == utc_midnight
+
+
 def test_floating_loss_at_rollover_is_not_a_daily_drawdown(client, account):
     """A floating loss must not fabricate a drawdown the moment the day flips.
 
