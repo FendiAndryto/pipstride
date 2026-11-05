@@ -27,6 +27,9 @@ Referensi: `docs/audits/pilar1-clean-architecture.md` §1.1, §3 (SRP-1…SRP-10
   → `ProfileTab` memakai `deriveDrawdownWatch`; `JournalTab` memakai `domain/analytics` / backend.
 - [x] `ProfileTab.jsx` dan `JournalTab.jsx` terpecah; tidak ada file komponen > ~300 baris.
   → ProfileTab 91 baris, JournalTab 256 baris; modul terbesar `useJournalData.js` 265 baris.
+  Sisa file >300 baris di `src/` **di luar lingkup fase ini** (tidak ada tiketnya):
+  `LoginPage` 769, `Mt5ConnectModal` 679, `HomeTab` 558, `MarketTab` 440, `PipstrideHeader` 348,
+  `JournalAnalytics` 304.
 - [x] `PositionsTable.jsx`, `MetricCard.jsx` dihapus (sudah tidak ada sebelum fase ini).
   → **Deviasi:** `BucketBars` **tetap** — masih dipakai hidup untuk `by_weekday`
   (`JournalAnalytics.jsx:289`), jadi premis "dead" di audit tidak terbukti.
@@ -46,3 +49,9 @@ Referensi: `docs/audits/pilar1-clean-architecture.md` §1.1, §3 (SRP-1…SRP-10
 - Migrasi **inkremental**, bukan big-bang (ADR 0009 §7).
 - Jangan bikin `packages/ui`/`packages/i18n` (rule-of-three).
 - Jangan sentuh backend di fase ini.
+
+## Status fase
+`done` — kelima tiket selesai dan gate ditutup (2026-11-05). Sisa file besar di `src/`
+(`LoginPage`, `Mt5ConnectModal`, `HomeTab`, `MarketTab`, `PipstrideHeader`, `JournalAnalytics`)
+belum punya tiket; kandidat untuk fase refactor lanjutan, bukan utang gate fase 006.
+`services/api.js` 249 baris juga diterima sebagai deviasi terdokumentasi (tiket 01).
