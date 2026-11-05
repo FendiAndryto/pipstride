@@ -87,13 +87,15 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **02-repositories-and-route-thinning.md** (`done`): Pemisahan repository data access dan perampingan route FastAPI.
 - [x] **03-service-decoupling-and-transaction-boundary.md** (`done`): Pemisahan domain service dan penegasan boundary transaksi database.
 
-### Fase 006: Web Feature Split (Dalam Pengerjaan)
-> **Catatan Implementasi (2026-11-05):** tiket 01–02 selesai; detail di `tickets/006-web-feature-split/`.
+### Fase 006: Web Feature Split (Selesai)
+> **Catatan Implementasi (2026-11-05):** kelima tiket selesai; gate fase ditutup. Detail per tiket di
+> `tickets/006-web-feature-split/`. Dua deviasi didokumentasikan: `api.js` 249 baris (bukan <150) dan
+> `BucketBars` dipertahankan karena masih dipakai untuk `by_weekday`.
 - [x] **01-split-api-client.md** (`done`): Pecah god-client `api.js` menjadi `lib/http` (transport + AbortController timeout), `lib/storage`, `lib/download`; `api.js` tipis.
 - [x] **02-frontend-domain-module.md** (`done`): `domain/{analytics,validation,pnl,format}.js` murni; analitik MONTH 1:1 dari backend (fixture parity PASS); validasi & PnL backend-first satu salinan.
-- [ ] **03-split-profile-tab.md** (`todo`): Refactor dan modularisasi komponen `ProfileTab.jsx`.
-- [ ] **04-split-journal-tab.md** (`todo`): Refactor dan modularisasi komponen `JournalTab.jsx`.
-- [ ] **05-remove-dead-code-and-guard-dev-bypass.md** (`todo`): Pembersihan dead code & proteksi bypass mode autentikasi dev.
+- [x] **03-split-profile-tab.md** (`done`): `ProfileTab` 803 → 91 baris (`features/profile/*`, 5 section) + `features/connections/useConnections` dipakai dua konsumen; `window.confirm` → `ConfirmInline`; rule depcruise `no-feature-to-feature` diperbaiki.
+- [x] **04-split-journal-tab.md** (`done`): `JournalTab` 903 → 256 baris (`features/journal/*`, 5 modul + `lib/csv`); 5 effect fetch → satu hook polling; filter/search state pindah ke hook.
+- [x] **05-remove-dead-code-and-guard-dev-bypass.md** (`done`): Dev bypass + kredensial demo dikompilasi keluar dari produksi (diverifikasi absen di `dist/`); guard zero-state data pasar.
 
 ### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
 - [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): RBAC role DB (`admin`/`support`) dan endpoint query read-only.

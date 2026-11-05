@@ -19,15 +19,25 @@ Referensi: `docs/audits/pilar1-clean-architecture.md` §1.1, §3 (SRP-1…SRP-10
 5. `05-remove-dead-code-and-guard-dev-bypass.md`
 
 ## Gate (checklist audit keluar)
-- [ ] `apps/web/src/services/api.js` (421 baris) tidak ada lagi sebagai god-object; transport di `lib/http`.
-- [ ] `domain/` TS berisi profit-factor/win-rate/drawdown + validasi password/email — **satu** salinan.
-- [ ] Tidak ada komponen yang menghitung ulang PnL/drawdown dengan rumus berbeda (SoC-7).
-- [ ] `ProfileTab.jsx` (855) dan `JournalTab.jsx` (814) terpecah; tidak ada file komponen > ~300 baris.
-- [ ] `PositionsTable.jsx`, `MetricCard.jsx`, `BucketBars` (dead) dihapus.
-- [ ] Dev auth bypass di `LoginPage.jsx:156-161` dibungkus `import.meta.env.DEV`.
-- [ ] Data pasar sintetis di `MarketTab.jsx:123-148` **tidak** dirender sebagai angka nyata (SoC-5).
-- [ ] `npm --prefix apps/web run lint && npm --prefix apps/web run build` exit 0.
-- [ ] `node apps/web/scripts/check-i18n.cjs` → `i18n OK — 460 keys per language`.
+- [x] `apps/web/src/services/api.js` tidak ada lagi sebagai god-object; transport di `lib/http`.
+  → `api.js` kini 249 baris (30 endpoint + kontrak 409 per-endpoint); lihat catatan tiket 01.
+- [x] `domain/` berisi profit-factor/win-rate/drawdown + validasi password/email — **satu** salinan.
+  → `domain/{analytics,validation,pnl,format}.js`; paritas diuji terhadap `compute_stats` Python.
+- [x] Tidak ada komponen yang menghitung ulang PnL/drawdown dengan rumus berbeda (SoC-7).
+  → `ProfileTab` memakai `deriveDrawdownWatch`; `JournalTab` memakai `domain/analytics` / backend.
+- [x] `ProfileTab.jsx` dan `JournalTab.jsx` terpecah; tidak ada file komponen > ~300 baris.
+  → ProfileTab 91 baris, JournalTab 256 baris; modul terbesar `useJournalData.js` 265 baris.
+- [x] `PositionsTable.jsx`, `MetricCard.jsx` dihapus (sudah tidak ada sebelum fase ini).
+  → **Deviasi:** `BucketBars` **tetap** — masih dipakai hidup untuk `by_weekday`
+  (`JournalAnalytics.jsx:289`), jadi premis "dead" di audit tidak terbukti.
+- [x] Dev auth bypass di `LoginPage.jsx` dibungkus `import.meta.env.DEV`.
+  → `dev-demo-token-offline` diverifikasi **absen** dari `dist/`.
+- [x] Data pasar sintetis di `MarketTab.jsx` **tidak** dirender sebagai angka nyata (SoC-5).
+  → guard zero-state; label data demo tetap eksplisit.
+- [x] `npm --prefix apps/web run lint && npm --prefix apps/web run build` exit 0.
+  → lint **0 warning**, `lint:arch` 0 pelanggaran.
+- [x] `node apps/web/scripts/check-i18n.cjs` → `i18n OK — 457 keys per language`.
+  → 457, bukan 460: baseline 455 + 2 key baru (`common_confirm`, `common_cancel`).
 
 ## Dampak
 - Membuka **fase 007** (frontend admin memakai `lib/http` + `domain` yang sama, tidak menduplikasi).

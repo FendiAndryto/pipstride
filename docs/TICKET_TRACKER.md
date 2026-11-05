@@ -31,11 +31,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 
 ### Ringkasan Status
 - **Total Tiket:** 25 tiket
-- **Selesai (`done`):** 15 tiket (Fase 001, 002, 003, 004, 005)
-- **Belum Diimplementasikan (`todo`):** 10 tiket (Fase 006, 007)
+- **Selesai (`done`):** 20 tiket (Fase 001, 002, 003, 004, 005, 006)
+- **Belum Diimplementasikan (`todo`):** 5 tiket (Fase 007)
 
 ```
-[==============================>----------------------------] 60% Selesai
+[============================================>--------------] 80% Selesai
 ```
 
 ---
@@ -93,18 +93,29 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **02-repositories-and-route-thinning.md** (`done`): Implementasi repository pattern dan perampingan router FastAPI.
 - [x] **03-service-decoupling-and-transaction-boundary.md** (`done`): Pemisahan service dependencies dan batas transaksi database eksplisit.
 
-#### Fase 006: Web Feature Split (Dalam Pengerjaan)
+#### Fase 006: Web Feature Split (SELESAI)
 > **Catatan Implementasi (2026-11-05):**
 > - Tiket 01 & 02 selesai: `lib/{http,storage,download}.js` + `api.js` tipis (249 baris), dan
 >   `domain/{analytics,validation,pnl,format}.js` murni. Analitik MONTH di-port 1:1 dari
 >   `app/domain/metrics.py` — fixture Python-vs-JS identik (totals, by_symbol, by_direction,
 >   by_weekday, by_hour); profit_factor tanpa-loss kini `null` ('∞'), bukan `0`.
 > - 3 warning oxlint lawas (HomeTab/JournalTab) dibersihkan; `lint:arch` tetap 0 pelanggaran.
+> - Tiket 03: `ProfileTab` 803 → 91 baris (`features/profile/*` 5 section +
+>   `features/connections/useConnections.js` dipakai dua konsumen). `window.confirm` dihapus →
+>   `components/ConfirmInline.jsx`. Rule `no-feature-to-feature` di depcruise diperbaiki (lookahead
+>   `(?!\1$)` tak didukung → semua import intra-feature ikut merah) dan diuji negatif.
+> - Tiket 04: `JournalTab` 903 → 256 baris (`features/journal/*` 6 modul + `lib/csv.js`); 5 effect
+>   fetch digabung jadi satu hook polling; filter/search state pindah ke hook; `monthStats` dihapus.
+> - Tiket 05: bypass auth dev + kredensial demo dikompilasi keluar dari produksi (diverifikasi
+>   `dev-demo-token-offline` absen di `dist/`); data pasar sintetis diberi guard zero-state.
+> - **Deviasi:** `api.js` 249 baris (target lunak <150; 30 endpoint + kontrak 409 per-endpoint) dan
+>   `BucketBars` **dipertahankan** karena masih dipakai untuk `by_weekday` — premis "dead" di audit
+>   tidak terbukti. `PreferencesSection` tidak pernah ada di `ProfileTab` asal, jadi tidak dibuat.
 - [x] **01-split-api-client.md** (`done`): Pemecahan file monolith `api.js` menjadi `lib/http` (transport + timeout AbortController), `lib/storage`, `lib/download`; api.js tipis 249 baris.
 - [x] **02-frontend-domain-module.md** (`done`): `domain/` frontend murni — port rumus backend 1:1 (terverifikasi fixture), validasi password/email satu salinan, PnL/drawdown backend-first, formatter tunggal.
-- [ ] **03-split-profile-tab.md** (`todo`): Modularisasi komponen raksasa `ProfileTab.jsx`.
-- [ ] **04-split-journal-tab.md** (`todo`): Modularisasi komponen `JournalTab.jsx`.
-- [ ] **05-remove-dead-code-and-guard-dev-bypass.md** (`todo`): Pembersihan dead code & proteksi bypass token dev.
+- [x] **03-split-profile-tab.md** (`done`): Modularisasi `ProfileTab.jsx` → `features/profile/*` + hook koneksi bersama; konfirmasi destruktif non-blocking.
+- [x] **04-split-journal-tab.md** (`done`): Modularisasi `JournalTab.jsx` → `features/journal/*` + `lib/csv`; polling tunggal di `useJournalData`.
+- [x] **05-remove-dead-code-and-guard-dev-bypass.md** (`done`): Bypass token dev dikompilasi keluar dari build produksi; guard zero-state data pasar.
 
 #### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
 - [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): Validasi role admin via database & endpoint analitik read-only.
