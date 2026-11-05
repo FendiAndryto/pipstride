@@ -244,6 +244,15 @@ dengan semantik yang diperbaiki.
 - **Egress:** candle naik dari 2×35 ke 2×35 + 2×24 bar ≈ +4,5 KB per heartbeat.
   Diterima (masih di bawah 10 KB/tick); opsi lanjutan bila perlu: kirim HTF hanya
   saat rebuild 30 detik dan merge di `live_state`.
+- **Kontrak urutan (bug pasca-deploy):** `BuildCandlesJson` mengirim candle
+  **oldest-first** (loop `copied-1 → 0`), dan API meneruskannya apa adanya. Versi
+  pertama Market tab mengasumsikan newest-first: ia mengambil `slice(0, bars)`
+  (bar **tertua**) lalu membandingkan `last.open` dengan `first.close`, sehingga
+  XAUUSD yang naik terbaca "BEARISH −2,13%" di H1 dan "−6,23%" di H4. Sekarang
+  urutan dinormalisasi di `src/domain/market.js` (`normalizeCandles`), window
+  diambil dari ujung terbaru (`slice(-bars)`), dan struktur dibaca dari high/low
+  sepertiga terakhir vs sepertiga sebelumnya. Konsumen baru **wajib** memakai
+  helper ini, bukan mengasumsikan urutan dari EA.
 
 ### D9 — `broker_time` menggantikan `timestamp` sebagai sumber offset
 
