@@ -2,6 +2,8 @@
 // Pure function: given trades and a locale it returns the same bucket shape the
 // backend's `by_weekday` uses, so JournalAnalytics renders either source.
 
+import { winRate, profitFactor } from '../../domain/analytics';
+
 const DAY_SECONDS = 86400;
 
 /**
@@ -69,9 +71,10 @@ export function buildDayBuckets(trades, { period, filter, selectedSymbol, monthT
       wins: bucket.wins,
       losses: bucket.losses,
       net_profit: Math.round(bucket.net_profit * 100) / 100,
-      win_rate: bucket.trades > 0 ? (bucket.wins / bucket.trades) * 100 : 0,
-      profit_factor: bucket.gross_loss > 0
-        ? bucket.gross_profit / bucket.gross_loss
-        : (bucket.gross_profit > 0 ? null : 0)
+      // Shared domain formulas (ADR 0009): same rounding and null semantics as
+      // the backend's `_bucket`, so a day bucket and a `by_weekday` bucket of
+      // the same trades are indistinguishable.
+      win_rate: winRate(bucket.wins, bucket.trades),
+      profit_factor: profitFactor(bucket.gross_profit, -bucket.gross_loss)
     }));
 }

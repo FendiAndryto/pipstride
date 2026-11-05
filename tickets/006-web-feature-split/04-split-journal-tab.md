@@ -53,6 +53,13 @@ done
   dari `historyData`/`stats`/`error`/`canFetch`, sehingga tidak ada `setState` sinkron di effect.
 - **Deviasi tiket:** `BucketBars` **tidak** dihapus — masih dipakai hidup untuk `by_weekday`
   (`components/JournalAnalytics.jsx:289`), jadi premis "dead code" di audit salah.
+- **Koreksi (audit 2026-11-05, pasca-gate):** `dayBuckets` sempat menghitung ulang
+  `win_rate`/`profit_factor` sendiri — melanggar gate fase 006 ("tidak ada rumus berbeda").
+  Divergensi terbukti saat dieksekusi: PF `2.857142857142857` vs `2.86`, WR `66.666…` vs `66.67`,
+  dan bucket breakeven-only menghasilkan PF `0` (dirender `"0.00"`) sementara backend `None` (`"—"`).
+  Kini memakai `domain/analytics.{winRate,profitFactor}`; paritas diuji 4 kasus
+  (all-wins, mixed, breakeven, all-losses) → `win_rate`/`profit_factor`/`net_profit` **identik**
+  dengan `computeTotals` untuk trade yang sama.
 - Regresi yang sempat muncul & diperbaiki: `monthLocale = monthLocale` (self-reference dari
   replace global) dan hilangnya `setSelectedSymbol('ALL')` saat ganti akun.
 - String hard-code: tidak ada yang baru; semua lewat `t()`. i18n tetap 457 key.
