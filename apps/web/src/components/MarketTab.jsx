@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, BarChart2, Compass } from 'lucide-react';
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import { STRUCTURE, describeWindow } from '../domain/market';
 
 const getSymbolIcon = (sym) => {
   const s = sym.toUpperCase();
@@ -45,6 +46,12 @@ const TIMEFRAMES = [
   { id: 'H1', field: 'candles_h1', bars: 24 },
   { id: 'H4', field: 'candles_h4', bars: 24 }
 ];
+
+const STRUCTURE_KEYS = {
+  [STRUCTURE.HIGHER_HIGHS]: 'market_struct_higher_highs',
+  [STRUCTURE.LOWER_LOWS]: 'market_struct_lower_lows',
+  [STRUCTURE.CONSOLIDATION]: 'market_struct_consolidation'
+};
 
 export default function MarketTab({ bridgeStatus, hasConnection = false }) {
   const { t } = useLanguage();
@@ -94,113 +101,35 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
     return map;
   }, [bridgeStatus, selectedSymbol]);
 
-  // Calculate dynamic timeframe metrics from real candles (M5, M15, H1, H4)
+  // Market-structure read over the newest `bars` candles (M5, M15, H1, H4).
+  // The domain helper normalises the wire order — the EA sends oldest-first,
+  // and reading that as newest-first was what flipped the bias.
   const tfMetrics = useMemo(() => {
     const metrics = bridgeStatus?.metrics || {};
     const chartSym = (metrics.chart_symbol || '').trim().toUpperCase().replace(/M$/, '');
     const isChartSym = Boolean(chartSym && (selectedSymbol || '').toUpperCase().replace(/M$/, '') === chartSym);
 
     const spec = TIMEFRAMES.find((tf) => tf.id === activeTf) || TIMEFRAMES[1];
-    const raw = metrics[spec.field];
-    const currentCandles = isChartSym && Array.isArray(raw) ? raw : [];
+    const currentCandles = isChartSym && Array.isArray(metrics[spec.field]) ? metrics[spec.field] : [];
+    const read = describeWindow(currentCandles, spec.bars, activeQuote.bid);
 
-    if (currentCandles.length === 0) {
-      return {
-        tf: activeTf,
-        hasData: false,
-        high: null,
-        low: null,
-        trend: null,
-        trendLabel: null,
-        changePct: null,
-        structureLabel: null,
-        pricePositionPct: 50,
-        rangeSpan: null,
-        avgRange: null
-      };
-    }
-
-    const sliceCount = spec.bars;
-    const activeSubset = currentCandles.slice(0, Math.min(currentCandles.length, sliceCount));
-
-    const highs = activeSubset.map((c) => Number(c.high) || 0).filter((h) => h > 0);
-    const lows = activeSubset.map((c) => Number(c.low) || 0).filter((l) => l > 0);
-    const closes = activeSubset.map((c) => Number(c.close) || 0);
-
-    if (highs.length === 0 || lows.length === 0) {
-      return {
-        tf: activeTf,
-        hasData: false,
-        high: null,
-        low: null,
-        trend: null,
-        trendLabel: null,
-        changePct: null,
-        structureLabel: null,
-        pricePositionPct: 50,
-        rangeSpan: null,
-        avgRange: null
-      };
-    }
-
-    const high = Math.max(...highs);
-    const low = Math.min(...lows);
-    const open = Number(activeSubset[activeSubset.length - 1]?.open) || 0;
-    const close = Number(activeSubset[0]?.close) || 0;
-
-    // Without a usable open/close pair there is no honest change to report.
-    if (open <= 0 || close <= 0) {
-      return {
-        tf: activeTf,
-        hasData: false,
-        high: null,
-        low: null,
-        trend: null,
-        trendLabel: null,
-        changePct: null,
-        structureLabel: null,
-        pricePositionPct: 50,
-        rangeSpan: null,
-        avgRange: null
-      };
-    }
-
-    const changePct = ((close - open) / open) * 100;
-    const trend = changePct >= 0 ? 'BULLISH' : 'BEARISH';
-    const trendLabel = trend === 'BULLISH' ? t('market_trend_bullish') : t('market_trend_bearish');
-
-    const ranges = activeSubset.map((c) => Math.abs((Number(c.high) || 0) - (Number(c.low) || 0)));
-    const avgRangePts = (ranges.reduce((a, b) => a + b, 0) / Math.max(1, ranges.length)).toFixed(activeQuote.digits);
-
-    let structureLabel = trend === 'BULLISH' ? t('market_struct_bullish_expansion') : t('market_struct_bearish_distribution');
-    if (closes.length >= 6) {
-      const recentAvg = (closes[0] + closes[1] + closes[2]) / 3;
-      const olderAvg = (closes[3] + closes[4] + closes[5]) / 3;
-      if (recentAvg > olderAvg) {
-        structureLabel = t('market_struct_higher_highs');
-      } else if (recentAvg < olderAvg) {
-        structureLabel = t('market_struct_lower_lows');
-      } else {
-        structureLabel = t('market_struct_consolidation');
-      }
-    }
-
-    const pricePositionPct = high > low
-      ? Math.max(2, Math.min(98, ((activeQuote.bid - low) / (high - low)) * 100))
-      : 50;
+    const structureKey = STRUCTURE_KEYS[read.structure]
+      || (read.trend === 'BULLISH' ? 'market_struct_bullish_expansion' : 'market_struct_bearish_distribution');
 
     return {
       tf: activeTf,
-      hasData: true,
-      high,
-      low,
-      trend,
-      trendLabel,
-      changePct,
-      structureLabel,
-      pricePositionPct,
-      rangeSpan: (high - low).toFixed(activeQuote.digits),
-      avgRange: avgRangePts
+      hasData: read.hasData,
+      high: read.high,
+      low: read.low,
+      trend: read.trend,
+      trendLabel: read.trend
+        ? t(read.trend === 'BULLISH' ? 'market_trend_bullish' : 'market_trend_bearish')
+        : null,
+      changePct: read.changePct,
+      structureLabel: read.hasData ? t(structureKey) : null,
+      pricePositionPct: read.pricePositionPct,
+      rangeSpan: read.rangeSpan === null ? null : read.rangeSpan.toFixed(activeQuote.digits),
+      avgRange: read.avgRange === null ? null : read.avgRange.toFixed(activeQuote.digits)
     };
   }, [activeTf, selectedSymbol, activeQuote, bridgeStatus, t]);
 
