@@ -93,9 +93,15 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **02-repositories-and-route-thinning.md** (`done`): Implementasi repository pattern dan perampingan router FastAPI.
 - [x] **03-service-decoupling-and-transaction-boundary.md** (`done`): Pemisahan service dependencies dan batas transaksi database eksplisit.
 
-#### Fase 006: Web Feature Split (Belum Diimplementasikan)
-- [ ] **01-split-api-client.md** (`todo`): Pemecahan file monolith `api.js` menjadi modul-modul klien per fitur.
-- [ ] **02-frontend-domain-module.md** (`todo`): Ekstraksi domain model & fungsi kalkulasi di sisi web.
+#### Fase 006: Web Feature Split (Dalam Pengerjaan)
+> **Catatan Implementasi (2026-11-05):**
+> - Tiket 01 & 02 selesai: `lib/{http,storage,download}.js` + `api.js` tipis (249 baris), dan
+>   `domain/{analytics,validation,pnl,format}.js` murni. Analitik MONTH di-port 1:1 dari
+>   `app/domain/metrics.py` — fixture Python-vs-JS identik (totals, by_symbol, by_direction,
+>   by_weekday, by_hour); profit_factor tanpa-loss kini `null` ('∞'), bukan `0`.
+> - 3 warning oxlint lawas (HomeTab/JournalTab) dibersihkan; `lint:arch` tetap 0 pelanggaran.
+- [x] **01-split-api-client.md** (`done`): Pemecahan file monolith `api.js` menjadi `lib/http` (transport + timeout AbortController), `lib/storage`, `lib/download`; api.js tipis 249 baris.
+- [x] **02-frontend-domain-module.md** (`done`): `domain/` frontend murni — port rumus backend 1:1 (terverifikasi fixture), validasi password/email satu salinan, PnL/drawdown backend-first, formatter tunggal.
 - [ ] **03-split-profile-tab.md** (`todo`): Modularisasi komponen raksasa `ProfileTab.jsx`.
 - [ ] **04-split-journal-tab.md** (`todo`): Modularisasi komponen `JournalTab.jsx`.
 - [ ] **05-remove-dead-code-and-guard-dev-bypass.md** (`todo`): Pembersihan dead code & proteksi bypass token dev.

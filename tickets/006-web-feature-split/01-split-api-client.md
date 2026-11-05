@@ -37,4 +37,11 @@ Expected: exit 0, 0 oxlint warning; `Select-String -Path apps/web/src/services/a
 - Fase 007 (admin memakai `lib/http` yang sama)
 
 ## Status
-todo
+done
+
+**Catatan implementasi (2026-11-05):**
+- `lib/http.js` — transport murni: `configureHttp()` (auth-header factory + hook 401), `AbortController` + timeout default 30 s; tanpa localStorage/import.meta.env.
+- `lib/storage.js` — token rememberMe tanpa sessionStorage + active connection id.
+- `lib/download.js` — `downloadPreset`.
+- `services/api.js` jadi lapisan endpoint tipis: **249 baris** (target < ~150 tidak tercapai persis; 30 endpoint + kontrak 409 per endpoint irreducible — god-object tetap pecah: transport/storage/download/notify semua keluar). Semua nama export dan pesan error tidak berubah; pemanggil tidak perlu diubah.
+- 3 warning oxlint lawas (HomeTab reassign/purity, JournalTab purity) dibersihkan agar "0 warning" tercapai.

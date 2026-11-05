@@ -40,4 +40,11 @@ Kontrak silang (ADR 0009 Consequences): buat fixture trade yang sama, bandingkan
 - `03-split-profile-tab.md`, `04-split-journal-tab.md`
 
 ## Status
-todo
+done
+
+**Catatan implementasi (2026-11-05):**
+- `domain/analytics.js` — port 1:1 dari `app/domain/metrics.py` untuk window MONTH (backend tetap melayani 1M/3M/1Y/ALL). Perbedaan lama dihapus: profit_factor tanpa-loss kini `null` (bukan 0), streak reset saat breakeven, rounding per backend, avg_loss negatif, simbol bucket di-upper-kan.
+- Kontrak silang: fixture 5 trade identik dijalankan lewat `compute_stats` (Python, .venv) vs `computeJournalStats` (node) → totals + 4 bucket **identik** (drove out off-by-one weekday: JS `getUTCDay()` Sun-first vs Python `.weekday()` Mon-first). Cross-check HTTP runtime (server hidup) tetap defer — Docker tidak berjalan.
+- `domain/validation.js` — mirror `user_service.validate_password_complexity` (min 8 + huruf + angka) & EMAIL_PATTERN; 3 duplikat diganti (LoginPage ×2, ProfileTab, ResetPasswordPage).
+- `domain/pnl.js` — `summarizeAccountPnl`/`dailyDrawdownFallback`/`deriveDrawdownWatch` backend-first; `domain/format.js` — satu `formatRatio` '∞' + money formatter.
+- `dayBuckets` & CSV export tetap di JournalTab (lintasannya ke tiket 04).

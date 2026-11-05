@@ -87,9 +87,10 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **02-repositories-and-route-thinning.md** (`done`): Pemisahan repository data access dan perampingan route FastAPI.
 - [x] **03-service-decoupling-and-transaction-boundary.md** (`done`): Pemisahan domain service dan penegasan boundary transaksi database.
 
-### Fase 006: Web Feature Split (Belum Diimplementasikan)
-- [ ] **01-split-api-client.md** (`todo`): Pecah god-client `api.js` menjadi per-domain HTTP client modular.
-- [ ] **02-frontend-domain-module.md** (`todo`): Ekstraksi kalkulasi metrik & tipe domain di frontend.
+### Fase 006: Web Feature Split (Dalam Pengerjaan)
+> **Catatan Implementasi (2026-11-05):** tiket 01–02 selesai; detail di `tickets/006-web-feature-split/`.
+- [x] **01-split-api-client.md** (`done`): Pecah god-client `api.js` menjadi `lib/http` (transport + AbortController timeout), `lib/storage`, `lib/download`; `api.js` tipis.
+- [x] **02-frontend-domain-module.md** (`done`): `domain/{analytics,validation,pnl,format}.js` murni; analitik MONTH 1:1 dari backend (fixture parity PASS); validasi & PnL backend-first satu salinan.
 - [ ] **03-split-profile-tab.md** (`todo`): Refactor dan modularisasi komponen `ProfileTab.jsx`.
 - [ ] **04-split-journal-tab.md** (`todo`): Refactor dan modularisasi komponen `JournalTab.jsx`.
 - [ ] **05-remove-dead-code-and-guard-dev-bypass.md** (`todo`): Pembersihan dead code & proteksi bypass mode autentikasi dev.
