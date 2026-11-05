@@ -48,11 +48,14 @@ pipstride/
 │   │   │   └── check-i18n.cjs  # EN/ID key-parity check (not wired into package.json)
 │   │   └── src/
 │   │       ├── assets/
-│   │       ├── components/     # one file per view (Dashboard, HomeTab, JournalTab, ProfileTab, …)
+│   │       ├── components/     # shell/views (Dashboard, HomeTab, MarketTab, LoginPage, …)
 │   │       ├── constants/      # nav.js, translations.js (EN/ID dictionary)
 │   │       ├── context/        # LanguageContext
+│   │       ├── domain/         # pure: analytics, validation, pnl, format (backend mirror)
+│   │       ├── features/       # profile/, journal/, connections/ — screen-level modules
 │   │       ├── hooks/          # useIdleLogout.js
-│   │       └── services/       # api.js — single HTTP client for the whole app
+│   │       ├── lib/            # http, storage, download, csv (IO only)
+│   │       └── services/       # api.js — thin HTTP client over lib/http
 │   └── marketing/              # Astro static site (landing, features, pricing, about)
 │       ├── src/components/     # Header, Footer, sections/*, showcase/*
 │       ├── src/layouts/        # BaseLayout.astro
@@ -98,20 +101,19 @@ All commands below were executed on 2026-11-05 and exited **0**.
 ```bash
 npm --prefix apps/web run lint
 ```
-`oxlint` — exit 0. Currently reports **3 warnings** (not errors) that pre-date onboarding:
-`HomeTab.jsx:379` reassign-after-render, `HomeTab.jsx:382` + `JournalTab.jsx:476` impure call during render.
+`oxlint` — exit 0 with **0 warnings** (the 3 pre-onboarding warnings were cleared in Fase 006).
 
 ### 2. Web build
 ```bash
 npm --prefix apps/web run build
 ```
-1952 modules → `apps/web/dist` in ~1.7s.
+1976 modules → `apps/web/dist` in ~1.4s.
 
 ### 3. Web i18n parity
 ```bash
 node apps/web/scripts/check-i18n.cjs
 ```
-`i18n OK — 455 keys per language, 410 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
+`i18n OK — 457 keys per language, 411 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
 
 ### 4. Marketing build
 ```bash
@@ -164,12 +166,12 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 3. **Layered architecture (ADR 0009)**.
    - Backend: `app/domain/` (pure, framework-free) + `app/infrastructure/` + thin `api/v1`; `main.py` is the only module that may know everything.
    - **Fase 005 landed the backend split.** `domain/` and `infrastructure/` exist and are enforced by `import-linter`; `interfaces/` is still the legacy `api/ models/ core/deps.py` names — do not rename them without a ticket.
-   - Frontend target (`app/ pages/ features/ domain/ lib/ components/ui/ styles/`) does **not** exist yet; the web app is still a flat `components/`, refactored in Fase 006.
+   - **Fase 006 landed the frontend split.** `src/lib/` (transport, storage, download, csv), `src/domain/` (analytics, validation, pnl, format) and `src/features/{profile,journal,connections}/` exist. `components/` keeps the shell/views that have no ticket yet (`LoginPage`, `Mt5ConnectModal`, `HomeTab`, `MarketTab`, `PipstrideHeader`, `JournalAnalytics`). Do not create `pages/` or `components/ui/` without a ticket.
    - `apps/marketing` is explicitly exempt from the React-centric layout.
    - `apps/A` must not import `apps/B`; `packages/*` must not import `apps/*`; `mt5-ea/` imports nothing from the Python/JS code.
-   - Enforced by CI today? **Backend yes** (`import-linter`, 6 contracts). **Frontend: `dependency-cruiser` runs** for cross-app rules; the `pages/features/domain` rules stay dormant until Fase 006 creates those folders.
+   - Enforced by CI today? **Backend yes** (`import-linter`, 6 contracts). **Frontend yes** (`npm run lint:arch`): `no-cross-app-imports`, `no-feature-to-feature`, and the `domain/` + `lib/` leaf rules are all live.
 4. **Pricing lives in exactly one file** — `packages/pricing/catalog.json` (ADR 0007). Add or change a plan there, never in a page, component, or migration.
-5. **Frontend shape**: single-page dashboard driven by active-tab state (`PipstrideHeader` + `PipstrideBottomNav`), custom CSS classes and tokens rather than utility frameworks, one HTTP client (`src/services/api.js`) with `X-Connection-Id` selecting the active account.
+5. **Frontend shape**: single-page dashboard driven by active-tab state (`PipstrideHeader` + `PipstrideBottomNav`), custom CSS classes and tokens rather than utility frameworks, one HTTP client (`src/services/api.js`, transport in `src/lib/http.js`) with `X-Connection-Id` selecting the active account.
 6. **Code quality**: smallest diff possible, zero unnecessary abstractions. Verify with lint + build (web) or `pytest` (API) before committing.
 7. **Docs are bilingual-ish**: ADRs, specs, and tickets are written in Indonesian; code, comments, API docs, and README are English. Match the language of the file you are editing.
 
@@ -180,7 +182,7 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–005 done. 006, 007 still `todo`.**
+- Current state: **001–006 done. 007 still `todo`.**
 - Recommended order: `002 → 003 → 004 → 005 → 006 → 007`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 
