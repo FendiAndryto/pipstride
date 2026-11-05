@@ -98,6 +98,8 @@ class HeartbeatPayload(BaseModel):
     closed_trades: List[ClosedTradeItem] = Field(default_factory=list, max_length=2000, description="Recent closed trades from MT5 history")
     candles: List[Any] = Field(default_factory=list, max_length=500, description="Recent M15 candles for trend bias")
     candles_m5: List[Any] = Field(default_factory=list, max_length=500, description="Recent M5 candles for scalping trigger")
+    candles_h1: List[Any] = Field(default_factory=list, max_length=500, description="Recent H1 candles for market structure (spec 003)")
+    candles_h4: List[Any] = Field(default_factory=list, max_length=500, description="Recent H4 candles for market structure (spec 003)")
     chart_symbol: Optional[str] = Field(None, description="Current symbol on active MT5 chart")
     bridge_token: Optional[str] = Field(None, description="Pipstride User Bridge Token")
     host_type: Optional[str] = Field("local", description="Terminal host environment: local or vps")

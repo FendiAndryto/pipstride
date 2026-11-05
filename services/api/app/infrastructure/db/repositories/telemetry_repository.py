@@ -31,14 +31,54 @@ def latest_snapshot_at(db: Session, connection_id: str) -> Optional[datetime]:
     )
 
 
-def balance_at_or_before(db: Session, connection_id: str, moment: datetime) -> Optional[float]:
+def snapshot_at_or_before(
+    db: Session, connection_id: str, moment: datetime
+) -> Optional[TelemetrySnapshot]:
+    """Newest snapshot at or before ``moment``, with the fields an anchor needs.
+
+    The daily drawdown anchor is rolled forward from this row, so ``equity`` and
+    ``floating_pnl`` are required alongside ``balance`` — a balance-only lookup
+    cannot express a floating loss at rollover (spec 003, ticket 09-01).
+    """
     return db.scalar(
-        select(TelemetrySnapshot.balance)
+        select(TelemetrySnapshot)
         .where(
             TelemetrySnapshot.connection_id == connection_id,
             TelemetrySnapshot.captured_at <= moment,
         )
         .order_by(TelemetrySnapshot.captured_at.desc())
+        .limit(1)
+    )
+
+
+def equity_minimum_since(
+    db: Session, connection_id: str, moment: datetime
+) -> Optional[float]:
+    """Lowest equity snapshot recorded since ``moment`` (intraday trough)."""
+    return db.scalar(
+        select(func.min(TelemetrySnapshot.equity)).where(
+            TelemetrySnapshot.connection_id == connection_id,
+            TelemetrySnapshot.captured_at >= moment,
+        )
+    )
+
+
+def snapshot_at_or_after(
+    db: Session, connection_id: str, moment: datetime
+) -> Optional[TelemetrySnapshot]:
+    """First snapshot recorded at or after ``moment`` (session start).
+
+    Used when no snapshot covers the day boundary because the EA was not
+    running: the first observation of the day becomes the anchor instead of a
+    derived guess (spec 003, ticket 09-01).
+    """
+    return db.scalar(
+        select(TelemetrySnapshot)
+        .where(
+            TelemetrySnapshot.connection_id == connection_id,
+            TelemetrySnapshot.captured_at >= moment,
+        )
+        .order_by(TelemetrySnapshot.captured_at.asc())
         .limit(1)
     )
 

@@ -24,7 +24,8 @@ from app.models.bridge import (
 )
 from app.models.risk import RiskWatchdogStatusResponse
 from app.domain.errors import ConnectionBindingError
-from app.domain.policies import evaluate_daily_drawdown
+from app.domain.policies import evaluate_drawdown, evaluate_overall_drawdown
+from app.domain.time import to_unix
 from app.services.account_settings_service import account_settings_service
 from app.services.bridge_status_service import bridge_status_service
 from app.services.connection_service import connection_service
@@ -248,34 +249,72 @@ def get_risk_watchdog(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    status_response = bridge_status_service.get_status(db, connection)
-    daily_start_balance = 0.0
-    equity = None
-    if status_response.metrics and status_response.metrics.balance:
-        daily_start_balance = bridge_status_service.get_daily_starting_balance(
-            db, connection, status_response.metrics.balance
-        )
-        equity = status_response.metrics.equity
+    """Passive drawdown report: broker-day daily + peak-to-trough overall.
 
-    drawdown = evaluate_daily_drawdown(
-        daily_start_balance,
-        equity,
+    The route only assembles the response; the anchor reconstruction and the
+    policy live in the service and ``app.domain`` respectively (ADR 0009).
+    """
+    status_response = bridge_status_service.get_status(db, connection)
+    metrics = status_response.metrics
+    deposit = status_response.initial_deposit
+
+    anchor = bridge_status_service.get_daily_anchor(db, connection, metrics, deposit)
+    boundary = anchor["at"]
+    daily_trough = bridge_status_service.get_daily_trough(db, connection, boundary)
+
+    daily = evaluate_drawdown(
+        anchor["equity"],
+        metrics.equity if metrics else None,
+        daily_trough,
         settings.MAX_DAILY_DRAWDOWN_PERCENT,
     )
 
+    overall_source = bridge_status_service.get_overall_drawdown(
+        db,
+        connection,
+        metrics.equity if metrics else None,
+        deposit,
+    )
+    overall = evaluate_overall_drawdown(
+        overall_source["peak_equity"],
+        overall_source["current_equity"],
+        overall_source["trough_equity"],
+        settings.MAX_OVERALL_DRAWDOWN_PERCENT,
+    )
+
+    daily_realized = None
+    if anchor["balance"] is not None and metrics is not None:
+        daily_realized = round(float(metrics.balance) - float(anchor["balance"]), 2)
+
+    # Without a live equity and without any anchor equity there is no basis to
+    # measure from; the zeros below are placeholders, not a clean bill of health.
+    data_available = metrics is not None or anchor["equity"] is not None
+
     return RiskWatchdogStatusResponse(
-        is_alert_active=drawdown.is_alert_active,
+        is_data_available=data_available,
+        is_alert_active=daily.is_alert_active,
         alert_reason=(
-            f"Equity drawdown {drawdown.drawdown_pct:.2f}% melampaui batas "
-            f"{settings.MAX_DAILY_DRAWDOWN_PERCENT}%"
-            if drawdown.reason_code
+            f"Daily drawdown {daily.max_pct:.2f}% exceeded the "
+            f"{settings.MAX_DAILY_DRAWDOWN_PERCENT}% limit"
+            if daily.reason_code
             else None
         ),
-        alert_time=int(time.time()) if drawdown.is_alert_active else None,
-        daily_drawdown_percent=drawdown.drawdown_pct,
-        daily_starting_balance=round(daily_start_balance, 2) if daily_start_balance > 0 else None,
+        alert_time=int(time.time()) if daily.is_alert_active else None,
+        daily_drawdown_percent=daily.current_pct,
+        daily_max_drawdown_percent=daily.max_pct,
+        daily_realized_pnl=daily_realized,
+        daily_starting_balance=anchor["balance"],
+        daily_starting_equity=anchor["equity"],
+        daily_anchor_at=to_unix(boundary),
+        daily_anchor_source=anchor["source"],
         max_daily_drawdown_percent=settings.MAX_DAILY_DRAWDOWN_PERCENT,
-        margin_level=status_response.metrics.margin_level if status_response.metrics else 0.0,
+        overall_drawdown_percent=overall.current_pct,
+        max_drawdown_percent=overall.max_pct,
+        peak_equity=overall_source["peak_equity"],
+        peak_equity_at=overall_source["peak_equity_at"],
+        max_overall_drawdown_percent=settings.MAX_OVERALL_DRAWDOWN_PERCENT,
+        is_overall_alert_active=overall.is_alert_active,
+        margin_level=metrics.margin_level if metrics else 0.0,
         max_spread_points=settings.MAX_SPREAD_POINTS,
         default_risk_percent=settings.DEFAULT_RISK_PER_TRADE_PERCENT,
         max_risk_percent=settings.MAX_RISK_PER_TRADE_PERCENT,

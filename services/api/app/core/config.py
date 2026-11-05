@@ -84,9 +84,15 @@ class Settings(BaseSettings):
     DEFAULT_RISK_PER_TRADE_PERCENT: float = 1.0
     MAX_RISK_PER_TRADE_PERCENT: float = 10.0
     MAX_DAILY_DRAWDOWN_PERCENT: float = 3.0
+    # Peak-to-trough ceiling for the whole account history (spec 003, ticket 09-02).
+    MAX_OVERALL_DRAWDOWN_PERCENT: float = 10.0
     MAX_SPREAD_POINTS: int = 35
     MIN_LOT_SIZE: float = 0.01
     MAX_LOT_SIZE: float = 100.0
+
+    # The broker clock offset is derived from each heartbeat; caching it for an
+    # hour keeps a stale/misconfigured terminal from moving the day boundary.
+    BROKER_OFFSET_CACHE_SECONDS: int = 3600
 
     # Telegram Push Notifications
     TELEGRAM_BOT_TOKEN: str = ""

@@ -1,5 +1,12 @@
 """Connection lifecycle and MT5 telemetry ingest tests."""
 
+import time
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import select
+
+from app.db.base import SessionLocal
+from app.db.models import Mt5Connection, TelemetrySnapshot
 from tests.conftest import grant_connections, heartbeat_payload
 
 
@@ -172,34 +179,305 @@ def test_initial_deposit_override_wins_over_mt5(client, account):
 
 def test_risk_watchdog_is_passive(client, account):
     created = create_connection(client, account)
+    # First heartbeat of the day establishes the anchor (equity 10,450).
     send_heartbeat(client, created["token"], heartbeat_payload(666666))
+    # Equity then slips to 10,400: 50 / 10,450 = 0.48%, below the 3% ceiling.
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            666666,
+            balance=10_500.0,
+            equity=10_400.0,
+            floating_pnl=-100.0,
+            initial_deposit=10_000.0,
+            closed_trades=[],
+        ),
+    )
 
     res = client.get("/api/v1/bridge/risk", headers=account["headers"])
     assert res.status_code == 200
     data = res.json()
-    # Daily drawdown is computed against the daily starting balance (not initial deposit).
-    # Balance 10,500, Equity 10,450 -> 50 / 10,500 = 0.48% (below the 3.0% threshold).
     assert data["daily_drawdown_percent"] == 0.48
+    assert data["daily_max_drawdown_percent"] == 0.48
     assert data["is_alert_active"] is False
+    assert data["daily_anchor_source"] in {"session_start", "snapshot_exact", "snapshot_rollforward"}
+    assert data["daily_starting_equity"] == 10_450.0
 
 
-def test_daily_drawdown_calculated_from_daily_start_balance(client, account):
-    """Daily drawdown is measured from start-of-day balance, not initial deposit."""
+def test_daily_drawdown_uses_broker_day_anchor(client, account):
+    """Daily drawdown is measured from the broker-day anchor equity.
+
+    The account grew from a 10,000 deposit to a 12,000 balance. The day opens at
+    equity 12,000 and slips to 11,640 — exactly 3.0%, which must alert.
+    Measuring against the initial deposit (10,000) would wrongly report 0%.
+    """
     created = create_connection(client, account)
-    # Account grew from 10,000 initial deposit to 12,000 balance.
-    # Today's equity drops to 11,640 -> 360 / 12,000 = 3.0% daily drawdown.
-    # Against initial deposit (10,000) this would wrongly show 0%, but against
-    # daily balance (12,000) it correctly triggers the 3.0% watchdog alert.
-    payload = heartbeat_payload(
-        999999, balance=12_000.0, equity=11_640.0, initial_deposit=10_000.0, closed_trades=[]
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            999999, balance=12_000.0, equity=12_000.0, initial_deposit=10_000.0, closed_trades=[]
+        ),
     )
-    send_heartbeat(client, created["token"], payload)
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            999999, balance=12_000.0, equity=11_640.0, initial_deposit=10_000.0, closed_trades=[]
+        ),
+    )
 
     res = client.get("/api/v1/bridge/risk", headers=account["headers"])
     assert res.status_code == 200
     data = res.json()
     assert data["daily_drawdown_percent"] == 3.0
+    assert data["daily_max_drawdown_percent"] == 3.0
     assert data["is_alert_active"] is True
+    assert data["daily_starting_equity"] == 12_000.0
+
+
+def test_floating_loss_at_rollover_is_not_a_daily_drawdown(client, account):
+    """A floating loss must not fabricate a drawdown the moment the day flips.
+
+    The anchor carries the floating P&L of the reference snapshot, so
+    equity-under-balance is measured against equity-under-balance, not against a
+    balance baseline (spec 003, ticket 09-01 bug #1).
+    """
+    created = create_connection(client, account)
+    # Same snapshot shape twice: balance 10,000 with a -200 floating position.
+    payload = heartbeat_payload(
+        888001,
+        balance=10_000.0,
+        equity=9_800.0,
+        floating_pnl=-200.0,
+        initial_deposit=10_000.0,
+        closed_trades=[],
+    )
+    send_heartbeat(client, created["token"], payload)
+    # Second heartbeat reuses the same anchor; equity has not moved.
+    send_heartbeat(client, created["token"], payload)
+
+    res = client.get("/api/v1/bridge/risk", headers=account["headers"])
+    data = res.json()
+    assert data["daily_drawdown_percent"] == 0.0
+    assert data["daily_max_drawdown_percent"] == 0.0
+    assert data["is_alert_active"] is False
+
+
+def test_daily_max_drawdown_holds_an_intraday_trough(client, account):
+    """A dip that recovers still reports the worst reading of the day.
+
+    The trough comes from a stored snapshot, so the test writes one directly:
+    three heartbeats inside the same second would be collapsed by the 30-second
+    snapshot throttle (``SNAPSHOT_MIN_INTERVAL_SECONDS``) and never persist the
+    dip. That throttle is the documented resolution limit of this metric.
+    """
+    created = create_connection(client, account)
+
+    # Anchor at 10,000, backdated so the dip below can sit *after* it. The
+    # anchor is the first observation of the day, so an earlier dip would
+    # otherwise become the anchor itself.
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888002, balance=10_000.0, equity=10_000.0, initial_deposit=10_000.0, closed_trades=[]
+        ),
+    )
+
+    with SessionLocal() as db:
+        connection = db.scalar(
+            select(Mt5Connection).where(Mt5Connection.account_number == 888002)
+        )
+        anchor_snapshot = db.scalar(
+            select(TelemetrySnapshot)
+            .where(TelemetrySnapshot.connection_id == connection.id)
+            .order_by(TelemetrySnapshot.captured_at.desc())
+        )
+        anchor_snapshot.captured_at = datetime.now(timezone.utc) - timedelta(seconds=40)
+
+        # The 3.5% dip that lasted long enough to be snapshotted.
+        db.add(
+            TelemetrySnapshot(
+                connection_id=connection.id,
+                captured_at=datetime.now(timezone.utc) - timedelta(seconds=20),
+                balance=10_000.0,
+                equity=9_650.0,
+                margin=0.0,
+                free_margin=9_650.0,
+                margin_level=0.0,
+                floating_pnl=-350.0,
+                open_positions=1,
+            )
+        )
+        db.commit()
+
+    # Recovery to only 0.5% under the anchor.
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888002, balance=10_000.0, equity=9_950.0, initial_deposit=10_000.0, closed_trades=[]
+        ),
+    )
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["daily_starting_equity"] == 10_000.0
+    assert data["daily_drawdown_percent"] == 0.5
+    assert data["daily_max_drawdown_percent"] == 3.5
+    assert data["is_alert_active"] is True
+
+
+def test_stale_snapshot_is_rolled_forward_to_the_day_boundary(client, account):
+    """A snapshot from before the boundary must not leak older P&L into today.
+
+    Reproduces the EA-offline case: the reference snapshot predates the day
+    boundary, so the realized P&L between snapshot and midnight has to be added
+    back before it can serve as today's anchor.
+    """
+    created = create_connection(client, account)
+
+    # Two days of history: a +500 trade closed before the boundary, and a -100
+    # trade closed inside today's window.
+    now = int(time.time())
+    two_days_ago = now - 2 * 86400
+    yesterday = now - 86400
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888003,
+            balance=10_500.0,
+            equity=10_500.0,
+            initial_deposit=10_000.0,
+            closed_trades=[
+                {
+                    "ticket": 7101,
+                    "symbol": "EURUSD",
+                    "type": "BUY",
+                    "volume": 0.1,
+                    "open_price": 1.08,
+                    "close_price": 1.09,
+                    "profit": 500.0,
+                    "open_time": two_days_ago - 600,
+                    "close_time": two_days_ago,
+                }
+            ],
+        ),
+    )
+
+    # Age the stored snapshot so the anchor has to be reconstructed.
+    with SessionLocal() as db:
+        for row in db.scalars(select(TelemetrySnapshot)):
+            row.captured_at = datetime.fromtimestamp(two_days_ago, tz=timezone.utc)
+        db.commit()
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888003,
+            balance=10_400.0,
+            equity=10_400.0,
+            initial_deposit=10_000.0,
+            closed_trades=[
+                {
+                    "ticket": 7102,
+                    "symbol": "EURUSD",
+                    "type": "BUY",
+                    "volume": 0.1,
+                    "open_price": 1.08,
+                    "close_price": 1.07,
+                    "profit": -100.0,
+                    "open_time": yesterday - 600,
+                    "close_time": now - 60,
+                }
+            ],
+        ),
+    )
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["daily_anchor_source"] == "snapshot_rollforward"
+    # The +500 belongs to a previous day, so it is part of the anchor (10,500),
+    # and only the -100 of today counts as the day's realized result.
+    assert data["daily_starting_balance"] == 10_500.0
+    assert data["daily_realized_pnl"] == -100.0
+
+
+def test_overall_drawdown_is_reported_as_peak_to_trough(client, account):
+    """Overall drawdown reconstructs the running equity curve."""
+    created = create_connection(client, account)
+    now = int(time.time())
+
+    # Deposit 10,000 -> +2,000 (peak 12,000) -> -1,200 (trough 10,800).
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888004,
+            balance=10_800.0,
+            equity=10_800.0,
+            initial_deposit=10_000.0,
+            closed_trades=[
+                {
+                    "ticket": 7201,
+                    "symbol": "EURUSD",
+                    "type": "BUY",
+                    "volume": 0.1,
+                    "open_price": 1.08,
+                    "close_price": 1.10,
+                    "profit": 2000.0,
+                    "open_time": now - 7200,
+                    "close_time": now - 3600,
+                },
+                {
+                    "ticket": 7202,
+                    "symbol": "XAUUSD",
+                    "type": "SELL",
+                    "volume": 0.01,
+                    "open_price": 2400.0,
+                    "close_price": 2412.0,
+                    "profit": -1200.0,
+                    "open_time": now - 1800,
+                    "close_time": now - 600,
+                },
+            ],
+        ),
+    )
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["peak_equity"] == 12_000.0
+    # 12,000 -> 10,800 is exactly 10%, the default overall ceiling.
+    assert data["max_drawdown_percent"] == 10.0
+    assert data["overall_drawdown_percent"] == 10.0
+    assert data["is_overall_alert_active"] is True
+    assert data["max_overall_drawdown_percent"] == 10.0
+
+
+def test_risk_reports_data_unavailable_instead_of_a_clean_zero(client, account):
+    """With no heartbeat at all, the zeros must not read as "no drawdown".
+
+    ``get_status`` returns ``metrics=None`` for a stale bridge, so both the live
+    equity and the anchor are missing. The numbers stay zero for older clients,
+    but ``is_data_available`` tells the UI to show a dash instead of 0.00%.
+    """
+    created = create_connection(client, account)
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["is_data_available"] is False
+    assert data["daily_drawdown_percent"] == 0.0
+    assert data["is_alert_active"] is False
+    assert created["token"]
+
+
+def test_risk_reports_data_available_once_a_heartbeat_lands(client, account):
+    created = create_connection(client, account)
+    send_heartbeat(client, created["token"], heartbeat_payload(888005))
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["is_data_available"] is True
 
 
 def test_rotate_token_invalidates_old_token_and_rebinds(client, account):

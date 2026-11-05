@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 KEY_PREFIX = "pipstride:live:"
 RESYNC_PREFIX = "pipstride:resync:"
 TRADE_COUNT_PREFIX = "pipstride:tradecount:"
+BROKER_OFFSET_PREFIX = "pipstride:brokeroffset:"
 TTL_SECONDS = 120
 RESYNC_TTL_SECONDS = 3600
 TRADE_COUNT_TTL_SECONDS = 3600
@@ -184,3 +185,28 @@ def load_trade_count(connection_id: str) -> Optional[int]:
 
 def clear_trade_count(connection_id: str) -> None:
     _backend.delete(f"{TRADE_COUNT_PREFIX}{connection_id}")
+
+
+def save_broker_offset(connection_id: str, offset_seconds: int, ttl: int) -> None:
+    """Cache the broker-clock offset derived from a heartbeat.
+
+    Every heartbeat re-derives the offset from ``TimeCurrent()``. Caching it
+    keeps a single heartbeat with a badly set terminal clock from shifting the
+    day boundary back and forth, and lets the risk read work while the bridge is
+    briefly stale (spec 003, ticket 09-01).
+    """
+    _backend.set(f"{BROKER_OFFSET_PREFIX}{connection_id}", str(int(offset_seconds)), ttl)
+
+
+def load_broker_offset(connection_id: str) -> Optional[int]:
+    raw = _backend.get(f"{BROKER_OFFSET_PREFIX}{connection_id}")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def clear_broker_offset(connection_id: str) -> None:
+    _backend.delete(f"{BROKER_OFFSET_PREFIX}{connection_id}")

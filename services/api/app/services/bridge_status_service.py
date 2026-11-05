@@ -17,8 +17,8 @@ from app.core import live_state
 from app.core.config import settings
 from app.db.models import Mt5Connection, Trade
 from app.domain.metrics import profit_factor, win_rate
-from app.domain.time import to_unix
-from app.infrastructure.db.repositories import telemetry_repository
+from app.domain.time import as_utc, broker_day_start_utc, broker_utc_offset_seconds, to_unix
+from app.infrastructure.db.repositories import telemetry_repository, trade_repository
 from app.models.bridge import (
     BridgeStatusResponse,
     ClosedTradeItem,
@@ -310,39 +310,185 @@ class BridgeStatusService:
             message="Initial deposit baseline loaded.",
         )
 
-    def get_daily_starting_balance(
-        self, db: Session, connection: Mt5Connection, current_balance: float
-    ) -> float:
-        """Calculate start-of-day balance (total saldo awal saat ganti hari).
+    # ------------------------------------------------------ daily / overall DD
+    def broker_offset(self, connection: Mt5Connection, metrics: Optional[HeartbeatPayload]) -> int:
+        """Broker-minus-UTC offset in seconds, cached per connection.
 
-        At each day rollover (00:00:00 UTC), the daily baseline is the account balance
-        at that exact moment. For the active day, it is reconstructed by subtracting
-        the net profits of trades closed today from the current balance.
-        If a TelemetrySnapshot exists on or before today's start, it is used as verification.
+        Derived from the EA's own ``timestamp`` (server clock) so the day rolls
+        over at the broker's midnight, not UTC's (spec 003, ticket 09-01).
+        """
+        cached = live_state.load_broker_offset(connection.id)
+        payload_ts = getattr(metrics, "timestamp", None) if metrics else None
+        derived = broker_utc_offset_seconds(payload_ts, _now())
+
+        # A fresh heartbeat is authoritative: it carries the terminal's own clock,
+        # so recompute and refresh the cache. The cache exists for the stale case
+        # below — ``get_status`` returns ``metrics=None`` once the bridge goes
+        # quiet, and without it the offset would fall back to UTC and move the day
+        # boundary by 2-3 hours exactly when nobody is watching.
+        if payload_ts:
+            live_state.save_broker_offset(
+                connection.id, derived, settings.BROKER_OFFSET_CACHE_SECONDS
+            )
+            return derived
+
+        return cached if cached is not None else derived
+
+    def get_daily_anchor(
+        self,
+        db: Session,
+        connection: Mt5Connection,
+        metrics: Optional[HeartbeatPayload],
+        deposit: Optional[float],
+    ) -> dict:
+        """Start-of-broker-day equity anchor.
+
+        Two informative rungs, then an honest fallback:
+
+        ``snapshot_exact`` / ``snapshot_rollforward``
+            A snapshot exists at or before the boundary. The anchor carries the
+            floating P&L that was already open at rollover, so a position held
+            across midnight does not fabricate a drawdown at 00:00 broker time —
+            which is the bug this replaces.
+
+        ``deposit_reconstruction``
+            No snapshot covers the boundary. The anchor is the deposit baseline
+            plus everything realized up to midnight, i.e. the equity the account
+            opened the day with.
+
+        ``current_fallback``
+            No snapshot and no deposit baseline: the anchor is the live equity,
+            so the report is an honest 0% instead of a derived guess.
+
+        Deliberately *not* derived from the current balance: that anchor is
+        circular (it always yields ``floating / balance`` as "daily drawdown"),
+        which is exactly the wrong number this ticket removes.
         """
         now = _now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        offset = self.broker_offset(connection, metrics)
+        boundary = broker_day_start_utc(now, offset)
 
-        # 1. Check for snapshot recorded on or before today's start
-        snapshot = telemetry_repository.balance_at_or_before(db, connection.id, today_start)
-        if snapshot is not None and snapshot > 0:
-            return round(float(snapshot), 2)
+        current_balance = float(getattr(metrics, "balance", 0.0) or 0.0)
+        current_equity = getattr(metrics, "equity", None)
+        current_equity = float(current_equity) if current_equity is not None else None
 
-        # 2. Reconstruct from trades closed today: balance_start = balance_current - today_profits
-        trades_today = list(
-            db.scalars(
-                select(Trade).where(
-                    Trade.connection_id == connection.id,
-                    Trade.closed_at >= today_start,
+        anchor: dict = {
+            "at": boundary,
+            "balance": None,
+            "equity": None,
+            "source": "current_fallback",
+            "broker_offset_seconds": offset,
+        }
+
+        snapshot = telemetry_repository.snapshot_at_or_before(db, connection.id, boundary)
+        if snapshot is not None and (snapshot.balance or 0) > 0:
+            captured_at = as_utc(snapshot.captured_at) or boundary
+            stale_seconds = (boundary - captured_at).total_seconds()
+
+            if stale_seconds <= 90:
+                anchor.update(
+                    balance=round(float(snapshot.balance), 2),
+                    equity=round(float(snapshot.equity or snapshot.balance), 2),
+                    source="snapshot_exact",
                 )
-            )
-        )
-        today_profit = sum((t.profit or 0.0) for t in trades_today)
-        computed_start = round(current_balance - today_profit, 2)
-        if computed_start > 0:
-            return computed_start
+                return anchor
 
-        return current_balance if current_balance > 0 else 500.0
+            # Roll the stale snapshot forward: equity at the boundary is the
+            # snapshot equity plus everything realized in between. The floating
+            # component of the snapshot is kept because it was open at rollover.
+            drift = trade_repository.sum_profit_between(
+                db, connection.id, after=captured_at, until=boundary
+            )
+            anchor.update(
+                balance=round(float(snapshot.balance) + drift, 2),
+                equity=round(float(snapshot.equity or snapshot.balance) + drift, 2),
+                source="snapshot_rollforward",
+            )
+            return anchor
+
+        # The EA was not running across midnight (new install, terminal closed,
+        # bridge added mid-day). The first observation of today is the honest
+        # anchor: it is observed, not derived, and it measures the day from the
+        # moment monitoring actually started.
+        first_today = telemetry_repository.snapshot_at_or_after(db, connection.id, boundary)
+        if first_today is not None and (first_today.balance or 0) > 0:
+            anchor.update(
+                balance=round(float(first_today.balance), 2),
+                equity=round(float(first_today.equity or first_today.balance), 2),
+                source="session_start",
+            )
+            return anchor
+
+        if deposit and deposit > 0:
+            realized = trade_repository.sum_profit_between(db, connection.id, until=boundary)
+            reconstructed = round(float(deposit) + realized, 2)
+            if reconstructed > 0:
+                anchor.update(
+                    balance=reconstructed,
+                    equity=reconstructed,
+                    source="deposit_reconstruction",
+                )
+                return anchor
+
+        anchor.update(
+            balance=round(current_balance, 2) if current_balance > 0 else None,
+            equity=round(current_equity, 2) if current_equity else None,
+            source="current_fallback",
+        )
+        return anchor
+
+    def get_overall_drawdown(
+        self,
+        db: Session,
+        connection: Mt5Connection,
+        current_equity: Optional[float],
+        deposit: Optional[float],
+    ) -> dict:
+        """Peak-to-trough drawdown over the whole reconstructed history.
+
+        Equity is rebuilt as ``deposit + running profit`` from the stored
+        trades, then the live equity is appended as the newest point. Nothing is
+        extrapolated: an empty history reports the live equity as its own peak.
+        """
+        base = float(deposit) if deposit and deposit > 0 else 0.0
+        points = trade_repository.profit_points(db, connection.id)
+
+        equity = base
+        peak = base
+        peak_at = None
+        trough_after_peak = base
+
+        for profit, closed_at in points:
+            equity = round(equity + profit, 2)
+            if equity > peak:
+                peak = equity
+                peak_at = to_unix(closed_at)
+                trough_after_peak = equity
+            elif equity < trough_after_peak:
+                trough_after_peak = equity
+
+        if current_equity is not None:
+            live = float(current_equity)
+            if live > peak:
+                peak = live
+                peak_at = to_unix(_now())
+                trough_after_peak = live
+            elif live < trough_after_peak:
+                trough_after_peak = live
+
+        return {
+            "peak_equity": round(peak, 2) if peak > 0 else None,
+            "peak_equity_at": peak_at,
+            "trough_equity": round(trough_after_peak, 2) if trough_after_peak > 0 else None,
+            "current_equity": round(float(current_equity), 2) if current_equity is not None else None,
+        }
+
+    def get_daily_trough(
+        self, db: Session, connection: Mt5Connection, boundary: datetime
+    ) -> Optional[float]:
+        """Lowest equity snapshot since the day boundary (intraday trough)."""
+        value = telemetry_repository.equity_minimum_since(db, connection.id, boundary)
+        return float(value) if value is not None else None
 
 
 bridge_status_service = BridgeStatusService()

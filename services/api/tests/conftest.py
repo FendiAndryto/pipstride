@@ -7,6 +7,7 @@ Tests never touch a developer database and never need Redis.
 
 import os
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -136,7 +137,10 @@ def heartbeat_payload(account_number: int, **overrides) -> dict:
             },
         ],
         "chart_symbol": "EURUSD",
-        "timestamp": 1_700_000_100,
+        # Must be "now": the API derives the broker clock offset from this value
+        # minus its own UTC clock, so a frozen past timestamp would be clamped to
+        # the +-14h limit and move the broker day boundary (spec 003, ticket 09-01).
+        "timestamp": int(time.time()),
     }
     payload.update(overrides)
     return payload
