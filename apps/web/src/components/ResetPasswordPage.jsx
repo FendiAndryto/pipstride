@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Lock } from 'lucide-react';
 import { api } from '../services/api';
+import { passwordError } from '../domain/validation';
 import { useLanguage } from '../context/LanguageContext';
 
 const inputStyle = {
@@ -33,11 +34,12 @@ export default function ResetPasswordPage({ token, onDone, onCancel }) {
     e.preventDefault();
     setError('');
 
-    if (password.length < 8) {
+    const passwordProblem = passwordError(password);
+    if (passwordProblem === 'length') {
       setError(t('err_password_min'));
       return;
     }
-    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    if (passwordProblem) {
       setError(t('err_password_alnum'));
       return;
     }

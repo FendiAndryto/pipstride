@@ -20,6 +20,8 @@ import {
   Laptop
 } from 'lucide-react';
 import { api, downloadPreset } from '../services/api';
+import { deriveDrawdownWatch } from '../domain/pnl';
+import { isValidEmail, passwordError } from '../domain/validation';
 import { useLanguage } from '../context/LanguageContext';
 import RichText from './RichText';
 
@@ -55,11 +57,8 @@ export default function ProfileTab({
   const activeConn = connections.find((c) => c.id === activeConnectionId) || connections[0];
 
   // Passive risk watchdog metrics (read-only, never liquidates positions)
-  const dailyDrawdownPercent = riskStatus?.daily_drawdown_percent ?? 0;
-  const maxDrawdownPercent = riskStatus?.max_daily_drawdown_percent ?? 3.0;
-  const isRiskAlert = riskStatus?.is_alert_active ?? false;
+  const { daily: dailyDrawdownPercent, alert: isRiskAlert, limitUsed } = deriveDrawdownWatch(riskStatus);
   const marginLevel = riskStatus?.margin_level ?? metrics.margin_level ?? 0;
-  const limitUsed = maxDrawdownPercent > 0 ? Math.min(100, (dailyDrawdownPercent / maxDrawdownPercent) * 100) : 0;
 
   // Connection management state
   const [isBusy, setIsBusy] = useState(false);
@@ -144,12 +143,13 @@ export default function ProfileTab({
       return;
     }
 
-    if (newPassword.length < 8) {
+    const passwordProblem = passwordError(newPassword);
+    if (passwordProblem === 'length') {
       setPassFeedback({ type: 'error', text: t('err_new_password_min') });
       return;
     }
 
-    if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+    if (passwordProblem) {
       setPassFeedback({ type: 'error', text: t('err_new_password_alnum') });
       return;
     }
@@ -190,7 +190,7 @@ export default function ProfileTab({
     setEmailFeedback(null);
 
     const value = emailInput.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
+    if (!isValidEmail(value)) {
       setEmailFeedback({ type: 'error', text: t('err_email_invalid') });
       return;
     }

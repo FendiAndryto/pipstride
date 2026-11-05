@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   DollarSign,
   Activity,
@@ -9,16 +9,8 @@ import {
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import RichText from './RichText';
-
-const formatCurrency = (val, currency = 'USD') => {
-  if (val === null || val === undefined || isNaN(val)) return '$0.00';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(val);
-};
+import { formatCurrency, formatRatio } from '../domain/format';
+import { summarizeAccountPnl, dailyDrawdownFallback } from '../domain/pnl';
 
 export default function HomeTab({
   bridgeStatus,
@@ -31,6 +23,7 @@ export default function HomeTab({
   const [chartRange, setChartRange] = useState('Month');
   const [equityCurveData, setEquityCurveData] = useState(null);
   const [historyData, setHistoryData] = useState(null);
+  const [fetchedAtSec, setFetchedAtSec] = useState(null);
 
   // State value stays the API contract ('Day'|'Week'|'Month'); only the label is translated.
   const rangeLabel = chartRange === 'Day'
@@ -63,20 +56,14 @@ export default function HomeTab({
   const prevAccountNumberRef = useRef(currentAccountNumber);
 
   // Initial Balance Benchmark & All-Time Performance Calculations
-  const initialDeposit = bridgeStatus?.initial_deposit ?? metrics.initial_deposit ?? balance;
-  const isDepositOverridden = bridgeStatus?.is_deposit_overridden ?? false;
-  const settledPnl = bridgeStatus?.settled_pnl !== undefined && bridgeStatus?.settled_pnl !== null
-    ? bridgeStatus.settled_pnl
-    : (balance - initialDeposit);
-  const settledPnlPercent = bridgeStatus?.settled_pnl_percent !== undefined && bridgeStatus?.settled_pnl_percent !== null
-    ? bridgeStatus.settled_pnl_percent
-    : (initialDeposit > 0 ? ((balance - initialDeposit) / initialDeposit) * 100 : 0);
-  const allTimePnl = bridgeStatus?.all_time_pnl !== undefined && bridgeStatus?.all_time_pnl !== null
-    ? bridgeStatus.all_time_pnl
-    : (equity - initialDeposit);
-  const allTimePnlPercent = bridgeStatus?.all_time_pnl_percent !== undefined && bridgeStatus?.all_time_pnl_percent !== null
-    ? bridgeStatus.all_time_pnl_percent
-    : (initialDeposit > 0 ? ((equity - initialDeposit) / initialDeposit) * 100 : 0);
+  const {
+    initialDeposit,
+    isDepositOverridden,
+    settledPnl,
+    settledPnlPercent,
+    allTimePnl,
+    allTimePnlPercent
+  } = summarizeAccountPnl(bridgeStatus, metrics);
 
   // 100% Automatic Sync: Immediately clear old account curve and history when MT5 account switches
   useEffect(() => {
@@ -95,6 +82,7 @@ export default function HomeTab({
     const fetchData = async () => {
       if (document.hidden) return;
       try {
+        setFetchedAtSec(Math.floor(Date.now() / 1000));
         const [curve, history] = await Promise.all([
           api.getEquityCurve(chartRange).catch(() => null),
           api.getTradeHistory(20).catch(() => null)
@@ -130,6 +118,69 @@ export default function HomeTab({
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [hasConnection, isConnected, currentAccountNumber, chartRange, bridgeStatus?.closed_trades_count]);
+
+  // Equity curve series and chart geometry, derived once per render input (pure).
+  // The fallback reconstruction runs off the fetched history snapshot; "now" is
+  // the fetch timestamp, never a Date call during render (oxlint react/purity).
+  const performanceChart = useMemo(() => {
+    const isCurveActive = Boolean(
+      equityCurveData &&
+      (!currentAccountNumber || !equityCurveData.account_number || equityCurveData.account_number === currentAccountNumber)
+    );
+    const activeCurve = isCurveActive ? equityCurveData : null;
+    const startVal = activeCurve?.starting_equity ?? activeCurve?.initial_deposit ?? initialDeposit;
+    const currentVal = activeCurve?.current_equity ?? equity;
+    const netVal = currentVal - startVal;
+    const isNetPositive = netVal >= 0;
+    const strokeColor = isNetPositive ? '#45e0ad' : '#ff5b6b';
+    const gradientId = isNetPositive ? 'pipstride-area-pos' : 'pipstride-area-neg';
+
+    // Build points: prefer activeCurve points, fallback to reconstructed curve from historyData
+    let points = activeCurve?.points || [];
+    if (points.length === 0 && historyData?.trades && historyData.trades.length > 0) {
+      const sorted = [...historyData.trades].sort((a, b) => (a.close_time || 0) - (b.close_time || 0));
+      const runs = sorted.reduce((acc, trade) => {
+        const previous = acc.length ? acc[acc.length - 1].equity : startVal;
+        const next = Math.round((previous + (trade.profit || 0)) * 100) / 100;
+        acc.push({ timestamp: trade.close_time || 0, equity: next, balance: next });
+        return acc;
+      }, []);
+      points = [
+        { timestamp: (sorted[0].close_time || 0) - 300, equity: startVal, balance: startVal },
+        ...runs,
+        { timestamp: fetchedAtSec ?? 0, equity: currentVal, balance: balance }
+      ];
+    }
+
+    let pathD = '';
+    let areaD = '';
+    if (points.length >= 2) {
+      const equities = points.map((p) => p.equity);
+      let minEq = Math.min(startVal, ...equities);
+      let maxEq = Math.max(startVal, ...equities);
+      if (maxEq - minEq < 1.0) {
+        maxEq += 5.0;
+        minEq -= 5.0;
+      }
+      const pad = Math.max((maxEq - minEq) * 0.08, 2.0);
+      const yMin = minEq - pad;
+      const yMax = maxEq + pad;
+
+      const coords = points.map((p, idx) => {
+        const x = Math.round((idx / (points.length - 1)) * 600);
+        const y = Math.round(155 - ((p.equity - yMin) / (yMax - yMin)) * 120);
+        return `${x},${y}`;
+      });
+      pathD = `M ${coords.join(' L ')}`;
+      areaD = `${pathD} L 600,180 L 0,180 Z`;
+    } else {
+      // Steady baseline at initial deposit to current equity
+      pathD = 'M 0,120 L 600,75';
+      areaD = 'M 0,120 L 600,75 L 600,180 L 0,180 Z';
+    }
+
+    return { startVal, currentVal, netVal, isNetPositive, strokeColor, gradientId, pathD, areaD };
+  }, [equityCurveData, historyData, currentAccountNumber, initialDeposit, equity, balance, fetchedAtSec]);
 
   return (
     <div className="home-tab-container animate-fade-in">
@@ -200,7 +251,7 @@ export default function HomeTab({
             <div className="card">
               <div className="metric">
                 {activeHistory && activeHistory.total_trades > 0
-                  ? (activeHistory.profit_factor > 0 ? activeHistory.profit_factor.toFixed(2) : (activeHistory.gross_loss === 0 ? '∞' : '0.00'))
+                  ? formatRatio(activeHistory.profit_factor)
                   : '0.00'}
               </div>
               <div className="label">{t('journal_profit_factor')}</div>
@@ -212,9 +263,7 @@ export default function HomeTab({
             </div>
             <div className="card">
               {(() => {
-                const ddPct = riskStatus?.daily_drawdown_percent ?? (
-                  balance > 0 && equity < balance ? ((balance - equity) / balance) * 100 : 0
-                );
+                const ddPct = dailyDrawdownFallback(riskStatus, metrics);
                 const isNegative = ddPct > 0;
                 return (
                   <>
@@ -356,60 +405,7 @@ export default function HomeTab({
           </div>
 
           {(() => {
-            const isCurveActive = Boolean(
-              equityCurveData &&
-              (!currentAccountNumber || !equityCurveData.account_number || equityCurveData.account_number === currentAccountNumber)
-            );
-            const activeCurve = isCurveActive ? equityCurveData : null;
-            const startVal = activeCurve?.starting_equity ?? activeCurve?.initial_deposit ?? initialDeposit;
-            const currentVal = activeCurve?.current_equity ?? equity;
-            const netVal = currentVal - startVal;
-            const isNetPositive = netVal >= 0;
-            const strokeColor = isNetPositive ? '#45e0ad' : '#ff5b6b';
-            const gradientId = isNetPositive ? 'pipstride-area-pos' : 'pipstride-area-neg';
-
-            // Build points: prefer activeCurve points, fallback to reconstructed curve from historyData and initialDeposit
-            let points = activeCurve?.points || [];
-            if (points.length === 0 && historyData?.trades && historyData.trades.length > 0) {
-              let run = startVal;
-              const sorted = [...historyData.trades].sort((a, b) => (a.close_time || 0) - (b.close_time || 0));
-              points = [
-                { timestamp: (sorted[0].close_time || 0) - 300, equity: startVal, balance: startVal },
-                ...sorted.map((t) => {
-                  run = Math.round((run + (t.profit || 0)) * 100) / 100;
-                  return { timestamp: t.close_time || 0, equity: run, balance: run };
-                }),
-                { timestamp: Math.floor(Date.now() / 1000), equity: currentVal, balance: balance }
-              ];
-            }
-
-            let pathD = '';
-            let areaD = '';
-
-            if (points.length >= 2) {
-              const equities = points.map((p) => p.equity);
-              let minEq = Math.min(startVal, ...equities);
-              let maxEq = Math.max(startVal, ...equities);
-              if (maxEq - minEq < 1.0) {
-                maxEq += 5.0;
-                minEq -= 5.0;
-              }
-              const pad = Math.max((maxEq - minEq) * 0.08, 2.0);
-              const yMin = minEq - pad;
-              const yMax = maxEq + pad;
-
-              const coords = points.map((p, idx) => {
-                const x = Math.round((idx / (points.length - 1)) * 600);
-                const y = Math.round(155 - ((p.equity - yMin) / (yMax - yMin)) * 120);
-                return `${x},${y}`;
-              });
-              pathD = `M ${coords.join(' L ')}`;
-              areaD = `${pathD} L 600,180 L 0,180 Z`;
-            } else {
-              // Steady baseline at initial deposit to current equity
-              pathD = 'M 0,120 L 600,75';
-              areaD = 'M 0,120 L 600,75 L 600,180 L 0,180 Z';
-            }
+            const { startVal, currentVal, netVal, isNetPositive, strokeColor, gradientId, pathD, areaD } = performanceChart;
 
             return (
               <>

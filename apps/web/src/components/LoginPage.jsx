@@ -14,6 +14,7 @@ import {
   Mail
 } from 'lucide-react';
 import { api, setToken } from '../services/api';
+import { isValidEmail, passwordError } from '../domain/validation';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice }) {
@@ -79,7 +80,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
       return;
     }
 
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!email || !isValidEmail(email)) {
       setError(t('err_email_invalid'));
       return;
     }
@@ -89,12 +90,13 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
       return;
     }
 
-    if (p.length < 8) {
+    const passwordProblem = passwordError(p);
+    if (passwordProblem === 'length') {
       setError(t('err_password_min'));
       return;
     }
 
-    if (!/[a-zA-Z]/.test(p) || !/[0-9]/.test(p)) {
+    if (passwordProblem) {
       setError(t('err_password_alnum'));
       return;
     }
@@ -127,7 +129,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
     e.preventDefault();
     const email = forgotEmail.trim();
 
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!email || !isValidEmail(email)) {
       setError(t('err_email_invalid'));
       return;
     }

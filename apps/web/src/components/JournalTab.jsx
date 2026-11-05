@@ -10,6 +10,8 @@ import {
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import JournalAnalytics from './JournalAnalytics';
+import { computeJournalStats } from '../domain/analytics';
+import { formatSignedMoney, formatRatio } from '../domain/format';
 
 const PERIODS = [
   { value: '1M', label: 'journal_period_1m' },
@@ -34,12 +36,6 @@ const getCurrentYearMonth = () => {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const formatCurrency = (val) => {
-  if (val === null || val === undefined || isNaN(val)) return '$0.00';
-  const prefix = val >= 0 ? '+' : '−';
-  return `${prefix}$${Math.abs(val).toFixed(2)}`;
-};
-
 export default function JournalTab({
   activeTab,
   closedTradesCount,
@@ -48,6 +44,7 @@ export default function JournalTab({
 }) {
   const { t, locale } = useLanguage();
   const [historyData, setHistoryData] = useState(null);
+  const [windowNowSec, setWindowNowSec] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All');
   const [selectedSymbol, setSelectedSymbol] = useState('ALL');
@@ -163,6 +160,7 @@ export default function JournalTab({
             if (active && (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber)) {
               setHistoryData(data);
               setHistoryError(false);
+              setWindowNowSec(Math.floor(Date.now() / 1000));
             }
           })
           .catch(() => {
@@ -303,124 +301,11 @@ export default function JournalTab({
     });
   }, [trades, selectedMonthIndex, selectedYear, filter, selectedSymbol]);
 
+  // MONTH calendar-window stats. The backend serves 1M/3M/1Y/ALL; for MONTH we
+  // port the same formulas via src/domain/analytics.js (one copy, no drift).
   const monthStats = useMemo(() => {
     if (period !== 'MONTH') return null;
-    const count = monthTrades.length;
-    const wins = monthTrades.filter((t) => t.profit > 0);
-    const losses = monthTrades.filter((t) => t.profit < 0);
-    const net = monthTrades.reduce((acc, t) => acc + (t.profit || 0), 0);
-    const grossProfit = wins.reduce((acc, t) => acc + (t.profit || 0), 0);
-    const grossLoss = Math.abs(losses.reduce((acc, t) => acc + (t.profit || 0), 0));
-    const pf = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? null : 0);
-    const wr = count > 0 ? (wins.length / count) * 100 : 0;
-    const avgWin = wins.length > 0 ? grossProfit / wins.length : 0;
-    const avgLoss = losses.length > 0 ? grossLoss / losses.length : 0;
-    const payoff = avgLoss > 0 ? avgWin / avgLoss : null;
-    const expectancy = count > 0 ? net / count : 0;
-
-    const profits = monthTrades.map((t) => t.profit || 0);
-    const bestTrade = profits.length > 0 ? Math.max(...profits) : 0;
-    const worstTrade = profits.length > 0 ? Math.min(...profits) : 0;
-
-    let maxWinStreak = 0;
-    let maxLossStreak = 0;
-    let curWin = 0;
-    let curLoss = 0;
-    let totalVolume = 0;
-    let totalHoldMinutes = 0;
-    let holdCount = 0;
-
-    const sorted = [...monthTrades].sort((a, b) => (a.close_time || 0) - (b.close_time || 0));
-    sorted.forEach((t) => {
-      totalVolume += t.volume || 0;
-      if (t.profit > 0) {
-        curWin += 1;
-        curLoss = 0;
-        if (curWin > maxWinStreak) maxWinStreak = curWin;
-      } else if (t.profit < 0) {
-        curLoss += 1;
-        curWin = 0;
-        if (curLoss > maxLossStreak) maxLossStreak = curLoss;
-      }
-      if (t.close_time && t.open_time && t.close_time > t.open_time) {
-        totalHoldMinutes += (t.close_time - t.open_time) / 60;
-        holdCount += 1;
-      }
-    });
-
-    const avgHold = holdCount > 0 ? totalHoldMinutes / holdCount : 0;
-
-    const symbolMap = {};
-    monthTrades.forEach((t) => {
-      const sym = t.symbol || 'OTHER';
-      if (!symbolMap[sym]) {
-        symbolMap[sym] = { key: sym, trades: 0, wins: 0, losses: 0, net_profit: 0, gross_profit: 0, gross_loss: 0 };
-      }
-      const s = symbolMap[sym];
-      s.trades += 1;
-      s.net_profit += t.profit || 0;
-      if (t.profit > 0) {
-        s.wins += 1;
-        s.gross_profit += t.profit;
-      } else if (t.profit < 0) {
-        s.losses += 1;
-        s.gross_loss += Math.abs(t.profit);
-      }
-    });
-
-    const bySymbol = Object.values(symbolMap).map((s) => ({
-      ...s,
-      win_rate: s.trades > 0 ? (s.wins / s.trades) * 100 : 0,
-      profit_factor: s.gross_loss > 0 ? s.gross_profit / s.gross_loss : (s.gross_profit > 0 ? null : 0)
-    }));
-
-    const dirMap = {
-      BUY: { key: 'BUY', trades: 0, net_profit: 0, gross_profit: 0, gross_loss: 0, wins: 0 },
-      SELL: { key: 'SELL', trades: 0, net_profit: 0, gross_profit: 0, gross_loss: 0, wins: 0 }
-    };
-    monthTrades.forEach((t) => {
-      const dir = (t.type || t.direction || '').toUpperCase().includes('SELL') ? 'SELL' : 'BUY';
-      dirMap[dir].trades += 1;
-      const prof = t.profit || 0;
-      dirMap[dir].net_profit += prof;
-      if (prof > 0) {
-        dirMap[dir].wins += 1;
-        dirMap[dir].gross_profit += prof;
-      } else if (prof < 0) {
-        dirMap[dir].gross_loss += Math.abs(prof);
-      }
-    });
-
-    const byDirection = Object.values(dirMap).map((d) => ({
-      ...d,
-      win_rate: d.trades > 0 ? (d.wins / d.trades) * 100 : 0,
-      profit_factor: d.gross_loss > 0 ? d.gross_profit / d.gross_loss : (d.gross_profit > 0 ? null : 0)
-    }));
-
-    return {
-      totals: {
-        trades: count,
-        wins: wins.length,
-        losses: losses.length,
-        net_profit: net,
-        gross_profit: grossProfit,
-        gross_loss: grossLoss,
-        profit_factor: pf,
-        win_rate: wr,
-        avg_win: avgWin,
-        avg_loss: avgLoss,
-        payoff_ratio: payoff,
-        expectancy: expectancy,
-        max_win_streak: maxWinStreak,
-        max_loss_streak: maxLossStreak,
-        total_volume: totalVolume,
-        best_trade: bestTrade,
-        worst_trade: worstTrade,
-        avg_hold_minutes: avgHold
-      },
-      by_symbol: bySymbol,
-      by_direction: byDirection
-    };
+    return computeJournalStats(monthTrades);
   }, [period, monthTrades]);
 
   const activeStats = period === 'MONTH' ? (monthStats || stats) : stats;
@@ -473,7 +358,9 @@ export default function JournalTab({
   }, [filteredTrades, currentPage, pageSize]);
 
   const dayBuckets = useMemo(() => {
-    const nowSec = Math.floor(new Date().getTime() / 1000);
+    // Snapshot of "now" from the last data refresh (kept out of the render
+    // phase to satisfy oxlint react/purity; impure Date calls live in effects).
+    const nowSec = windowNowSec ?? 0;
     const relevantTrades = period === 'MONTH' ? monthTrades : trades.filter((t) => {
       if (!t.close_time) return false;
       const isEa = t.magic > 0;
@@ -540,7 +427,7 @@ export default function JournalTab({
         win_rate: d.trades > 0 ? (d.wins / d.trades) * 100 : 0,
         profit_factor: d.gross_loss > 0 ? d.gross_profit / d.gross_loss : (d.gross_profit > 0 ? null : 0)
       }));
-  }, [period, monthTrades, trades, filter, selectedSymbol, locale]);
+  }, [period, monthTrades, trades, filter, selectedSymbol, locale, windowNowSec]);
 
   const handleExportCSV = () => {
     const tradesToExport = filteredTrades.length > 0 ? filteredTrades : trades;
@@ -721,7 +608,7 @@ export default function JournalTab({
       <div className="grid-cards-responsive-2col four-cols-desktop">
         <div className="card" id="journal-kpi-net-pnl">
           <div className={`metric ${netPnl >= 0 ? 'positive' : 'negative'}`}>
-            {formatCurrency(netPnl)}
+            {formatSignedMoney(netPnl)}
           </div>
           <div className="label">{t('journal_realized_pnl')}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
@@ -737,7 +624,7 @@ export default function JournalTab({
         </div>
         <div className="card" id="journal-kpi-profit-factor">
           <div className="metric">
-            {profitFactor === null || profitFactor === undefined ? '∞' : Number(profitFactor).toFixed(2)}
+            {formatRatio(profitFactor)}
           </div>
           <div className="label">{t('journal_profit_factor')}</div>
           <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>

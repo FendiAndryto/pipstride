@@ -1,226 +1,131 @@
-// API service with dynamic base URL and JWT token handling.
-// Reads from Vite environment variable or falls back to relative path for reverse proxy.
-const API_BASE = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, '') : '';
-const TOKEN_KEY = 'pipstride_jwt_token';
-const REMEMBER_KEY = 'pipstride_remember_me';
-const CONNECTION_KEY = 'pipstride_active_connection_id';
-
-export const getToken = () => localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
-
-export const setToken = (token, remember = true) => {
-  if (remember) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(REMEMBER_KEY, 'true');
-    sessionStorage.removeItem(TOKEN_KEY);
-  } else {
-    sessionStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REMEMBER_KEY);
-  }
-};
-
-export const clearToken = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REMEMBER_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
-};
-
-export const isRemembered = () => localStorage.getItem(REMEMBER_KEY) === 'true';
-
-// ---------------------------------------------------------------------------
-// Active MT5 connection
+// Thin service endpoints -- the app's single HTTP client surface.
+// Transport lives in `lib/http`, token/connection persistence in `lib/storage`,
+// and file downloads in `lib/download` (ticket 006-01). This file only builds
+// requests and throws typed errors; no storage or DOM logic here.
 //
-// A user may own several MT5 accounts. Every dashboard request targets one of
-// them through the X-Connection-Id header; the backend falls back to the oldest
-// active connection when the header is absent.
-// ---------------------------------------------------------------------------
-export const getActiveConnectionId = () => localStorage.getItem(CONNECTION_KEY) || null;
+// Every exported name from the original god-client keeps its exact semantics.
 
-export const setActiveConnectionId = (connectionId) => {
-  if (connectionId) {
-    localStorage.setItem(CONNECTION_KEY, connectionId);
-  } else {
-    localStorage.removeItem(CONNECTION_KEY);
-  }
-};
+import { configureHttp, authRequest, rawRequest } from '../lib/http';
+import {
+  getToken,
+  setToken,
+  getActiveConnectionId,
+  clearToken,
+  clearActiveConnectionId
+} from '../lib/storage';
 
-export const clearActiveConnectionId = () => localStorage.removeItem(CONNECTION_KEY);
+const API_BASE = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, '') : '';
+const AUTH = '/api/v1/auth';
+const conn = (path) => `/api/v1/connections${path}`;
 
-/**
- * Saves the MT5 preset (.set) produced by connection create/rotate.
- * The file carries the raw connection token, so it is only downloadable in the
- * same session where the token was revealed.
- */
-export const downloadPreset = (preset) => {
-  if (!preset?.content || typeof document === 'undefined') return false;
-  const blob = new Blob([preset.content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = preset.filename || 'PipstrideMonitor.set';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  return true;
-};
-
-const notifySessionExpired = () => {
-  clearToken();
-  clearActiveConnectionId();
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('pipstride:session-expired'));
-  }
-};
-
-const getAuthHeaders = () => {
-  const token = getToken();
-  const connectionId = getActiveConnectionId();
-  return {
+configureHttp({
+  authHeaders: () => ({
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(connectionId ? { 'X-Connection-Id': connectionId } : {})
-  };
-};
-
-const parseError = async (res, fallback) => {
-  const err = await res.json().catch(() => ({ detail: fallback }));
-  return new Error(err.detail || fallback);
-};
-
-/**
- * Unified authenticated fetch wrapper.
- * Intercepts HTTP 401 across all API endpoints and notifies the app of session expiration.
- */
-const authFetch = async (url, options = {}) => {
-  const headers = {
-    ...getAuthHeaders(),
-    ...options.headers
-  };
-  const res = await fetch(url, { ...options, headers });
-  if (res.status === 401) {
-    notifySessionExpired();
+    ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+    ...(getActiveConnectionId() ? { 'X-Connection-Id': getActiveConnectionId() } : {})
+  }),
+  unauthorized: () => {
+    clearToken();
+    clearActiveConnectionId();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pipstride:session-expired'));
+    }
   }
-  return res;
+});
+
+const jsonError = async (res, fallback) => {
+  const body = await res.json().catch(() => ({ detail: fallback }));
+  return new Error(body.detail || fallback);
 };
+
+/** Parse a JSON body or throw a typed error carrying the API's `detail`. */
+const sendAndParse = async (res, fallback) => {
+  if (!res.ok) throw await jsonError(res, fallback);
+  return res.json();
+};
+
+const rawPost = (path, payload, fallback) =>
+  sendAndParse(
+    rawRequest(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }),
+    fallback
+  );
+
+const authJson = (path, { method = 'GET', payload } = {}, fallback) =>
+  sendAndParse(
+    authRequest(`${API_BASE}${path}`, { method, ...(payload ? { body: JSON.stringify(payload) } : {}) }),
+    fallback
+  );
+
+// Re-exports keep existing call sites stable (App, Dashboard, LoginPage,
+// ProfileTab, Mt5ConnectModal).
+export { downloadPreset } from '../lib/download';
+export {
+  getToken,
+  setToken,
+  clearToken,
+  isRemembered,
+  getActiveConnectionId,
+  setActiveConnectionId,
+  clearActiveConnectionId
+} from '../lib/storage';
 
 export const api = {
   // ---------------------------------------------------------------- auth
   async login(username, password, remember = true) {
-    const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'Authentication failed');
-    }
-
-    const data = await res.json();
+    const data = await rawPost(`${AUTH}/login`, { username, password }, 'Authentication failed');
     setToken(data.access_token, remember);
     return data;
   },
 
   async register(username, password, email = null, remember = true) {
-    const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, ...(email ? { email } : {}) })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'Registration failed');
-    }
-
-    const data = await res.json();
+    const data = await rawPost(
+      `${AUTH}/register`,
+      { username, password, ...(email ? { email } : {}) },
+      'Registration failed'
+    );
     setToken(data.access_token, remember);
     return data;
   },
 
   /** Always resolves with a generic message; the API never reveals registered addresses. */
   async forgotPassword(email) {
-    const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to request a password reset');
-    }
-
-    return res.json();
+    return rawPost(`${AUTH}/forgot-password`, { email }, 'Failed to request a password reset');
   },
 
   async resetPassword(token, newPassword) {
-    const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, new_password: newPassword })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'This reset link is invalid or has expired');
-    }
-
-    return res.json();
+    return rawPost(`${AUTH}/reset-password`, { token, new_password: newPassword }, 'This reset link is invalid or has expired');
   },
 
   async verifyEmail(token) {
-    const res = await fetch(`${API_BASE}/api/v1/auth/verify-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'This verification link is invalid or has expired');
-    }
-
-    return res.json();
+    return rawPost(`${AUTH}/verify-email`, { token }, 'This verification link is invalid or has expired');
   },
 
   /** Attach or change the account email; the API emails a verification link. */
   async setEmail(email) {
-    const res = await authFetch(`${API_BASE}/api/v1/auth/email`, {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to update email');
-    }
-
-    return res.json();
+    return authJson(`${AUTH}/email`, { method: 'POST', payload: { email } }, 'Failed to update email');
   },
 
   async changePassword(oldPassword, newPassword) {
-    const res = await authFetch(`${API_BASE}/api/v1/auth/change-password`, {
-      method: 'POST',
-      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
-    });
-
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to change password');
-    }
-
-    return res.json();
+    return authJson(
+      `${AUTH}/change-password`,
+      { method: 'POST', payload: { old_password: oldPassword, new_password: newPassword } },
+      'Failed to change password'
+    );
   },
 
   async getMe() {
-    const res = await authFetch(`${API_BASE}/api/v1/auth/me`, { method: 'GET' });
-
-    if (!res.ok) {
-      throw new Error('Unauthorized');
-    }
-
+    const res = await authRequest(`${API_BASE}${AUTH}/me`, { method: 'GET' });
+    if (!res.ok) throw new Error('Unauthorized');
     return res.json();
   },
 
   async logout() {
     try {
-      await authFetch(`${API_BASE}/api/v1/auth/logout`, { method: 'POST' });
+      await authRequest(`${API_BASE}${AUTH}/logout`, { method: 'POST' });
     } catch {
       // Ignore network errors on logout
     } finally {
@@ -231,11 +136,7 @@ export const api = {
 
   // ---------------------------------------------------------- connections
   async getConnections() {
-    const res = await authFetch(`${API_BASE}/api/v1/connections`, { method: 'GET' });
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to load MT5 connections');
-    }
-    return res.json();
+    return authJson(conn(''), {}, 'Failed to load MT5 connections');
   },
 
   /**
@@ -243,58 +144,35 @@ export const api = {
    * returned by this call and by rotation, so the caller must show it once.
    */
   async createConnection(label = 'Akun MT5') {
-    const res = await authFetch(
-      `${API_BASE}/api/v1/connections?label=${encodeURIComponent(label)}`,
-      { method: 'POST' }
-    );
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to create MT5 connection');
-    }
-    return res.json();
+    return authJson(conn(`?label=${encodeURIComponent(label)}`), { method: 'POST' }, 'Failed to create MT5 connection');
   },
 
   async rotateConnectionToken(connectionId) {
-    const res = await authFetch(`${API_BASE}/api/v1/connections/${connectionId}/rotate`, {
-      method: 'POST'
-    });
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to rotate connection token');
-    }
-    return res.json();
+    return authJson(conn(`/${connectionId}/rotate`), { method: 'POST' }, 'Failed to rotate connection token');
   },
 
   async revokeConnection(connectionId) {
-    const res = await authFetch(`${API_BASE}/api/v1/connections/${connectionId}`, {
-      method: 'DELETE'
-    });
-    if (!res.ok) {
-      throw await parseError(res, 'Failed to revoke MT5 connection');
-    }
+    const res = await authRequest(`${API_BASE}${conn(`/${connectionId}`)}`, { method: 'DELETE' });
+    if (!res.ok) throw await jsonError(res, 'Failed to revoke MT5 connection');
     return res.status === 204 ? null : res.json();
   },
 
   // -------------------------------------------------------------- bridge
   async getBridgeStatus() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/status`, { method: 'GET' });
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch bridge telemetry (HTTP ${res.status})`);
-    }
-
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/status`, { method: 'GET' });
+    if (!res.ok) throw new Error(`Failed to fetch bridge telemetry (HTTP ${res.status})`);
     return res.json();
   },
 
   async getMarketQuotes() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/market`, { method: 'GET' });
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/market`, { method: 'GET' });
     if (res.status === 409) return [];
-    if (!res.ok) {
-      throw new Error('Failed to fetch market quotes');
-    }
+    if (!res.ok) throw new Error('Failed to fetch market quotes');
     return res.json();
   },
 
   async getTradeHistory(limit = 1000) {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/history?limit=${limit}`, { method: 'GET' });
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/history?limit=${limit}`, { method: 'GET' });
     if (res.status === 409) {
       return {
         trades: [],
@@ -306,9 +184,7 @@ export const api = {
         win_rate: 0
       };
     }
-    if (!res.ok) {
-      throw new Error('Failed to fetch trade history');
-    }
+    if (!res.ok) throw new Error('Failed to fetch trade history');
     return res.json();
   },
 
@@ -318,77 +194,56 @@ export const api = {
    */
   async getJournalStats(range = '1M', source = 'all', symbol = null) {
     const params = { range, source };
-    if (symbol && symbol !== 'ALL') {
-      params.symbol = symbol;
-    }
-    const query = new URLSearchParams(params);
-    const res = await authFetch(`${API_BASE}/api/v1/journal/stats?${query.toString()}`, {
-      method: 'GET'
-    });
+    if (symbol && symbol !== 'ALL') params.symbol = symbol;
+    const res = await authRequest(`${API_BASE}/api/v1/journal/stats?${new URLSearchParams(params)}`, { method: 'GET' });
     if (res.status === 409) return null;
-    if (!res.ok) {
-      throw new Error('Failed to fetch journal statistics');
-    }
+    if (!res.ok) throw new Error('Failed to fetch journal statistics');
     return res.json();
   },
 
   async resetTradeHistory() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/history/reset`, { method: 'POST' });
-    if (!res.ok) {
-      throw new Error('Failed to reset trade history');
-    }
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/history/reset`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to reset trade history');
     return res.json();
   },
 
   async getEquityCurve(range = '1M') {
-    const res = await authFetch(
+    const res = await authRequest(
       `${API_BASE}/api/v1/bridge/equity-curve?range=${encodeURIComponent(range)}`,
       { method: 'GET' }
     );
     if (res.status === 409) return null;
-    if (!res.ok) {
-      throw new Error('Failed to fetch equity curve');
-    }
+    if (!res.ok) throw new Error('Failed to fetch equity curve');
     return res.json();
   },
 
   async getInitialDeposit() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/initial-deposit`, { method: 'GET' });
-    if (!res.ok) {
-      throw new Error('Failed to fetch initial deposit');
-    }
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/initial-deposit`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to fetch initial deposit');
     return res.json();
   },
 
   async setInitialDeposit(amount) {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/initial-deposit`, {
-      method: 'POST',
-      body: JSON.stringify({
-        initial_deposit: amount !== null && amount !== undefined && amount !== '' ? Number(amount) : null
-      })
-    });
-    if (!res.ok) {
-      throw await parseError(res, 'Initial deposit update failed');
-    }
-    return res.json();
+    return authJson(
+      '/api/v1/bridge/initial-deposit',
+      {
+        method: 'POST',
+        payload: { initial_deposit: amount !== null && amount !== undefined && amount !== '' ? Number(amount) : null }
+      },
+      'Initial deposit update failed'
+    );
   },
 
   async getPositions() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/positions`, { method: 'GET' });
-
-    if (!res.ok) {
-      throw new Error('Failed to retrieve open positions');
-    }
-
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/positions`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to retrieve open positions');
     return res.json();
   },
 
   // Risk Watchdog Telemetry (read-only; never executes orders)
   async getRiskStatus() {
-    const res = await authFetch(`${API_BASE}/api/v1/bridge/risk`, { method: 'GET' });
-    if (!res.ok) {
-      throw new Error('Failed to retrieve risk watchdog status');
-    }
+    const res = await authRequest(`${API_BASE}/api/v1/bridge/risk`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to retrieve risk watchdog status');
     return res.json();
   }
 };

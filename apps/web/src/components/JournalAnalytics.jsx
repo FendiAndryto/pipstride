@@ -1,14 +1,7 @@
 import React from 'react';
 import { Activity, BarChart3, Gauge, TrendingDown, TrendingUp } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-
-const money = (value) => {
-  const numeric = Number(value) || 0;
-  return `${numeric >= 0 ? '+' : '−'}$${Math.abs(numeric).toFixed(2)}`;
-};
-
-const ratio = (value, suffix = '') =>
-  value === null || value === undefined ? '∞' : `${value.toFixed(2)}${suffix}`;
+import { formatSignedMoney, formatRatio } from '../domain/format';
 
 const holdTime = (minutes, t) => {
   if (minutes === null || minutes === undefined) return '—';
@@ -82,11 +75,11 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
                     color: positive ? 'var(--g)' : 'var(--red)'
                   }}
                 >
-                  {money(bucket.net_profit)}
+                  {formatSignedMoney(bucket.net_profit)}
                 </span>
               </div>
               <span className="tiny" style={{ fontSize: '9px', color: 'var(--muted)', marginLeft: '115px' }}>
-                {t('ja_bucket_detail', { count: bucket.trades, win: bucket.win_rate.toFixed(0), pf: ratio(bucket.profit_factor) })}
+                {t('ja_bucket_detail', { count: bucket.trades, win: bucket.win_rate.toFixed(0), pf: formatRatio(bucket.profit_factor) })}
               </span>
             </div>
           );
@@ -131,28 +124,28 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
         <MetricTile
           id="journal-metric-expectancy"
           label={t('ja_expectancy')}
-          value={money(totals.expectancy)}
+          value={formatSignedMoney(totals.expectancy)}
           tone={totals.expectancy >= 0 ? 'positive' : 'negative'}
           hint={t('ja_trades_period', { count: totals.trades, period: periodLabel })}
         />
         <MetricTile
           id="journal-metric-avg-win"
           label={t('ja_avg_win')}
-          value={money(totals.avg_win)}
+          value={formatSignedMoney(totals.avg_win)}
           tone="positive"
           hint={t('ja_trades_won', { count: totals.wins })}
         />
         <MetricTile
           id="journal-metric-avg-loss"
           label={t('ja_avg_loss')}
-          value={money(totals.avg_loss)}
+          value={formatSignedMoney(totals.avg_loss)}
           tone="negative"
           hint={t('ja_trades_lost', { count: totals.losses })}
         />
         <MetricTile
           id="journal-metric-payoff"
           label={t('ja_payoff')}
-          value={ratio(totals.payoff_ratio)}
+          value={formatRatio(totals.payoff_ratio)}
           hint={t('ja_payoff_hint')}
         />
         <MetricTile
@@ -171,13 +164,13 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
         <MetricTile
           id="journal-metric-best"
           label={t('ja_best_trade')}
-          value={money(totals.best_trade ?? 0)}
+          value={formatSignedMoney(totals.best_trade ?? 0)}
           tone="positive"
         />
         <MetricTile
           id="journal-metric-worst"
           label={t('ja_worst_trade')}
-          value={money(totals.worst_trade ?? 0)}
+          value={formatSignedMoney(totals.worst_trade ?? 0)}
           tone="negative"
         />
       </div>
@@ -221,7 +214,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
                       </td>
                       <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{bucket.trades}</td>
                       <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{bucket.win_rate.toFixed(1)}%</td>
-                      <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{ratio(bucket.profit_factor)}</td>
+                      <td style={{ padding: '8px 6px', fontFamily: 'monospace' }}>{formatRatio(bucket.profit_factor)}</td>
                       <td
                         style={{
                           padding: '8px 6px',
@@ -231,7 +224,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
                           color: bucket.net_profit >= 0 ? 'var(--g)' : 'var(--red)'
                         }}
                       >
-                        {money(bucket.net_profit)}
+                        {formatSignedMoney(bucket.net_profit)}
                       </td>
                     </tr>
                   );
@@ -276,11 +269,11 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
                         color: positive ? 'var(--g)' : 'var(--red)'
                       }}
                     >
-                      {money(bucket.net_profit)}
+                      {formatSignedMoney(bucket.net_profit)}
                     </span>
                   </div>
                   <div className="tiny" style={{ marginTop: '3px', color: 'var(--muted)' }}>
-                    {t('ja_trade_win_pf', { count: bucket.trades, win: (bucket.win_rate ?? 0).toFixed(1), pf: ratio(bucket.profit_factor) })}
+                    {t('ja_trade_win_pf', { count: bucket.trades, win: (bucket.win_rate ?? 0).toFixed(1), pf: formatRatio(bucket.profit_factor) })}
                   </div>
                 </div>
               );
@@ -303,7 +296,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
 
       <div className="tiny" style={{ color: 'var(--muted)', fontSize: '10px' }}>
         {t('ja_footnote')}{' '}
-        <span style={{ color: netTone === 'positive' ? 'var(--g)' : 'var(--red)' }}>{money(totals.net_profit)}</span>{' '}
+        <span style={{ color: netTone === 'positive' ? 'var(--g)' : 'var(--red)' }}>{formatSignedMoney(totals.net_profit)}</span>{' '}
         {t('ja_footnote_rest', { count: totals.trades, breakeven: totals.breakeven })}
       </div>
     </div>
