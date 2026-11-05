@@ -76,7 +76,7 @@ pipstride/
 │       │   └── services/       # telemetry ingest, bridge status, account settings, connection, user, auth tokens, email, mt5_package, pricing_catalog, telegram
 │       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens)
 │       ├── scripts/            # backup_db, check_migrations, prune_snapshots, reset_admin_password
-│       └── tests/              # 11 test modules + conftest, 104 tests
+│       └── tests/              # 11 test modules + conftest, 121 tests
 ├── mt5-ea/PipstrideMonitor.mq5 # canonical read-only sensor
 ├── infra/                      # compose files, Caddyfile, cron/pipstride-crontab
 ├── docs/
@@ -85,7 +85,7 @@ pipstride/
 │   ├── specs/                  # feature specs (+ README workflow)
 │   ├── GLOSSARY.md             # domain vocabulary
 │   └── TICKET_TRACKER.md
-├── tickets/                    # phased execution tickets, 001–007 (+ README workflow)
+├── tickets/                    # phased execution tickets, 001–009 (+ README workflow)
 ├── .github/workflows/ci.yml    # api tests, migration drift, web, marketing, docker images
 ├── backups/                    # gitignored local DB dumps
 └── .venv/                      # gitignored, working local Python env (see below)
@@ -107,7 +107,7 @@ npm --prefix apps/web run lint
 ```bash
 npm --prefix apps/web test
 ```
-`vitest run` — **4 files, 54 tests, exit 0** in ~0.6s. Pure modules only (`environment: 'node'`,
+`vitest run` — **4 files, 57 tests, exit 0** in ~0.6s. Pure modules only (`environment: 'node'`,
 no jsdom): `domain/{analytics,pnl,validation}` and `features/journal/dayBuckets`. Vitest is used
 instead of `node:test` because 95 of 96 relative imports in `src/` are extensionless and plain
 `node:test` fails with `ERR_MODULE_NOT_FOUND` outside `domain/`. **Run this after touching
@@ -124,7 +124,7 @@ npm --prefix apps/web run build
 ```bash
 node apps/web/scripts/check-i18n.cjs
 ```
-`i18n OK — 457 keys per language, 411 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
+`i18n OK — 476 keys per language, 425 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
 
 ### 4. Marketing build
 ```bash
@@ -139,7 +139,7 @@ cd services/api
 $env:ENVIRONMENT="test"; $env:SECRET_KEY="ci-secret-key-not-for-production"
 ../../.venv/Scripts/python.exe -m pytest
 ```
-`104 passed, 1 warning in ~24s`. Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
+`121 passed, 1 warning in ~26s`. Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
 
 Docker alternative (matches the old note, only when the daemon is up):
 ```bash
@@ -193,8 +193,8 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–006 and 008 done. 007 still `todo`.**
-- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 007`.
+- Current state: **001–006, 008, and 009 done. 007 still `todo`.**
+- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 
 ## Build & release expectations

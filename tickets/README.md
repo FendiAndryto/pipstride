@@ -24,13 +24,16 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **006** | `006-web-feature-split/` | Pecah god-class `apps/web` | 003, 005 | 007 (frontend) |
 | **007** | `007-admin-console/` | Admin console + privilege boundary | 003, 005, 006 | ops/support |
 | **008** | `008-web-test-harness/` | Test runner `apps/web` + paritas domain terjaga | 006 | 007-05 |
+| **009** | `009-live-metrics-correctness/` | Daily DD hari broker, overall DD peak-to-trough, market structure 4 TF | 005, 006, 008 | 007 |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 007`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
   (bundle + origin terpisah), dan menutup gap funnel (hari ini user mendarat di halaman login).
   Refactor `apps/web` justru menunda nilai.
+- **009 (metrik) sebelum 007 (admin)** — 007 menambah permukaan admin di atas angka metrik. Kalau
+  admin dibangun dulu, bug drawdown ikut terwarisi ke layar support.
 - **007 (admin) paling akhir** — ADR 0008 menaruh kerja keamanan (TOTP, role re-check, audit,
   support mode, access log) sebagai **prasyarat**, bukan follow-up. Bangun saat sudah ada user
   yang perlu di-support.
@@ -100,6 +103,16 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 
 ### Fase 008: Web Test Harness (Selesai)
 - [x] **01-vitest-harness-and-domain-tests.md** (`done`): Vitest (tanpa jsdom) + 4 file tes / 54 tes yang mengunci paritas `domain/` dan `features/journal/dayBuckets` terhadap backend; `npm test` masuk CI job `web`. Bundle produksi tidak berubah (vitest hanya devDependency).
+
+### Fase 009: Live Metrics Correctness (Selesai)
+> **Catatan Implementasi (2026-11-05):** tiga tiket selesai, gate fase ditutup. Detail per tiket di
+> `tickets/009-live-metrics-correctness/`. Dua deviasi didokumentasikan: kartu drawdown dipindah ke
+> halaman Journal (bukan Profile) atas permintaan produk, dan anchor harian memakai rung
+> `session_start` (observasi pertama hari itu) alih-alih rekonstruksi dari saldo sekarang yang
+> terbukti sirkular.
+- [x] **01-daily-drawdown-broker-day.md** (`done`): Boundary hari broker (offset dari `TimeCurrent()`, clamp ±14 jam), anchor equity roll-forward dari snapshot, `daily_max_drawdown_percent` menahan trough intraday, overall DD peak-to-trough; `+15 tes` (104 → 119).
+- [x] **02-overall-drawdown-and-single-formula.md** (`done`): `drawdownView` menggantikan `dailyDrawdownFallback` + `deriveDrawdownWatch`; kartu `DrawdownCard` di Journal setelah KPI; section risk Profile dihapus, `margin_level` pindah ke kartu Active Account; `is_data_available` mencegah 0,00% palsu.
+- [x] **03-market-structure-timeframes.md** (`done`): EA mengirim `candles_h1`/`candles_h4` (24 bar, cache 30s), `HeartbeatPayload` meneruskannya, `MarketTab` menampilkan M5/M15/H1/H4 dengan state jujur untuk TF tanpa data; kedua file EA identik.
 
 ### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
 - [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): RBAC role DB (`admin`/`support`) dan endpoint query read-only.

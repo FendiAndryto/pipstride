@@ -30,12 +30,12 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 26 tiket
-- **Selesai (`done`):** 21 tiket (Fase 001, 002, 003, 004, 005, 006, 008)
+- **Total Tiket:** 29 tiket
+- **Selesai (`done`):** 24 tiket (Fase 001, 002, 003, 004, 005, 006, 008, 009)
 - **Belum Diimplementasikan (`todo`):** 5 tiket (Fase 007)
 
 ```
-[==============================================>------------] 81% Selesai
+[================================================>----------] 83% Selesai
 ```
 
 ---
@@ -123,6 +123,19 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 > 4 file tes / 54 tes; paritas `computeTotals` diverifikasi langsung ke `metrics.py` Python.
 > Uji negatif membuktikan tes menangkap regresi (6 dan 5 tes merah). Tanpa jsdom, tanpa coverage gate.
 - [x] **01-vitest-harness-and-domain-tests.md** (`done`): Vitest (devDependency) + tes paritas `domain/{analytics,pnl,validation}` & `features/journal/dayBuckets`; `npm test` masuk CI job `web`.
+
+#### Fase 009: Live Metrics Correctness (SELESAI)
+> **Catatan Implementasi:** hotfix produksi untuk tiga keluhan metrik. Kartu drawdown dipindah ke
+> halaman **Journal** (tepat setelah KPI cards) atas permintaan produk, dan Profile dibersihkan dari
+> section "Risk Watchdog" (`margin_level` pindah ke kartu Active Account). Anchor harian memakai rung
+> `snapshot_exact → snapshot_rollforward → session_start → deposit_reconstruction → current_fallback`;
+> rekonstruksi dari saldo sekarang dibuang karena sirkular (menghasilkan `floating/balance` sebagai
+> DD harian — persis bug yang diperbaiki). EA wajib diunduh ulang agar H1/H4 muncul; token & preset
+> tidak berubah. Verifikasi: pytest 121 passed, lint-imports 6/0, vitest 57 passed, lint + lint:arch
+> bersih, build exit 0, i18n 476 keys, dua file EA identik.
+- [x] **01-daily-drawdown-broker-day.md** (`done`): Boundary tengah malam **waktu broker** (offset dari `TimeCurrent()`, clamp ±14 jam, cache 1 jam), anchor equity roll-forward, `daily_max_drawdown_percent` menahan trough intraday, `get_overall_drawdown` peak-to-trough.
+- [x] **02-overall-drawdown-and-single-formula.md** (`done`): `drawdownView` di `domain/pnl.js` (satu sumber, tanpa fallback lokal); `DrawdownCard` di Journal; `RiskWatchdogSection` dihapus; margin level pindah ke Active Account.
+- [x] **03-market-structure-timeframes.md** (`done`): `candles_h1`/`candles_h4` (24 bar, cache 30s) dari EA → `HeartbeatPayload` → `MarketTab` 4 timeframe, dengan state jujur untuk TF tanpa data.
 
 #### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
 - [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): Validasi role admin via database & endpoint analitik read-only.
