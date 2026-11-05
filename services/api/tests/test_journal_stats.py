@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
-from app.services.journal_service import compute_stats
+from app.domain.metrics import compute_stats
 from tests.conftest import heartbeat_payload
 
 

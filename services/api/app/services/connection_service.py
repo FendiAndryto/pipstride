@@ -8,24 +8,14 @@ connection is created or rotated.
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import live_state
 from app.core.tokens import generate_token, hash_token, token_display_prefix
+from app.db.base import session_scope
 from app.db.models import AuditLog, Entitlement, Mt5Connection, User
-
-
-class ConnectionLimitReached(Exception):
-    pass
-
-
-class ConnectionBindingError(Exception):
-    pass
-
-
-class ConnectionTokenInvalidError(Exception):
-    pass
+from app.domain.errors import ConnectionBindingError, ConnectionLimitReached
+from app.infrastructure.db.repositories import connection_repository
 
 
 def _now() -> datetime:
@@ -45,32 +35,15 @@ def _audit(db: Session, user_id: str, action: str, connection_id: Optional[str] 
 
 class ConnectionService:
     def list_connections(self, db: Session, user_id: str) -> list[Mt5Connection]:
-        return list(
-            db.scalars(
-                select(Mt5Connection)
-                .where(Mt5Connection.user_id == user_id, Mt5Connection.revoked_at.is_(None))
-                .order_by(Mt5Connection.created_at)
-            )
-        )
+        return connection_repository.list_active(db, user_id)
 
     def get_connection(self, db: Session, user_id: str, connection_id: str) -> Optional[Mt5Connection]:
-        return db.scalar(
-            select(Mt5Connection).where(
-                Mt5Connection.id == connection_id,
-                Mt5Connection.user_id == user_id,
-                Mt5Connection.revoked_at.is_(None),
-            )
-        )
+        return connection_repository.get_active(db, user_id, connection_id)
 
     def get_by_token(self, db: Session, raw_token: str) -> Optional[Mt5Connection]:
         if not raw_token or not raw_token.strip():
             return None
-        conn = db.scalar(
-            select(Mt5Connection).where(Mt5Connection.token_hash == hash_token(raw_token))
-        )
-        if conn is None or conn.revoked_at is not None:
-            return None
-        return conn
+        return connection_repository.get_by_token_hash(db, hash_token(raw_token))
 
     def _active_count(self, db: Session, user_id: str) -> int:
         return len(self.list_connections(db, user_id))
@@ -99,34 +72,34 @@ class ConnectionService:
             token_prefix=token_display_prefix(raw),
             status="pending",
         )
-        db.add(conn)
-        db.flush()
-        _audit(db, user.id, "connection.created", conn.id, label)
-        db.commit()
+        with session_scope(db):
+            connection_repository.add(db, conn)
+            db.flush()
+            _audit(db, user.id, "connection.created", conn.id, label)
         db.refresh(conn)
         return conn, raw
 
     def rotate_token(self, db: Session, user: User, connection: Mt5Connection) -> tuple[Mt5Connection, str]:
         raw = generate_token()
-        connection.token_hash = hash_token(raw)
-        connection.token_prefix = token_display_prefix(raw)
-        connection.status = "pending"
-        connection.bound_at = None
-        connection.account_number = None
-        connection.broker_server = None
-        connection.last_seen_at = None
+        with session_scope(db):
+            connection.token_hash = hash_token(raw)
+            connection.token_prefix = token_display_prefix(raw)
+            connection.status = "pending"
+            connection.bound_at = None
+            connection.account_number = None
+            connection.broker_server = None
+            connection.last_seen_at = None
+            _audit(db, user.id, "connection.token_rotated", connection.id)
         live_state.clear_live_payload(connection.id)
-        _audit(db, user.id, "connection.token_rotated", connection.id)
-        db.commit()
         db.refresh(connection)
         return connection, raw
 
     def revoke_connection(self, db: Session, user: User, connection: Mt5Connection) -> None:
-        connection.revoked_at = _now()
-        connection.status = "revoked"
+        with session_scope(db):
+            connection.revoked_at = _now()
+            connection.status = "revoked"
+            _audit(db, user.id, "connection.revoked", connection.id)
         live_state.clear_live_payload(connection.id)
-        _audit(db, user.id, "connection.revoked", connection.id)
-        db.commit()
 
     def bind_account(
         self,
@@ -142,13 +115,8 @@ class ConnectionService:
         later heartbeat claiming a different account is rejected so a leaked
         token cannot be pointed at another trading account.
         """
-        conflict = db.scalar(
-            select(Mt5Connection).where(
-                Mt5Connection.user_id == connection.user_id,
-                Mt5Connection.account_number == account_number,
-                Mt5Connection.id != connection.id,
-                Mt5Connection.revoked_at.is_(None),
-            )
+        conflict = connection_repository.get_conflicting_account(
+            db, connection.user_id, account_number, connection.id
         )
         if conflict is not None:
             raise ConnectionBindingError(

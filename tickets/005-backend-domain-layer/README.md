@@ -17,14 +17,29 @@ Referensi: `docs/audits/pilar1-clean-architecture.md` §1.2-1.3, §2.4-2.5;
 3. `03-service-decoupling-and-transaction-boundary.md`
 
 ## Gate (checklist audit keluar)
-- [ ] `app/domain/` hanya berisi pure Python: tidak ada `import fastapi / sqlalchemy / redis`.
-- [ ] Rumus profit-factor/win-rate **satu** salinan (di `domain/metrics`), bukan dua (mematikan SoC-22).
-- [ ] `app/api/v1/journal.py` tidak lagi import atau query `Trade` ORM langsung (SoC-18).
-- [ ] Route risk (`bridge.py:126-159`) mendelegasikan ke `domain/policies` (SoC-12).
-- [ ] `services/` tidak raise `fastapi.HTTPException` (SoC-19); exception domain di-map di boundary route.
-- [ ] `core/deps.py` tidak import `services/` (Dep-1) — bila masih harus, buat interface di `domain/`.
-- [ ] `_as_utc` satu salinan (SoC-23).
-- [ ] `pytest` hijau; gate `arch` hijau.
+- [x] `app/domain/` hanya berisi pure Python: tidak ada `import fastapi / sqlalchemy / redis`.
+- [x] Rumus profit-factor/win-rate **satu** salinan (di `domain/metrics`), bukan dua (mematikan SoC-22).
+- [x] `app/api/v1/journal.py` tidak lagi import atau query `Trade` ORM langsung (SoC-18).
+- [x] Route risk (`bridge.py:126-159`) mendelegasikan ke `domain/policies` (SoC-12).
+- [x] `services/` tidak raise `fastapi.HTTPException` (SoC-19); exception domain di-map di boundary route.
+- [x] `core/deps.py` tidak import `services/` (Dep-1) — bila masih harus, buat interface di `domain/`.
+- [x] `_as_utc` satu salinan (SoC-23).
+- [x] `pytest` hijau; gate `arch` hijau.
+
+## Catatan implementasi
+- `app/domain/` berisi `metrics.py` (satu definisi profit-factor/win-rate/bucketing), `policies.py`
+  (drawdown → `reason_code`, format pesan di route), `time.py` (`as_utc`/`to_unix`), `errors.py`.
+- `app/infrastructure/db/repositories/` menampung seluruh query ORM yang dipakai route/service
+  (`trade`, `connection`, `telemetry`, `user`); `journal.py` tinggal memanggil `trade_repository`.
+- `bridge_service.py` dipecah menjadi `telemetry_ingest_service` (tulis), `bridge_status_service`
+  (baca/analytics), dan `account_settings_service` (initial deposit). Tidak ada lagi `HTTPException`
+  di `services/`.
+- `db.base.session_scope(db)` menjadi unit-of-work: menerima session request-scoped dan memiliki
+  commit; `grep "db.commit(" services/` → 0.
+- `core/deps.py` memakai repository langsung (Dep-1); heartbeat menerima `connection` hasil resolve
+  route, bukan lookup di dalam service (Dep-2).
+- Verifikasi: `104 passed` (termasuk `tests/test_domain_metrics.py`), `lint-imports` **6 kept, 0 broken**
+  (termasuk dua contract baru: `no-frameworks-in-domain`, `domain-imports-no-app-layer`).
 
 ## Dampak
 - Membuka **fase 006** (frontend domain TS bisa dipakai sebagai cermin pure domain Python).

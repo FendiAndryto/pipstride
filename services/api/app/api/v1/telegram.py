@@ -1,21 +1,12 @@
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.deps import require_admin
 from app.core.rate_limit import consume, get_client_ip
+from app.models.telegram import TelegramTestAlertRequest, TelegramToggleRequest
 from app.services.telegram_service import telegram_service
 
 router = APIRouter(prefix="/telegram", tags=["Telegram Notifications & Remote Alerts"])
-
-
-class TelegramTestAlertRequest(BaseModel):
-    message: Optional[str] = Field(None, max_length=100, description="Optional brief test note (max 100 chars)")
-
-
-class TelegramToggleRequest(BaseModel):
-    enabled: bool = Field(..., description="Enable or disable Telegram push notifications")
 
 
 @router.get(

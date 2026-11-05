@@ -7,8 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.base import get_db
 from app.db.models import Mt5Connection, User
-from app.services.connection_service import connection_service
-from app.services.user_service import user_service
+from app.infrastructure.db.repositories import connection_repository, user_repository
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -37,7 +36,7 @@ def get_current_user(
     if not username:
         raise _unauthorized("User not recognized or invalid session")
 
-    user = user_service.get_user(db, username)
+    user = user_repository.get_by_username(db, username)
     if not user or not user.is_active:
         raise _unauthorized("User not recognized or account deactivated")
 
@@ -68,7 +67,7 @@ def get_active_connection(
     keeps single-account clients working unchanged.
     """
     if x_connection_id:
-        connection = connection_service.get_connection(db, user.id, x_connection_id)
+        connection = connection_repository.get_active(db, user.id, x_connection_id)
         if connection is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +75,7 @@ def get_active_connection(
             )
         return connection
 
-    connections = connection_service.list_connections(db, user.id)
+    connections = connection_repository.list_active(db, user.id)
     if not connections:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

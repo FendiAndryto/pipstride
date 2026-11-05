@@ -4,41 +4,50 @@ Everything here is derived from rows already stored in ``trades``; nothing is
 invented and nothing is extrapolated. Timestamps are bucketed in UTC: the MT5
 monitor reports deal times as the broker server clock encoded in a Unix
 timestamp, so UTC buckets reproduce the server's own weekday/hour.
+
+Rows are duck-typed on the attributes the persistence layer already exposes
+(``profit``, ``symbol``, ``direction``, ``volume``, ``magic``, ``opened_at``,
+``closed_at``, ``created_at``), so this module imports no ORM or framework.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Callable, Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence
 
-from app.db.models import Trade
+from app.domain.time import as_utc
 
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 RANGE_DAYS = {"1M": 30, "3M": 90, "1Y": 365}
 
 
-def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
-    """PostgreSQL returns aware datetimes, SQLite returns naive ones."""
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+def win_rate(wins: int, total: int) -> float:
+    """Winning trades as a percentage of all trades; ``0.0`` for an empty set."""
+    return round(wins / total * 100.0, 2) if total else 0.0
 
 
-def close_time(row: Trade) -> Optional[datetime]:
-    return _as_utc(row.closed_at or row.opened_at or row.created_at)
+def profit_factor(gross_profit: float, gross_loss: float) -> Optional[float]:
+    """Gross profit divided by the absolute gross loss.
+
+    ``None`` when there is no loss at all: an infinite ratio is not a number
+    the dashboard can plot, and ``0.0`` would read as a terrible strategy.
+    """
+    return round(gross_profit / abs(gross_loss), 2) if gross_loss else None
 
 
-def _hold_minutes(row: Trade) -> Optional[float]:
-    opened, closed = _as_utc(row.opened_at), _as_utc(row.closed_at)
+def close_time(row: Any) -> Optional[datetime]:
+    return as_utc(row.closed_at or row.opened_at or row.created_at)
+
+
+def _hold_minutes(row: Any) -> Optional[float]:
+    opened, closed = as_utc(row.opened_at), as_utc(row.closed_at)
     if opened is None or closed is None:
         return None
     minutes = (closed - opened).total_seconds() / 60.0
     return minutes if minutes >= 0 else None
 
 
-def _bucket(key: str, rows: Sequence[Trade]) -> dict:
+def _bucket(key: str, rows: Sequence[Any]) -> dict:
     wins = [row.profit for row in rows if row.profit > 0]
     losses = [row.profit for row in rows if row.profit < 0]
     gross_profit = sum(wins)
@@ -48,18 +57,18 @@ def _bucket(key: str, rows: Sequence[Trade]) -> dict:
         "trades": len(rows),
         "wins": len(wins),
         "losses": len(losses),
-        "win_rate": round(len(wins) / len(rows) * 100.0, 2) if rows else 0.0,
+        "win_rate": win_rate(len(wins), len(rows)),
         "net_profit": round(gross_profit + gross_loss, 2),
-        "profit_factor": round(gross_profit / abs(gross_loss), 2) if gross_loss else None,
+        "profit_factor": profit_factor(gross_profit, gross_loss),
     }
 
 
 def _bucketize(
-    rows: Sequence[Trade],
-    key_fn: Callable[[Trade], Optional[str]],
+    rows: Sequence[Any],
+    key_fn: Callable[[Any], Optional[str]],
     order: Optional[Sequence[str]] = None,
 ) -> list[dict]:
-    grouped: dict[str, list[Trade]] = {}
+    grouped: dict[str, list[Any]] = {}
     for row in rows:
         key = key_fn(row)
         if key is not None:
@@ -79,30 +88,30 @@ def _bucketize(
     return [_bucket(key, grouped[key]) for key in ordered]
 
 
-def _symbol_key(row: Trade) -> Optional[str]:
+def _symbol_key(row: Any) -> Optional[str]:
     return (row.symbol or "").strip().upper() or None
 
 
-def _weekday_key(row: Trade) -> Optional[str]:
+def _weekday_key(row: Any) -> Optional[str]:
     moment = close_time(row)
     return WEEKDAY_LABELS[moment.weekday()] if moment else None
 
 
-def _hour_key(row: Trade) -> Optional[str]:
+def _hour_key(row: Any) -> Optional[str]:
     moment = close_time(row)
     return f"{moment.hour:02d}" if moment else None
 
 
-def _direction_key(row: Trade) -> Optional[str]:
+def _direction_key(row: Any) -> Optional[str]:
     direction = (row.direction or "").strip().upper()
     return direction or None
 
 
-def _source_key(row: Trade) -> Optional[str]:
+def _source_key(row: Any) -> Optional[str]:
     return "EA" if (row.magic or 0) > 0 else "Manual"
 
 
-def compute_totals(rows: Sequence[Trade]) -> dict:
+def compute_totals(rows: Sequence[Any]) -> dict:
     profits = [row.profit for row in rows]
     wins = [p for p in profits if p > 0]
     losses = [p for p in profits if p < 0]
@@ -134,11 +143,11 @@ def compute_totals(rows: Sequence[Trade]) -> dict:
         "wins": len(wins),
         "losses": len(losses),
         "breakeven": total - len(wins) - len(losses),
-        "win_rate": round(len(wins) / total * 100.0, 2) if total else 0.0,
+        "win_rate": win_rate(len(wins), total),
         "net_profit": round(gross_profit + gross_loss, 2),
         "gross_profit": round(gross_profit, 2),
         "gross_loss": round(gross_loss, 2),
-        "profit_factor": round(gross_profit / abs(gross_loss), 2) if gross_loss else None,
+        "profit_factor": profit_factor(gross_profit, gross_loss),
         "expectancy": round((gross_profit + gross_loss) / total, 2) if total else 0.0,
         "avg_win": round(avg_win, 2),
         "avg_loss": round(avg_loss, 2),
@@ -152,7 +161,7 @@ def compute_totals(rows: Sequence[Trade]) -> dict:
     }
 
 
-def compute_stats(rows: Iterable[Trade]) -> dict:
+def compute_stats(rows: Iterable[Any]) -> dict:
     rows = list(rows)
     return {
         "totals": compute_totals(rows),

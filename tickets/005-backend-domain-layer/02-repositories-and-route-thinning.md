@@ -35,4 +35,4 @@ Expected: pass; `journal.py` tidak lagi import `sqlalchemy`/`app.db.models`.
 - `03-service-decoupling-and-transaction-boundary.md`
 
 ## Status
-todo
+done

@@ -82,10 +82,10 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **04-seo-and-structured-data.md** (`done`): Implementasi `sitemap.xml`, `robots.txt`, dan schema.org `Product`/`Offer`.
 - [x] **05-infra-and-ci.md** (`done`): Dockerfile Astro, konfigurasi Caddy/Nginx reverse proxy, dan pipeline build CI.
 
-### Fase 005: Backend Domain Layer (Belum Diimplementasikan)
-- [ ] **01-extract-domain-metrics-policies.md** (`todo`): Ekstraksi domain model murni (drawdown policy, daily metrics) bebas dari framework.
-- [ ] **02-repositories-and-route-thinning.md** (`todo`): Pemisahan repository data access dan perampingan route FastAPI.
-- [ ] **03-service-decoupling-and-transaction-boundary.md** (`todo`): Pemisahan domain service dan penegasan boundary transaksi database.
+### Fase 005: Backend Domain Layer (Selesai)
+- [x] **01-extract-domain-metrics-policies.md** (`done`): Ekstraksi domain model murni (drawdown policy, daily metrics) bebas dari framework.
+- [x] **02-repositories-and-route-thinning.md** (`done`): Pemisahan repository data access dan perampingan route FastAPI.
+- [x] **03-service-decoupling-and-transaction-boundary.md** (`done`): Pemisahan domain service dan penegasan boundary transaksi database.
 
 ### Fase 006: Web Feature Split (Belum Diimplementasikan)
 - [ ] **01-split-api-client.md** (`todo`): Pecah god-client `api.js` menjadi per-domain HTTP client modular.

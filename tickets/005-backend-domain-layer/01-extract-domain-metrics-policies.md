@@ -46,4 +46,4 @@ Expected: `domain/` muncul tanpa pelanggaran; tidak ada `fastapi`/`sqlalchemy` d
 - `03-service-decoupling-and-transaction-boundary.md`
 
 ## Status
-todo
+done

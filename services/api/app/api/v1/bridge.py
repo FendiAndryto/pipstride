@@ -23,12 +23,12 @@ from app.models.bridge import (
     TradeHistoryResponse,
 )
 from app.models.risk import RiskWatchdogStatusResponse
-from app.services.bridge_service import (
-    ConnectionBindingError as _ConnectionBindingError,
-    ConnectionTokenInvalidError as _ConnectionTokenInvalidError,
-    bridge_service,
-)
+from app.domain.errors import ConnectionBindingError as _ConnectionBindingError
+from app.domain.policies import evaluate_daily_drawdown
+from app.services.account_settings_service import account_settings_service
+from app.services.bridge_status_service import bridge_status_service
 from app.services.connection_service import connection_service
+from app.services.telemetry_ingest_service import telemetry_ingest_service
 
 router = APIRouter(prefix="/bridge", tags=["Bridge"])
 
@@ -89,13 +89,15 @@ def receive_heartbeat(
                 headers={"Retry-After": str(anon_retry)},
             )
 
-    try:
-        return bridge_service.process_heartbeat(db, payload, raw_token=token)
-    except _ConnectionTokenInvalidError as exc:
+    connection = connection_service.get_by_token(db, token or "")
+    if connection is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+            detail="Invalid or revoked connection token.",
+        )
+
+    try:
+        return telemetry_ingest_service.process_heartbeat(db, connection, payload)
     except _ConnectionBindingError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -171,7 +173,7 @@ def sync_trades(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Sync payload belongs to a different MT5 account.",
             )
-    return bridge_service.sync_trades(db, connection, payload.closed_trades)
+    return telemetry_ingest_service.sync_trades(db, connection, payload.closed_trades)
 
 
 @router.get(
@@ -183,17 +185,17 @@ def get_bridge_status(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.get_status(db, connection)
+    return bridge_status_service.get_status(db, connection)
 
 
 @router.get("/positions", response_model=List[PositionItem])
 def get_positions(connection: Mt5Connection = Depends(get_active_connection)):
-    return bridge_service.get_positions(connection)
+    return bridge_status_service.get_positions(connection)
 
 
 @router.get("/market", response_model=List[MarketQuoteItem])
 def get_market_quotes(connection: Mt5Connection = Depends(get_active_connection)):
-    return bridge_service.get_market_quotes(connection)
+    return bridge_status_service.get_market_quotes(connection)
 
 
 @router.get("/history", response_model=TradeHistoryResponse)
@@ -203,7 +205,7 @@ def get_trade_history(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.get_trade_history(db, connection, limit=limit, offset=offset)
+    return bridge_status_service.get_trade_history(db, connection, limit=limit, offset=offset)
 
 
 @router.post("/history/reset")
@@ -211,7 +213,7 @@ def reset_trade_history(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.reset_journal(db, connection)
+    return telemetry_ingest_service.reset_journal(db, connection)
 
 
 @router.get("/equity-curve", response_model=EquityCurveResponse)
@@ -220,7 +222,7 @@ def get_equity_curve(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.get_equity_curve(db, connection, time_range=range)
+    return bridge_status_service.get_equity_curve(db, connection, time_range=range)
 
 
 @router.get("/initial-deposit", response_model=InitialDepositResponse)
@@ -228,7 +230,7 @@ def get_initial_deposit(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.get_initial_deposit_info(db, connection)
+    return bridge_status_service.get_initial_deposit_info(db, connection)
 
 
 @router.post("/initial-deposit", response_model=InitialDepositResponse)
@@ -237,7 +239,8 @@ def set_initial_deposit(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    return bridge_service.set_initial_deposit_override(db, connection, req.initial_deposit)
+    account_settings_service.set_initial_deposit_override(db, connection, req.initial_deposit)
+    return bridge_status_service.get_initial_deposit_info(db, connection)
 
 
 @router.get("/risk", response_model=RiskWatchdogStatusResponse, tags=["Risk Watchdog"])
@@ -245,32 +248,31 @@ def get_risk_watchdog(
     connection: Mt5Connection = Depends(get_active_connection),
     db: Session = Depends(get_db),
 ):
-    from app.core.config import settings
-
-    status_response = bridge_service.get_status(db, connection)
-    drawdown = 0.0
+    status_response = bridge_status_service.get_status(db, connection)
     daily_start_balance = 0.0
+    equity = None
     if status_response.metrics and status_response.metrics.balance:
-        daily_start_balance = bridge_service.get_daily_starting_balance(
+        daily_start_balance = bridge_status_service.get_daily_starting_balance(
             db, connection, status_response.metrics.balance
         )
         equity = status_response.metrics.equity
-        if daily_start_balance > 0 and equity < daily_start_balance:
-            drawdown = max(
-                0.0,
-                ((daily_start_balance - equity) / daily_start_balance) * 100.0,
-            )
+
+    drawdown = evaluate_daily_drawdown(
+        daily_start_balance,
+        equity,
+        settings.MAX_DAILY_DRAWDOWN_PERCENT,
+    )
 
     return RiskWatchdogStatusResponse(
-        is_alert_active=drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT,
+        is_alert_active=drawdown.is_alert_active,
         alert_reason=(
-            f"Equity drawdown {drawdown:.2f}% melampaui batas "
+            f"Equity drawdown {drawdown.drawdown_pct:.2f}% melampaui batas "
             f"{settings.MAX_DAILY_DRAWDOWN_PERCENT}%"
-            if drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT
+            if drawdown.reason_code
             else None
         ),
-        alert_time=int(time.time()) if drawdown >= settings.MAX_DAILY_DRAWDOWN_PERCENT else None,
-        daily_drawdown_percent=round(drawdown, 2),
+        alert_time=int(time.time()) if drawdown.is_alert_active else None,
+        daily_drawdown_percent=drawdown.drawdown_pct,
         daily_starting_balance=round(daily_start_balance, 2) if daily_start_balance > 0 else None,
         max_daily_drawdown_percent=settings.MAX_DAILY_DRAWDOWN_PERCENT,
         margin_level=status_response.metrics.margin_level if status_response.metrics else 0.0,

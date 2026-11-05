@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
+from app.db.base import session_scope
 from app.db.models import Entitlement, User
 
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{3,32}$")
@@ -93,11 +94,10 @@ class UserService:
             password_hash=hash_password(plain_password),
             role=role,
         )
-        db.add(user)
-        db.flush()
-
-        db.add(Entitlement(user_id=user.id, plan_code="free", max_connections=1))
-        db.commit()
+        with session_scope(db):
+            db.add(user)
+            db.flush()
+            db.add(Entitlement(user_id=user.id, plan_code="free", max_connections=1))
         db.refresh(user)
         return user
 
@@ -110,24 +110,24 @@ class UserService:
         if existing is not None and existing.id != user.id:
             raise ValueError("Email already registered")
 
-        user.email = normalized
-        user.email_verified_at = None
-        db.commit()
+        with session_scope(db):
+            user.email = normalized
+            user.email_verified_at = None
         db.refresh(user)
         return user
 
     def mark_email_verified(self, db: Session, user: User) -> User:
-        user.email_verified_at = datetime.now(timezone.utc)
-        db.commit()
+        with session_scope(db):
+            user.email_verified_at = datetime.now(timezone.utc)
         db.refresh(user)
         return user
 
     def reset_password(self, db: Session, user: User, new_password: str) -> User:
         validate_password_complexity(new_password)
-        user.password_hash = hash_password(new_password)
-        # A reset must also sign out every existing session.
-        user.token_version = int(user.token_version) + 1
-        db.commit()
+        with session_scope(db):
+            user.password_hash = hash_password(new_password)
+            # A reset must also sign out every existing session.
+            user.token_version = int(user.token_version) + 1
         db.refresh(user)
         return user
 
@@ -136,14 +136,14 @@ class UserService:
             return False
 
         validate_password_complexity(new_password)
-        user.password_hash = hash_password(new_password)
-        user.token_version = int(user.token_version) + 1
-        db.commit()
+        with session_scope(db):
+            user.password_hash = hash_password(new_password)
+            user.token_version = int(user.token_version) + 1
         return True
 
     def increment_token_version(self, db: Session, user: User) -> int:
-        user.token_version = int(user.token_version) + 1
-        db.commit()
+        with session_scope(db):
+            user.token_version = int(user.token_version) + 1
         return user.token_version
 
 

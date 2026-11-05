@@ -16,7 +16,9 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.tokens import hash_token
+from app.db.base import session_scope
 from app.db.models import AuthToken, User
+from app.domain.time import as_utc
 
 PURPOSE_RESET = "reset_password"
 PURPOSE_VERIFY = "verify_email"
@@ -28,36 +30,31 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
 class AuthTokenService:
     def issue(
         self, db: Session, user: User, purpose: str, ttl: timedelta
     ) -> str:
         """Create a token, invalidating older unused ones for the same purpose."""
         now = _now()
-        db.execute(
-            update(AuthToken)
-            .where(
-                AuthToken.user_id == user.id,
-                AuthToken.purpose == purpose,
-                AuthToken.used_at.is_(None),
-            )
-            .values(used_at=now)
-        )
-
         raw = secrets.token_urlsafe(TOKEN_BYTES)
-        db.add(
-            AuthToken(
-                user_id=user.id,
-                purpose=purpose,
-                token_hash=hash_token(raw),
-                expires_at=now + ttl,
+        with session_scope(db):
+            db.execute(
+                update(AuthToken)
+                .where(
+                    AuthToken.user_id == user.id,
+                    AuthToken.purpose == purpose,
+                    AuthToken.used_at.is_(None),
+                )
+                .values(used_at=now)
             )
-        )
-        db.commit()
+            db.add(
+                AuthToken(
+                    user_id=user.id,
+                    purpose=purpose,
+                    token_hash=hash_token(raw),
+                    expires_at=now + ttl,
+                )
+            )
         return raw
 
     def consume(self, db: Session, raw_token: str, purpose: str) -> Optional[User]:
@@ -78,7 +75,7 @@ class AuthTokenService:
         )
         if row is None or row.used_at is not None:
             return None
-        if _as_utc(row.expires_at) <= _now():
+        if as_utc(row.expires_at) <= _now():
             return None
 
         burned = db.execute(

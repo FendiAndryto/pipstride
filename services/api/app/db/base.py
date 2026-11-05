@@ -1,6 +1,6 @@
 import os
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Iterator, Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -36,16 +36,22 @@ def get_db() -> Iterator[Session]:
 
 
 @contextmanager
-def session_scope() -> Iterator[Session]:
-    db = SessionLocal()
+def session_scope(db: Optional[Session] = None) -> Iterator[Session]:
+    """Unit of work: the scope owns the commit, callers never commit.
+
+    Pass an existing request-scoped session to make that session's pending
+    changes one transaction; omit it to open (and close) a standalone one.
+    """
+    session = db if db is not None else SessionLocal()
     try:
-        yield db
-        db.commit()
+        yield session
+        session.commit()
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if db is None:
+            session.close()
 
 
 def init_db() -> None:

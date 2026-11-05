@@ -55,22 +55,35 @@ forbidden_modules =
     app.api.v1
 
 [importlinter:contract:no-fastapi-in-services]
-name = fastapi is not imported by the service layer (Fase 005 baseline)
+name = fastapi is not imported by the service layer
 type = forbidden
 source_modules =
     app.services
 forbidden_modules =
     fastapi
 
-# TODO(Fase 005): activate once app.domain/ is created.
-# [importlinter:contract:no-sqlalchemy-in-domain]
-# name = SQLAlchemy is forbidden inside the pure domain layer
-# type = forbidden
-# source_modules =
-#     app.domain
-# transitive = false
-# forbidden_modules =
-#     sqlalchemy
+[importlinter:contract:no-frameworks-in-domain]
+name = Domain imports no framework, ORM or cache client
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    fastapi
+    sqlalchemy
+    redis
+
+[importlinter:contract:domain-imports-no-app-layer]
+name = Domain imports no application layer
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    app.api.v1
+    app.core
+    app.db
+    app.models
+    app.services
+    app.main
 
 # Redis contract: the `redis` module is only allowed inside app.core.live_state
 # and app.core.rate_limit. import-linter does not distinguish "imports the

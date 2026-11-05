@@ -31,11 +31,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 
 ### Ringkasan Status
 - **Total Tiket:** 25 tiket
-- **Selesai (`done`):** 12 tiket (Fase 001, 002, 003, 004)
-- **Belum Diimplementasikan (`todo`):** 13 tiket (Fase 005, 006, 007)
+- **Selesai (`done`):** 15 tiket (Fase 001, 002, 003, 004, 005)
+- **Belum Diimplementasikan (`todo`):** 10 tiket (Fase 006, 007)
 
 ```
-[========================>----------------------------------] 48% Selesai
+[==============================>----------------------------] 60% Selesai
 ```
 
 ---
@@ -76,10 +76,21 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **04-seo-and-structured-data.md** (`done`): Konfigurasi SEO English, sitemap.xml, robots.txt, dan schema.org `SoftwareApplication` & `Product`.
 - [x] **05-infra-and-ci.md** (`done`): Multi-stage Dockerfile Astro, konfigurasi routing domain apex pada Caddy/Nginx, dan pipeline build CI.
 
-#### Fase 005: Backend Domain Layer (Belum Diimplementasikan)
-- [ ] **01-extract-domain-metrics-policies.md** (`todo`): Ekstraksi core business logic drawdown & metrik jurnal murni.
-- [ ] **02-repositories-and-route-thinning.md** (`todo`): Implementasi repository pattern dan perampingan router FastAPI.
-- [ ] **03-service-decoupling-and-transaction-boundary.md** (`todo`): Pemisahan service dependencies dan batas transaksi database eksplisit.
+#### Fase 005: Backend Domain Layer (SELESAI)
+> **Catatan Implementasi (2026-11-05):**
+> - `app/domain/` murni: `metrics.py` (satu definisi profit-factor/win-rate), `policies.py` (drawdown),
+>   `time.py` (`as_utc`/`to_unix`), `errors.py`. Contract baru `import-linter`:
+>   `no-frameworks-in-domain`, `domain-imports-no-app-layer` (6 kept, 0 broken).
+> - `app/infrastructure/db/repositories/` (`trade`, `connection`, `telemetry`, `user`); `journal.py`
+>   tidak lagi import `sqlalchemy`/`Trade`.
+> - `bridge_service.py`/`journal_service.py` dihapus, diganti `telemetry_ingest_service`,
+>   `bridge_status_service`, `account_settings_service`.
+> - `session_scope(db)` menjadi unit-of-work; `grep "db.commit(" services/` → 0; `HTTPException` di
+>   `services/` → 0; `core/deps.py` memakai repository (Dep-1); heartbeat menerima `connection` (Dep-2).
+> - Verifikasi: pytest `104 passed`; `lint-imports` `6 kept, 0 broken`.
+- [x] **01-extract-domain-metrics-policies.md** (`done`): Ekstraksi core business logic drawdown & metrik jurnal murni.
+- [x] **02-repositories-and-route-thinning.md** (`done`): Implementasi repository pattern dan perampingan router FastAPI.
+- [x] **03-service-decoupling-and-transaction-boundary.md** (`done`): Pemisahan service dependencies dan batas transaksi database eksplisit.
 
 #### Fase 006: Web Feature Split (Belum Diimplementasikan)
 - [ ] **01-split-api-client.md** (`todo`): Pemecahan file monolith `api.js` menjadi modul-modul klien per fitur.

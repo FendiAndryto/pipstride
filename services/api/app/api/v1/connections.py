@@ -6,41 +6,39 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.db.base import get_db
 from app.db.models import User
-from app.models.auth import ConnectionCreatedResponse, ConnectionResponse
-from app.services.connection_service import (
-    ConnectionLimitReached,
-    connection_service,
-)
+from app.models.auth import ConnectionCreatedResponse, ConnectionResponse, PresetFileResponse
+from app.domain.errors import ConnectionLimitReached
+from app.services.connection_service import connection_service
 from app.services.mt5_package import build_preset
 
 router = APIRouter(prefix="/connections", tags=["MT5 Connections"])
 
 
-def _project(connection) -> dict:
-    return {
-        "id": connection.id,
-        "label": connection.label,
-        "token_prefix": connection.token_prefix,
-        "status": connection.status,
-        "account_number": connection.account_number,
-        "broker_server": connection.broker_server,
-        "account_currency": connection.account_currency,
-        "last_seen_at": connection.last_seen_at.isoformat() if connection.last_seen_at else None,
-        "created_at": connection.created_at.isoformat(),
-    }
+def _project(connection) -> ConnectionResponse:
+    return ConnectionResponse(
+        id=connection.id,
+        label=connection.label,
+        token_prefix=connection.token_prefix,
+        status=connection.status,
+        account_number=connection.account_number,
+        broker_server=connection.broker_server,
+        account_currency=connection.account_currency,
+        last_seen_at=connection.last_seen_at.isoformat() if connection.last_seen_at else None,
+        created_at=connection.created_at.isoformat(),
+    )
 
 
-def _preset(connection, token: str, request: Request) -> dict:
+def _preset(connection, token: str, request: Request) -> PresetFileResponse:
     preset = build_preset(
         token,
         request_base_url=str(request.base_url),
         label=connection.label,
     )
-    return {
-        "filename": preset.filename,
-        "content": preset.content,
-        "backend_url": preset.backend_url,
-    }
+    return PresetFileResponse(
+        filename=preset.filename,
+        content=preset.content,
+        backend_url=preset.backend_url,
+    )
 
 
 @router.get(
@@ -69,11 +67,11 @@ def create_connection(
     except ConnectionLimitReached as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
-    return {
-        **_project(connection),
-        "token": raw_token,
-        "preset": _preset(connection, raw_token, request),
-    }
+    return ConnectionCreatedResponse(
+        **_project(connection).model_dump(),
+        token=raw_token,
+        preset=_preset(connection, raw_token, request),
+    )
 
 
 @router.post(
@@ -92,11 +90,11 @@ def rotate_token(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
 
     connection, raw_token = connection_service.rotate_token(db, user, connection)
-    return {
-        **_project(connection),
-        "token": raw_token,
-        "preset": _preset(connection, raw_token, request),
-    }
+    return ConnectionCreatedResponse(
+        **_project(connection).model_dump(),
+        token=raw_token,
+        preset=_preset(connection, raw_token, request),
+    )
 
 
 @router.delete(
