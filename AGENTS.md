@@ -103,6 +103,17 @@ npm --prefix apps/web run lint
 ```
 `oxlint` — exit 0 with **0 warnings** (the 3 pre-onboarding warnings were cleared in Fase 006).
 
+### 1b. Web tests (Fase 008)
+```bash
+npm --prefix apps/web test
+```
+`vitest run` — **4 files, 54 tests, exit 0** in ~0.6s. Pure modules only (`environment: 'node'`,
+no jsdom): `domain/{analytics,pnl,validation}` and `features/journal/dayBuckets`. Vitest is used
+instead of `node:test` because 95 of 96 relative imports in `src/` are extensionless and plain
+`node:test` fails with `ERR_MODULE_NOT_FOUND` outside `domain/`. **Run this after touching
+`src/domain/` or `src/features/`** — it is the only guard on backend parity.
+`vitest` is a devDependency only; the production bundle hash must not change.
+
 ### 2. Web build
 ```bash
 npm --prefix apps/web run build
@@ -182,13 +193,13 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–006 done. 007 still `todo`.**
-- Recommended order: `002 → 003 → 004 → 005 → 006 → 007`.
+- Current state: **001–006 and 008 done. 007 still `todo`.**
+- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 007`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 
 ## Build & release expectations
 
-- CI (`.github/workflows/ci.yml`) runs six jobs: `api` (pytest, Python 3.12), `migrations` (upgrade head + drift + backup/restore round-trip against Postgres 16), `web` (`npm ci && lint && build`, Node 22), `marketing` (`npm ci && build`, Node 22), `arch` (`lint-imports` + `npm run lint:arch`), and `docker` (three image builds, gated on the first three).
+- CI (`.github/workflows/ci.yml`) runs six jobs: `api` (pytest, Python 3.12), `migrations` (upgrade head + drift + backup/restore round-trip against Postgres 16), `web` (`npm ci && lint && test && build`, Node 22), `marketing` (`npm ci && build`, Node 22), `arch` (`lint-imports` + `npm run lint:arch`), and `docker` (three image builds, gated on the first three).
 - Commit messages follow Conventional Commits with a scope: `fix(api):`, `feat(marketing):`, `docs(tickets):`.
 
 ---

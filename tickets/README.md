@@ -23,8 +23,9 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **005** | `005-backend-domain-layer/` | `domain/` + `infrastructure/repositories` | 003 | 006 |
 | **006** | `006-web-feature-split/` | Pecah god-class `apps/web` | 003, 005 | 007 (frontend) |
 | **007** | `007-admin-console/` | Admin console + privilege boundary | 003, 005, 006 | ops/support |
+| **008** | `008-web-test-harness/` | Test runner `apps/web` + paritas domain terjaga | 006 | 007-05 |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 007`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 007`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -96,6 +97,9 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **03-split-profile-tab.md** (`done`): `ProfileTab` 803 → 91 baris (`features/profile/*`, 5 section) + `features/connections/useConnections` dipakai dua konsumen; `window.confirm` → `ConfirmInline`; rule depcruise `no-feature-to-feature` diperbaiki.
 - [x] **04-split-journal-tab.md** (`done`): `JournalTab` 903 → 256 baris (`features/journal/*`, 5 modul + `lib/csv`); 5 effect fetch → satu hook polling; filter/search state pindah ke hook.
 - [x] **05-remove-dead-code-and-guard-dev-bypass.md** (`done`): Dev bypass + kredensial demo dikompilasi keluar dari produksi (diverifikasi absen di `dist/`); guard zero-state data pasar.
+
+### Fase 008: Web Test Harness (Selesai)
+- [x] **01-vitest-harness-and-domain-tests.md** (`done`): Vitest (tanpa jsdom) + 4 file tes / 54 tes yang mengunci paritas `domain/` dan `features/journal/dayBuckets` terhadap backend; `npm test` masuk CI job `web`. Bundle produksi tidak berubah (vitest hanya devDependency).
 
 ### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
 - [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): RBAC role DB (`admin`/`support`) dan endpoint query read-only.

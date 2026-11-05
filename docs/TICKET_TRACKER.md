@@ -30,12 +30,12 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 25 tiket
-- **Selesai (`done`):** 20 tiket (Fase 001, 002, 003, 004, 005, 006)
+- **Total Tiket:** 26 tiket
+- **Selesai (`done`):** 21 tiket (Fase 001, 002, 003, 004, 005, 006, 008)
 - **Belum Diimplementasikan (`todo`):** 5 tiket (Fase 007)
 
 ```
-[============================================>--------------] 80% Selesai
+[==============================================>------------] 81% Selesai
 ```
 
 ---
@@ -116,6 +116,13 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **03-split-profile-tab.md** (`done`): Modularisasi `ProfileTab.jsx` → `features/profile/*` + hook koneksi bersama; konfirmasi destruktif non-blocking.
 - [x] **04-split-journal-tab.md** (`done`): Modularisasi `JournalTab.jsx` → `features/journal/*` + `lib/csv`; polling tunggal di `useJournalData`.
 - [x] **05-remove-dead-code-and-guard-dev-bypass.md** (`done`): Bypass token dev dikompilasi keluar dari build produksi; guard zero-state data pasar.
+
+#### Fase 008: Web Test Harness (SELESAI)
+> **Catatan Implementasi:** `vitest@5.1.0` dipilih (bukan `node:test`) karena 95 dari 96 relative
+> import di `src/` tanpa ekstensi — `node:test` gagal `ERR_MODULE_NOT_FOUND` di luar `domain/`.
+> 4 file tes / 54 tes; paritas `computeTotals` diverifikasi langsung ke `metrics.py` Python.
+> Uji negatif membuktikan tes menangkap regresi (6 dan 5 tes merah). Tanpa jsdom, tanpa coverage gate.
+- [x] **01-vitest-harness-and-domain-tests.md** (`done`): Vitest (devDependency) + tes paritas `domain/{analytics,pnl,validation}` & `features/journal/dayBuckets`; `npm test` masuk CI job `web`.
 
 #### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
 - [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): Validasi role admin via database & endpoint analitik read-only.
