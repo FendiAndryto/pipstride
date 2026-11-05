@@ -36,18 +36,21 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
   const prevAccountRef = useRef(activeAccountNumber);
   const historyInFlightRef = useRef(false);
   const statsInFlightRef = useRef(false);
+  const ticksRef = useRef(0);
 
   const fetchHistory = useCallback(async () => {
     if (!hasConnection && !isConnected) return;
     if (document.hidden || historyInFlightRef.current) return;
     historyInFlightRef.current = true;
+    // Stamp "now" even when the request fails: buildDayBuckets needs a reference
+    // timestamp for the 1M/3M/1Y windows, and 0 would drop every trade.
+    setWindowNowSec(Math.floor(Date.now() / 1000));
     try {
       const data = await api.getTradeHistory(HISTORY_LIMIT);
       // Never show another MT5 account's history.
       if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
         setHistoryData(data);
         setHistoryError(false);
-        setWindowNowSec(Math.floor(Date.now() / 1000));
       }
     } catch {
       setHistoryError(true);
@@ -76,6 +79,14 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
     }
   }, [period, statsSource, selectedSymbol, hasConnection, isConnected, activeAccountNumber]);
 
+  // Keep the latest fetchers reachable from the interval without re-keying it.
+  const fetchHistoryRef = useRef(fetchHistory);
+  const fetchStatsRef = useRef(fetchStats);
+  useEffect(() => {
+    fetchHistoryRef.current = fetchHistory;
+    fetchStatsRef.current = fetchStats;
+  }, [fetchHistory, fetchStats]);
+
   // Switching MT5 account wipes everything that belonged to the previous one.
   useEffect(() => {
     if (activeAccountNumber && prevAccountRef.current && prevAccountRef.current !== activeAccountNumber) {
@@ -89,28 +100,36 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
     prevAccountRef.current = activeAccountNumber;
   }, [activeAccountNumber]);
 
-  // Single polling loop for the visible journal tab (replaces 3 separate effects).
-  // The first tick is deferred so the effect body never sets state during commit;
-  // the loading spinners are derived below, not stored.
+  // Refetch immediately whenever the query identity changes (tab, account, period,
+  // filter, symbol, closed-trade count). This replaces the two original reactive
+  // effects, which refetched on exactly these keys.
+  // The kickoff is deferred by a tick so the effect body never calls setState
+  // synchronously during commit; it still runs before paint.
   useEffect(() => {
     if (activeTab && activeTab !== 'journal') return undefined;
     if (!canFetch) return undefined;
-
-    let ticks = 0;
-    const poll = () => {
-      ticks += 1;
+    const kickoff = setTimeout(() => {
       void fetchHistory();
-      if (ticks === 1 || ticks % 4 === 0) void fetchStats();
-    };
-
-    const kickoff = setTimeout(poll, 0);
-    const timer = setInterval(poll, 20000);
-
-    return () => {
-      clearTimeout(kickoff);
-      clearInterval(timer);
-    };
+      void fetchStats();
+    }, 0);
+    return () => clearTimeout(kickoff);
   }, [activeTab, canFetch, closedTradesCount, activeAccountNumber, period, statsSource, selectedSymbol, fetchHistory, fetchStats]);
+
+  // Background polling while the journal tab is actually visible. Keyed only on
+  // the tab, so a re-key above does NOT restart the interval and the 80s stats
+  // cadence survives. `ticks` lives in a ref for the same reason.
+  useEffect(() => {
+    if (activeTab !== 'journal') return undefined;
+    if (!canFetch) return undefined;
+
+    const timer = setInterval(() => {
+      ticksRef.current += 1;
+      void fetchHistoryRef.current();
+      if (ticksRef.current % 4 === 0) void fetchStatsRef.current();
+    }, 20000);
+
+    return () => clearInterval(timer);
+  }, [activeTab, canFetch]);
 
   // ------------------------------------------------------------------ derived
   const { selectedMonthIndex, selectedYear, selectedMonth } = month;

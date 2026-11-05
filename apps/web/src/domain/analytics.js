@@ -59,11 +59,12 @@ const symbolKey = (row) => {
 
 const sourceKey = (row) => ((row.magic || 0) > 0 ? 'EA' : 'Manual');
 
+// Mirrors Python `_direction_key`: upper-cased raw value, None when empty.
+// Do NOT collapse to BUY/SELL by substring — the backend keeps the raw value,
+// so "BUY_LIMIT"/"SELL_STOP" would bucket differently between the two sides.
 const directionKey = (row) => {
   const direction = String(row.direction ?? row.type ?? '').trim().toUpperCase();
-  if (direction.includes('SELL')) return 'SELL';
-  if (direction.includes('BUY')) return 'BUY';
-  return null;
+  return direction || null;
 };
 
 function bucket(key, rows) {
