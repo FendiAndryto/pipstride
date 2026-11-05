@@ -62,15 +62,36 @@ describe('describeWindow', () => {
     expect(read.structure).toBe(STRUCTURE.LOWER_LOWS);
   });
 
-  it('measures the change over the window, not between two stray fields', () => {
+  it('measures the bias over the last six candles, not the whole window', () => {
     // Newest bar pulls back: open 129 -> close 120 while the window opened at 101.
     const withPullback = [...rising.slice(0, 29), candle(rising[29].time, 129, 130, 119, 120)];
     const read = describeWindow(withPullback, 24, 120);
 
+    expect(read.biasBars).toBe(6);
     expect(read.open).toBe(withPullback[6].open);
     expect(read.close).toBe(120);
-    expect(read.changePct).toBeCloseTo(((120 - withPullback[6].open) / withPullback[6].open) * 100, 6);
-    expect(read.trend).toBe('BULLISH');
+    expect(read.changePct).toBeCloseTo(
+      ((120 - withPullback[24].open) / withPullback[24].open) * 100,
+      6
+    );
+    expect(read.windowChangePct).toBeCloseTo(((120 - withPullback[6].open) / withPullback[6].open) * 100, 6);
+    expect(read.trend).toBe('BEARISH');
+  });
+
+  it('flips to bearish when a long rally cracks over the last six candles', () => {
+    // The production report: XAUUSD ran up for days, then dumped. The 24-bar
+    // change was still positive while the current leg was clearly down, so the
+    // badge stayed green. Bias must follow the latest candles.
+    const crash = [
+      candle(rising[29].time + 300, 126, 127, 125, 126),
+      candle(rising[29].time + 600, 125, 126, 122, 122),
+      candle(rising[29].time + 900, 121, 122, 117, 118)
+    ];
+    const read = describeWindow([...rising, ...crash], 24, 118);
+
+    expect(read.windowChangePct).toBeGreaterThan(0);
+    expect(read.changePct).toBeLessThan(0);
+    expect(read.trend).toBe('BEARISH');
   });
 
   it('keeps the newest bars when the payload carries more than the window', () => {

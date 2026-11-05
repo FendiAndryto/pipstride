@@ -249,10 +249,18 @@ dengan semantik yang diperbaiki.
   pertama Market tab mengasumsikan newest-first: ia mengambil `slice(0, bars)`
   (bar **tertua**) lalu membandingkan `last.open` dengan `first.close`, sehingga
   XAUUSD yang naik terbaca "BEARISH −2,13%" di H1 dan "−6,23%" di H4. Sekarang
-  urutan dinormalisasi di `src/domain/market.js` (`normalizeCandles`), window
-  diambil dari ujung terbaru (`slice(-bars)`), dan struktur dibaca dari high/low
-  sepertiga terakhir vs sepertiga sebelumnya. Konsumen baru **wajib** memakai
+  urutan dinormalisasi di `src/domain/market.js` (`normalizeCandles`) dan window
+  diambil dari ujung terbaru (`slice(-bars)`). Konsumen baru **wajib** memakai
   helper ini, bukan mengasumsikan urutan dari EA.
+- **Definisi bias (bug pasca-deploy kedua):** net change seluruh window (H4 = 24
+  bar = 4 hari) membuat badge tetap BULLISH saat harga sudah jatuh — H1 +1,44%
+  padahal 6 candle terakhir −0,54%. Bias sekarang = arah **6 candle terakhir**
+  (`BIAS_BARS`), struktur = high/low 6 candle terakhir vs 6 sebelumnya
+  (`STRUCTURE_BARS`), dan range/support/resistance tetap dari seluruh window.
+  Dengan data 2026-11-05 14:50 UTC: H1 BEARISH (−0,54%, lower lows), H4 BULLISH
+  (+1,38%, higher highs) — sedangkan window H1 masih +1,44% dan H4 +5,69%.
+  Menurunkan `BIAS_BARS` membuat badge lebih cepat berbalik (lebih berisik);
+  menaikkannya membuat lebih lambat.
 
 ### D9 — `broker_time` menggantikan `timestamp` sebagai sumber offset
 
