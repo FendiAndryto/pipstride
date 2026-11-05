@@ -629,7 +629,13 @@ string BuildHeartbeatJson()
 
    bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
    int positions = PositionsTotal();
+   // Two clocks, deliberately kept apart:
+   //   timestamp  = TimeLocal()   -> wall clock of the PC running the terminal
+   //   broker_time = TimeCurrent() -> trade server clock, which defines the day
+   // Sending only the local clock made the API anchor the daily drawdown at the
+   // trader's midnight (UTC+7) instead of the broker's (spec 003, ticket 09-01).
    long timestamp = (long)TimeLocal();
+   long broker_time = (long)TimeCurrent();
 
    // Build Open Positions Array
    string positionsJson = "[";
@@ -727,6 +733,7 @@ string BuildHeartbeatJson()
       + "\"bridge_token\":\"" + EscapeJsonString(g_bridge_token) + "\","
       + "\"host_type\":\"" + host_type + "\","
       + StringFormat("\"timestamp\":%I64d", timestamp)
+      + StringFormat(",\"broker_time\":%I64d", broker_time)
       + "}";
 
    return json;
