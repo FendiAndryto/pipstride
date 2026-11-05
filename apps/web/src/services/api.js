@@ -39,7 +39,11 @@ const jsonError = async (res, fallback) => {
 };
 
 /** Parse a JSON body or throw a typed error carrying the API's `detail`. */
-const sendAndParse = async (res, fallback) => {
+const sendAndParse = async (pendingRes, fallback) => {
+  // Callers pass the pending request, not a settled Response: `res.ok` on a
+  // Promise is `undefined`, which made every call take the error branch and
+  // throw `res.json is not a function` instead of parsing the body.
+  const res = await pendingRes;
   if (!res.ok) throw await jsonError(res, fallback);
   return res.json();
 };
