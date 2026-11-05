@@ -7,7 +7,6 @@ import { useConnectionManager } from '../features/connections/useConnections';
 import { SectionHeading } from '../features/profile/sectionPrimitives';
 import Mt5ConnectionsSection from '../features/profile/Mt5ConnectionsSection';
 import ActiveAccountSection from '../features/profile/ActiveAccountSection';
-import RiskWatchdogSection from '../features/profile/RiskWatchdogSection';
 import AccountEmailSection from '../features/profile/AccountEmailSection';
 import PasswordSection from '../features/profile/PasswordSection';
 
@@ -76,10 +75,7 @@ export default function ProfileTab({
       />
 
       <SectionHeading>{t('profile_active_account')}</SectionHeading>
-      <ActiveAccountSection bridgeStatus={bridgeStatus} activeConn={activeConn} />
-
-      <SectionHeading>{t('profile_risk_section')}</SectionHeading>
-      <RiskWatchdogSection bridgeStatus={bridgeStatus} riskStatus={riskStatus} />
+      <ActiveAccountSection bridgeStatus={bridgeStatus} riskStatus={riskStatus} activeConn={activeConn} />
 
       <SectionHeading>{t('profile_email_section')}</SectionHeading>
       <AccountEmailSection user={user} onRefreshUser={onRefreshUser} />

@@ -35,6 +35,8 @@ string   g_status_msg = "Initializing...";
 // OnTimer stays cheap. Trade history is event-driven (OnTradeTransaction).
 string   g_cached_candles_m15 = "[]";
 string   g_cached_candles_m5 = "[]";
+string   g_cached_candles_h1 = "[]";
+string   g_cached_candles_h4 = "[]";
 datetime g_candles_built_at = 0;
 double   g_cached_initial_deposit = 0.0;
 datetime g_deposit_cached_at = 0;
@@ -525,12 +527,13 @@ string BuildMarketQuotesJson()
 
 //+------------------------------------------------------------------+
 //| Build JSON array of recent candles for specified timeframe       |
+//| bars: 35 for the M5/M15 chart, 24 for H1/H4 structure (egress).   |
 //+------------------------------------------------------------------+
-string BuildCandlesJson(ENUM_TIMEFRAMES tf = PERIOD_M15)
+string BuildCandlesJson(ENUM_TIMEFRAMES tf = PERIOD_M15, int bars = 35)
 {
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
-   int copied = CopyRates(_Symbol, tf, 0, 35, rates);
+   int copied = CopyRates(_Symbol, tf, 0, bars, rates);
    if(copied <= 0) return "[]";
 
    string json = "[";
@@ -676,12 +679,18 @@ string BuildHeartbeatJson()
    // via SendTradeSync(), never on every heartbeat.
    if(g_candles_built_at == 0 || (TimeCurrent() - g_candles_built_at) >= 30)
    {
-      g_cached_candles_m15 = BuildCandlesJson(PERIOD_M15);
-      g_cached_candles_m5 = BuildCandlesJson(PERIOD_M5);
+      g_cached_candles_m15 = BuildCandlesJson(PERIOD_M15, 35);
+      g_cached_candles_m5 = BuildCandlesJson(PERIOD_M5, 35);
+      // H1/H4 feed the market-structure panel. 24 bars is the minimum the
+      // structure read needs, and keeps the heartbeat payload small.
+      g_cached_candles_h1 = BuildCandlesJson(PERIOD_H1, 24);
+      g_cached_candles_h4 = BuildCandlesJson(PERIOD_H4, 24);
       g_candles_built_at = TimeCurrent();
    }
    string candlesM15Json = g_cached_candles_m15;
    string candlesM5Json = g_cached_candles_m5;
+   string candlesH1Json = g_cached_candles_h1;
+   string candlesH4Json = g_cached_candles_h4;
 
    string host_type = "local";
    if(InpHostEnv == HOST_ENV_VPS)
@@ -712,6 +721,8 @@ string BuildHeartbeatJson()
       + "\"closed_trades\":[],"
       + "\"candles\":" + candlesM15Json + ","
       + "\"candles_m5\":" + candlesM5Json + ","
+      + "\"candles_h1\":" + candlesH1Json + ","
+      + "\"candles_h4\":" + candlesH4Json + ","
       + "\"chart_symbol\":\"" + EscapeJsonString(_Symbol) + "\","
       + "\"bridge_token\":\"" + EscapeJsonString(g_bridge_token) + "\","
       + "\"host_type\":\"" + host_type + "\","

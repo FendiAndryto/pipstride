@@ -6,7 +6,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { formatCurrency } from '../../domain/format';
 import { StatTile } from './sectionPrimitives';
 
-export default function ActiveAccountSection({ bridgeStatus, activeConn }) {
+export default function ActiveAccountSection({ bridgeStatus, riskStatus, activeConn }) {
   const { t } = useLanguage();
   const metrics = bridgeStatus?.metrics || {};
   const isConnected = bridgeStatus?.is_connected || false;
@@ -15,6 +15,9 @@ export default function ActiveAccountSection({ bridgeStatus, activeConn }) {
   const server = metrics.server || 'MetaQuotes-Demo';
   const accountNumber = metrics.account_number || 0;
   const currency = metrics.currency || 'USD';
+  // Margin level used to live only on the removed risk card; keep it visible here
+  // so moving drawdown to the Journal does not hide account safety data.
+  const marginLevel = riskStatus?.margin_level ?? metrics.margin_level ?? 0;
 
   return (
     <div className="card" style={{ marginBottom: '20px' }}>
@@ -77,6 +80,23 @@ export default function ActiveAccountSection({ bridgeStatus, activeConn }) {
             </span>
           </div>
         </StatTile>
+      </div>
+
+      <div
+        style={{
+          marginTop: '10px',
+          paddingTop: '8px',
+          borderTop: '1px solid var(--line)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '8px',
+          flexWrap: 'wrap',
+          fontSize: '10.5px',
+          color: 'var(--muted)'
+        }}
+      >
+        <span>{t('profile_margin_level', { level: marginLevel ? `${marginLevel.toFixed(1)}%` : '—' })}</span>
+        <span>{t('profile_margin_level_hint')}</span>
       </div>
     </div>
   );

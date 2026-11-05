@@ -10,7 +10,7 @@ import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import RichText from './RichText';
 import { formatCurrency, formatRatio } from '../domain/format';
-import { summarizeAccountPnl, dailyDrawdownFallback } from '../domain/pnl';
+import { summarizeAccountPnl, drawdownView } from '../domain/pnl';
 
 export default function HomeTab({
   bridgeStatus,
@@ -263,16 +263,21 @@ export default function HomeTab({
             </div>
             <div className="card">
               {(() => {
-                const ddPct = dailyDrawdownFallback(riskStatus, metrics);
-                const isNegative = ddPct > 0;
+                // The headline is the day's worst reading, not the live one: a dip
+                // that recovered must not read as a green day. No local fallback —
+                // an unanswered backend shows a dash (ticket 09-02).
+                const dd = drawdownView(riskStatus);
+                const headline = dd.available ? dd.dailyMax : null;
                 return (
                   <>
-                    <div className={`metric ${isNegative ? 'negative' : ''}`}>
-                      {isNegative ? `−${ddPct.toFixed(2)}%` : '0.0%'}
+                    <div className={`metric ${headline > 0 ? 'negative' : ''}`}>
+                      {headline === null ? '—' : headline > 0 ? `−${headline.toFixed(2)}%` : '0.0%'}
                     </div>
                     <div className="label">{t('home_daily_dd')}</div>
                     <div className="tiny" style={{ color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' }}>
-                      {t('home_daily_dd_desc', { pct: ddPct.toFixed(2) })}
+                      {dd.available && dd.daily !== null
+                        ? t('home_daily_dd_desc', { pct: dd.daily.toFixed(2) })
+                        : t('home_daily_dd_unavailable')}
                     </div>
                   </>
                 );

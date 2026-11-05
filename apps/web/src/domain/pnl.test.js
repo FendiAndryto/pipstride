@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dailyDrawdownFallback, deriveDrawdownWatch, summarizeAccountPnl } from './pnl';
+import { drawdownTone, drawdownView, summarizeAccountPnl } from './pnl';
 
 // Ticket 008-01 — locks the rule from ticket 006-02 (SoC-7): backend-provided
 // values win, local formulas only run when the field is absent. Also locks the
@@ -71,51 +71,108 @@ describe('summarizeAccountPnl', () => {
   });
 });
 
-describe('dailyDrawdownFallback', () => {
-  it('prefers the live watchdog value when present', () => {
-    expect(dailyDrawdownFallback({ daily_drawdown_percent: 1.25 }, { balance: 1000, equity: 900 })).toBe(1.25);
+describe('drawdownView', () => {
+  const full = {
+    daily_drawdown_percent: 0.5,
+    daily_max_drawdown_percent: 3.5,
+    max_daily_drawdown_percent: 3,
+    is_alert_active: true,
+    daily_anchor_at: 1767225600,
+    daily_anchor_source: 'snapshot_rollforward',
+    overall_drawdown_percent: 4.2,
+    max_drawdown_percent: 6.5,
+    max_overall_drawdown_percent: 10,
+    is_overall_alert_active: false,
+    peak_equity: 12000,
+    peak_equity_at: 1767220000
+  };
+
+  it('passes every backend value through unchanged', () => {
+    const view = drawdownView(full);
+
+    expect(view.available).toBe(true);
+    expect(view.daily).toBe(0.5);
+    expect(view.dailyMax).toBe(3.5);
+    expect(view.dailyLimit).toBe(3);
+    expect(view.overall).toBe(4.2);
+    expect(view.maxOverall).toBe(6.5);
+    expect(view.peakEquity).toBe(12000);
+    expect(view.dailyAnchorSource).toBe('snapshot_rollforward');
   });
 
-  it('derives floating loss as a percent of balance when absent', () => {
-    expect(dailyDrawdownFallback({}, { balance: 1000, equity: 950 })).toBe(5);
+  it('scales each gauge against its own limit', () => {
+    const view = drawdownView(full);
+
+    // 3.5 / 3 is over the daily limit -> bar pinned at 100, alert flag passed through.
+    expect(view.dailyUsed).toBe(100);
+    expect(view.dailyAlert).toBe(true);
+    expect(view.overallUsed).toBe(65);
+    expect(view.overallAlert).toBe(false);
   });
 
-  it('returns 0 when equity is at or above balance', () => {
-    expect(dailyDrawdownFallback({}, { balance: 1000, equity: 1000 })).toBe(0);
-    expect(dailyDrawdownFallback({}, { balance: 1000, equity: 1200 })).toBe(0);
+  it('is unavailable when riskStatus is null, so the UI shows a dash', () => {
+    const view = drawdownView(null);
+
+    expect(view.available).toBe(false);
+    expect(view.dailyMax).toBeNull();
+    expect(view.maxOverall).toBeNull();
+    expect(view.dailyUsed).toBe(0);
+    expect(view.dailyAlert).toBe(false);
   });
 
-  it('does not divide by zero when balance is missing', () => {
-    const value = dailyDrawdownFallback(null, { equity: 900 });
+  it('is unavailable when the payload predates the drawdown fields', () => {
+    // An older backend (or a cached response) only carries margin_level.
+    expect(drawdownView({ margin_level: 5225 }).available).toBe(false);
+  });
 
-    expect(value).toBe(0);
-    expect(Number.isFinite(value)).toBe(true);
+  it('honours is_data_available=false even though the zeros look clean', () => {
+    // No snapshot, no deposit, bridge down: the API still sends zeros for old
+    // clients. The flag is what stops the card from claiming 0.00% is safe.
+    const view = drawdownView({
+      is_data_available: false,
+      daily_drawdown_percent: 0,
+      daily_max_drawdown_percent: 0,
+      overall_drawdown_percent: 0,
+      max_drawdown_percent: 0
+    });
+
+    expect(view.available).toBe(false);
+  });
+
+  it('treats null fields as absent instead of rendering 0', () => {
+    const view = drawdownView({ daily_max_drawdown_percent: null, max_drawdown_percent: null });
+
+    expect(view.available).toBe(false);
+    expect(view.dailyMax).toBeNull();
+  });
+
+  it('does not divide by a zero limit', () => {
+    const view = drawdownView({ daily_max_drawdown_percent: 2, max_daily_drawdown_percent: 0 });
+
+    expect(view.dailyUsed).toBe(0);
+    expect(Number.isFinite(view.dailyUsed)).toBe(true);
+  });
+
+  it('clamps a negative reading to zero usage', () => {
+    expect(drawdownView({ daily_max_drawdown_percent: -1, max_daily_drawdown_percent: 3 }).dailyUsed).toBe(0);
+  });
+
+  it('does not throw when riskStatus is undefined', () => {
+    expect(() => drawdownView(undefined)).not.toThrow();
   });
 });
 
-describe('deriveDrawdownWatch', () => {
-  it('defaults the limit to 3% and reports the used fraction', () => {
-    const watch = deriveDrawdownWatch({ daily_drawdown_percent: 1.5 });
-
-    expect(watch.max).toBe(3);
-    expect(watch.limitUsed).toBe(50);
-    expect(watch.alert).toBe(false);
+describe('drawdownTone', () => {
+  it('stays green below 40% of the limit', () => {
+    expect(drawdownTone(10, false)).toBe('var(--g)');
   });
 
-  it('clamps limitUsed at 100 when the daily drawdown exceeds the limit', () => {
-    expect(deriveDrawdownWatch({ daily_drawdown_percent: 9, max_daily_drawdown_percent: 3 }).limitUsed).toBe(100);
+  it('turns amber past 40% and red past 75%', () => {
+    expect(drawdownTone(50, false)).toBe('var(--amber)');
+    expect(drawdownTone(80, false)).toBe('var(--red)');
   });
 
-  it('passes the alert flag through', () => {
-    expect(deriveDrawdownWatch({ is_alert_active: true }).alert).toBe(true);
-  });
-
-  it('does not divide by zero when the limit is zero', () => {
-    expect(deriveDrawdownWatch({ daily_drawdown_percent: 2, max_daily_drawdown_percent: 0 }).limitUsed).toBe(0);
-  });
-
-  it('does not throw when riskStatus is null', () => {
-    expect(() => deriveDrawdownWatch(null)).not.toThrow();
-    expect(deriveDrawdownWatch(null)).toEqual({ daily: 0, max: 3, alert: false, limitUsed: 0 });
+  it('is red whenever the alert flag is on, even at low usage', () => {
+    expect(drawdownTone(5, true)).toBe('var(--red)');
   });
 });

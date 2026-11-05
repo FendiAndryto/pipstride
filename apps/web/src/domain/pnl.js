@@ -6,10 +6,22 @@
 // which is `null` until the first poll resolves. Default parameters only cover
 // `undefined`, so every entry point normalises with `?? {}` — a bare `= {}`
 // default let `null` through and crashed the whole dashboard render.
+//
+// Ticket 09-02 removed the local drawdown formula (`dailyDrawdownFallback`,
+// `deriveDrawdownWatch`). It derived `(balance - equity) / balance`, which is a
+// floating loss, not a drawdown: on a red day it reported ~0% and disagreed with
+// the backend. Drawdown is now read-only from `/bridge/risk`; when the backend
+// cannot answer, the UI says so instead of inventing a number.
 
 const provided = (value) => value !== undefined && value !== null;
 
 const percentOfBase = (amount, base) => (base > 0 ? (amount / base) * 100 : 0);
+
+/** Fraction of a limit already used, clamped to 0-100; a zero limit uses none. */
+const usedFraction = (value, limit) => {
+  if (!provided(value) || !provided(limit) || limit <= 0) return 0;
+  return Math.min(100, Math.max(0, (value / limit) * 100));
+};
 
 /**
  * All-time performance of the active account.
@@ -39,31 +51,54 @@ export function summarizeAccountPnl(bridgeStatus, metrics) {
 }
 
 /**
- * Daily drawdown used where the live watchdog value is missing: negative
- * floating loss (equity under balance) expressed as a percent of balance.
+ * Drawdown view for the Journal card and the Home tile.
+ *
+ * Pure shaping only — every number comes from `/bridge/risk`:
+ *   daily   = equity now vs the broker-day anchor equity
+ *   dailyMax= worst reading of the day (alerts key off this, not `daily`)
+ *   overall = equity now vs the all-time peak
+ *   maxOverall = worst peak-to-trough ever
+ *
+ * `available` is false when the endpoint has not answered (or predates the
+ * fields), so the caller renders a dash instead of a fabricated 0.00%.
  */
-export function dailyDrawdownFallback(riskStatus, metrics) {
+export function drawdownView(riskStatus) {
   const risk = riskStatus ?? {};
-  const live = metrics ?? {};
-  const value = risk.daily_drawdown_percent;
-  if (provided(value)) return value;
-  const balance = live.balance ?? 0;
-  const equity = live.equity ?? 0;
-  return balance > 0 && equity < balance ? ((balance - equity) / balance) * 100 : 0;
+  const hasAny =
+    risk.is_data_available === false
+      ? false
+      : provided(risk.daily_drawdown_percent) ||
+        provided(risk.daily_max_drawdown_percent) ||
+        provided(risk.overall_drawdown_percent) ||
+        provided(risk.max_drawdown_percent);
+
+  const dailyMax = provided(risk.daily_max_drawdown_percent) ? risk.daily_max_drawdown_percent : null;
+  const maxOverall = provided(risk.max_drawdown_percent) ? risk.max_drawdown_percent : null;
+  const dailyLimit = provided(risk.max_daily_drawdown_percent) ? risk.max_daily_drawdown_percent : null;
+  const overallLimit = provided(risk.max_overall_drawdown_percent) ? risk.max_overall_drawdown_percent : null;
+
+  return {
+    available: hasAny,
+    daily: provided(risk.daily_drawdown_percent) ? risk.daily_drawdown_percent : null,
+    dailyMax,
+    dailyLimit,
+    dailyUsed: usedFraction(dailyMax, dailyLimit),
+    dailyAlert: risk.is_alert_active ?? false,
+    dailyAnchorAt: provided(risk.daily_anchor_at) ? risk.daily_anchor_at : null,
+    dailyAnchorSource: provided(risk.daily_anchor_source) ? risk.daily_anchor_source : null,
+    overall: provided(risk.overall_drawdown_percent) ? risk.overall_drawdown_percent : null,
+    maxOverall,
+    overallLimit,
+    overallUsed: usedFraction(maxOverall, overallLimit),
+    overallAlert: risk.is_overall_alert_active ?? false,
+    peakEquity: provided(risk.peak_equity) ? risk.peak_equity : null,
+    peakEquityAt: provided(risk.peak_equity_at) ? risk.peak_equity_at : null
+  };
 }
 
-/**
- * Passive risk-watchdog display state (ProfileTab). Read-only; the watchdog
- * never liquidates anything.
- */
-export function deriveDrawdownWatch(riskStatus) {
-  const risk = riskStatus ?? {};
-  const daily = risk.daily_drawdown_percent ?? 0;
-  const max = risk.max_daily_drawdown_percent ?? 3.0;
-  return {
-    daily,
-    max,
-    alert: risk.is_alert_active ?? false,
-    limitUsed: max > 0 ? Math.min(100, (daily / max) * 100) : 0
-  };
+/** Bar colour band shared by both gauges: <40% green, <75% amber, else red. */
+export function drawdownTone(used, alert) {
+  if (alert || used > 75) return 'var(--red)';
+  if (used > 40) return 'var(--amber)';
+  return 'var(--g)';
 }

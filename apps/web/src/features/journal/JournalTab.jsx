@@ -9,6 +9,7 @@ import { exportTradesCsv } from '../../lib/csv';
 import { useMonthStepper } from './useMonthStepper';
 import { useJournalData } from './useJournalData';
 import KpiCards from './KpiCards';
+import DrawdownCard from './DrawdownCard';
 import TradeTable from './TradeTable';
 import MonthCalendar from './MonthCalendar';
 
@@ -28,7 +29,7 @@ const PERIOD_LABELS = {
   MONTH: 'journal_period_label_month'
 };
 
-export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus, hasConnection = false }) {
+export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus, riskStatus, hasConnection = false }) {
   const { t, locale } = useLanguage();
   const [period, setPeriod] = useState('1M');
 
@@ -183,6 +184,8 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         losingTrades={data.losingTrades}
         periodLabel={periodLabel}
       />
+
+      <DrawdownCard bridgeStatus={bridgeStatus} riskStatus={riskStatus} />
 
       <JournalAnalytics
         stats={{

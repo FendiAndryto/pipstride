@@ -35,6 +35,17 @@ const FALLBACK_QUOTE = {
   low: 0
 };
 
+// Market structure timeframes (ticket 09-03). Each entry names the heartbeat
+// field that carries it — the EA sends M15 under `candles` for backward
+// compatibility. `bars` is how many recent candles the structure read uses:
+// fewer for M5 (noise), the full 24 for H1/H4 (that is all the EA sends).
+const TIMEFRAMES = [
+  { id: 'M5', field: 'candles_m5', bars: 16 },
+  { id: 'M15', field: 'candles', bars: 24 },
+  { id: 'H1', field: 'candles_h1', bars: 24 },
+  { id: 'H4', field: 'candles_h4', bars: 24 }
+];
+
 export default function MarketTab({ bridgeStatus, hasConnection = false }) {
   const { t } = useLanguage();
   const [fetchedQuotes, setFetchedQuotes] = useState([]);
@@ -65,19 +76,33 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
 
   const isPositive = activeQuote.daily_change_pct >= 0;
 
-  // Calculate dynamic timeframe metrics from real candles (M5, M15)
+  // Why each timeframe does or does not have candles right now. An old EA build
+  // sends only `candles` + `candles_m5`, and the EA only streams the symbol open
+  // on the MT5 chart — two different causes that need two different messages.
+  // Neither may borrow another timeframe's numbers (ticket 09-03).
+  const tfAvailability = useMemo(() => {
+    const metrics = bridgeStatus?.metrics || {};
+    const chartSym = (metrics.chart_symbol || '').trim().toUpperCase().replace(/M$/, '');
+    const isChartSym = Boolean(chartSym && (selectedSymbol || '').toUpperCase().replace(/M$/, '') === chartSym);
+    const map = {};
+    TIMEFRAMES.forEach(({ id, field }) => {
+      const raw = metrics[field];
+      if (!isChartSym) map[id] = 'symbol_mismatch';
+      else if (!Array.isArray(raw) || raw.length === 0) map[id] = 'not_streamed';
+      else map[id] = 'ok';
+    });
+    return map;
+  }, [bridgeStatus, selectedSymbol]);
+
+  // Calculate dynamic timeframe metrics from real candles (M5, M15, H1, H4)
   const tfMetrics = useMemo(() => {
-    const rawCandlesM5 = bridgeStatus?.metrics?.candles_m5 || [];
-    const rawCandlesM15 = bridgeStatus?.metrics?.candles || [];
-    const chartSym = (bridgeStatus?.metrics?.chart_symbol || '').trim().toUpperCase().replace(/M$/, '');
+    const metrics = bridgeStatus?.metrics || {};
+    const chartSym = (metrics.chart_symbol || '').trim().toUpperCase().replace(/M$/, '');
     const isChartSym = Boolean(chartSym && (selectedSymbol || '').toUpperCase().replace(/M$/, '') === chartSym);
 
-    let currentCandles = [];
-    if (activeTf === 'M5') {
-      currentCandles = isChartSym && Array.isArray(rawCandlesM5) ? rawCandlesM5 : [];
-    } else if (activeTf === 'M15') {
-      currentCandles = isChartSym && Array.isArray(rawCandlesM15) ? rawCandlesM15 : [];
-    }
+    const spec = TIMEFRAMES.find((tf) => tf.id === activeTf) || TIMEFRAMES[1];
+    const raw = metrics[spec.field];
+    const currentCandles = isChartSym && Array.isArray(raw) ? raw : [];
 
     if (currentCandles.length === 0) {
       return {
@@ -95,7 +120,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
       };
     }
 
-    const sliceCount = activeTf === 'M5' ? 16 : 24;
+    const sliceCount = spec.bars;
     const activeSubset = currentCandles.slice(0, Math.min(currentCandles.length, sliceCount));
 
     const highs = activeSubset.map((c) => Number(c.high) || 0).filter((h) => h > 0);
@@ -325,27 +350,37 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
             {tfMetrics.hasData && <div className="tiny">{tfMetrics.structureLabel}</div>}
           </div>
           <div style={{ display: 'flex', gap: '4px', background: '#0a1419', padding: '3px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-            {['M5', 'M15'].map((tf) => (
-              <button
-                key={tf}
-                type="button"
-                style={{
-                  border: 0,
-                  background: activeTf === tf ? '#205342' : 'transparent',
-                  color: activeTf === tf ? '#b8ffe6' : 'var(--muted)',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  padding: '5px 12px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-                onClick={() => setActiveTf(tf)}
-                id={`btn-tf-${tf}`}
-              >
-                {tf}
-              </button>
-            ))}
+            {TIMEFRAMES.map(({ id: tf }) => {
+              const state = tfAvailability[tf];
+              const hasTf = state === 'ok';
+              const isActive = activeTf === tf;
+              const hint = state === 'symbol_mismatch'
+                ? t('market_tf_needs_chart_symbol', { tf, symbol: selectedSymbol })
+                : t('market_tf_needs_new_ea', { tf });
+              return (
+                <button
+                  key={tf}
+                  type="button"
+                  title={hasTf ? undefined : hint}
+                  aria-pressed={isActive}
+                  style={{
+                    border: 0,
+                    background: isActive ? '#205342' : 'transparent',
+                    color: isActive ? '#b8ffe6' : hasTf ? 'var(--muted)' : 'rgba(148,163,184,0.45)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '5px 12px',
+                    borderRadius: '6px',
+                    cursor: hasTf ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onClick={() => setActiveTf(tf)}
+                  id={`btn-tf-${tf}`}
+                >
+                  {tf}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -430,7 +465,9 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
               {t('market_no_candles_title', { tf: tfMetrics.tf, symbol: activeQuote.symbol })}
             </div>
             <div style={{ fontSize: '11px', marginTop: '4px', maxWidth: '380px', margin: '4px auto 0', lineHeight: 1.5 }}>
-              {t('market_no_candles_body')}
+              {tfAvailability[activeTf] === 'symbol_mismatch'
+                ? t('market_no_candles_body', { symbol: activeQuote.symbol })
+                : t('market_tf_unavailable_body', { tf: activeTf })}
             </div>
           </div>
         )}

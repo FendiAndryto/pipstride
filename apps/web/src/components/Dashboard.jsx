@@ -192,6 +192,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
             activeTab={activeTab}
             closedTradesCount={bridgeStatus?.closed_trades_count}
             bridgeStatus={bridgeStatus}
+            riskStatus={riskStatus}
             hasConnection={connections.length > 0}
             onNavigateAI={() => setActiveTab('ai')}
           />
