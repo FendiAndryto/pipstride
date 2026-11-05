@@ -72,24 +72,35 @@ risk dipindahkan sebagai baris kecil di kartu Active Account agar tidak hilang.
 
 ### D1 — Batas hari = waktu server broker
 
-Offset broker diturunkan dari payload EA: EA mengirim `timestamp = TimeCurrent()`
-(waktu server yang di-encode sebagai Unix detik), sedangkan API tahu waktu UTC
-sebenarnya.
+Offset broker harus berasal dari **jam server**, dan MT5 punya dua jam yang mudah
+tertukar: `TimeCurrent()` (server broker, yang menentukan hari trading) dan
+`TimeLocal()` (jam PC trader). Sumber offset, berurutan:
+
+1. `broker_time` — `TimeCurrent()` yang dikirim eksplisit oleh build EA terbaru.
+2. Timestamp candle (`MqlRates.time`, selalu waktu server) — dipakai build EA lama
+   yang belum mengirim `broker_time`.
+3. Cache per koneksi (Redis/in-process, TTL 1 jam) saat bridge senyap.
+4. `0` (UTC) bila tidak ada sumber yang bisa dipakai.
+
+`payload.timestamp` **tidak** dipakai untuk offset: nilainya `TimeLocal()`, jam PC
+trader. Memakainya menempatkan boundary di tengah malam PC — 7 jam meleset untuk
+trader UTC+7 di server UTC — yaitu bug yang justru ingin dicegah (lihat D9). Field
+itu tetap dikirim untuk dokumentasi/diagnostik.
 
 ```text
-offset_seconds = metrics.timestamp - now_utc
+offset_seconds = broker_clock - now_utc
 offset_seconds = round(offset_seconds / 900) * 900     # 15 menit terdekat
 offset_seconds = clamp(offset_seconds, -14h, +14h)
 ```
 
 Boundary harian = tengah malam pada waktu broker, dikonversi kembali ke UTC.
-Offset di-cache per koneksi (Redis/in-process, TTL 1 jam) supaya fluktuasi
-`timestamp` antar-heartbeat tidak menggeser boundary. Fallback ke UTC bila
-payload tidak tersedia (bridge offline).
+Offset di-cache per koneksi supaya fluktuasi jam antar-heartbeat tidak menggeser
+boundary. Fallback ke UTC bila tidak ada sumber (bridge offline).
 
 Fungsi murni baru di `app/domain/time.py`:
 
 - `broker_utc_offset_seconds(payload_timestamp, now_utc)` — offset 15-menit terdekat, di-clamp.
+- `broker_offset_from_bars(candles, now_utc)` — offset dari bar tertua/terbaru yang server-stamped.
 - `broker_day_start_utc(now_utc, offset_seconds)` — boundary hari dalam UTC.
 
 ### D2 — Anchor = (balance, equity) di boundary, di-roll-forward
@@ -233,6 +244,21 @@ dengan semantik yang diperbaiki.
 - **Egress:** candle naik dari 2×35 ke 2×35 + 2×24 bar ≈ +4,5 KB per heartbeat.
   Diterima (masih di bawah 10 KB/tick); opsi lanjutan bila perlu: kirim HTF hanya
   saat rebuild 30 detik dan merge di `live_state`.
+
+### D9 — `broker_time` menggantikan `timestamp` sebagai sumber offset
+
+Bug produksi pasca-deploy: offset diturunkan dari `payload.timestamp`, padahal EA
+mengirim `TimeLocal()` — jam PC trader. Pada akun Exness (server UTC) milik trader
+UTC+7, boundary harian jatuh di `17:00 UTC` (tengah malam WIB), bukan `00:00 UTC`.
+
+- **EA:** kirim field baru `broker_time = TimeCurrent()` di samping `timestamp =
+  TimeLocal()`. `timestamp` dipertahankan untuk diagnostik; bukan sumber offset.
+- **API:** `HeartbeatPayload.broker_time` opsional (build lama tetap jalan).
+  Prioritas sumber: `broker_time` → candle (`broker_offset_from_bars`) → cache → 0.
+- **Kompatibilitas:** EA lama tanpa `broker_time` tetap benar karena timestamp
+  candle selalu server-stamped.
+- **Verifikasi:** `daily_anchor_at` untuk akun UTC harus `00:00 UTC` (kelipatan
+  86 400), bukan `17:00 UTC`.
 
 ---
 
