@@ -17,9 +17,11 @@ import {
   Trash2,
   Info
 } from 'lucide-react';
-import { api, downloadPreset } from '../services/api';
+import { downloadPreset } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import RichText from './RichText';
+import { useConnectionManager } from '../features/connections/useConnections';
+import ConfirmInline from './ConfirmInline';
 
 const EA_SHA256 = '07aeb16c81dd52a6dbde996ac54a9ae24aea99ff835dbfba92475c16525ff0db';
 
@@ -39,20 +41,35 @@ export default function Mt5ConnectModal({
   const { t } = useLanguage();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [revealedToken, setRevealedToken] = useState('');
-  const [presetFile, setPresetFile] = useState(null);
-  const [copiedToken, setCopiedToken] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState('');
   const [newLabel, setNewLabel] = useState('');
+  const [error, setError] = useState('');
+
+  // One shared connection manager with the profile section (ticket 006-03).
+  const manager = useConnectionManager({
+    onChanged: onConnectionsChanged,
+    onSelect: onSelectConnection,
+    onError: setError
+  });
+  const {
+    isBusy,
+    revealedToken,
+    presetFile,
+    copiedToken,
+    pendingConfirm,
+    create,
+    requestRotate,
+    requestRevoke,
+    cancelPending,
+    confirmPending,
+    copyToken,
+    reset
+  } = manager;
 
   const handleClose = () => {
-    setRevealedToken('');
-    setPresetFile(null);
+    reset();
     setError('');
     setNewLabel('');
-    setCopiedToken(false);
     setCopiedHash(false);
     if (onClose) onClose();
   };
@@ -77,62 +94,24 @@ export default function Mt5ConnectModal({
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
-  const handleCopyToken = () => {
-    if (!revealedToken) return;
-    navigator.clipboard.writeText(revealedToken);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
-  };
-
   const handleCopyHash = () => {
     navigator.clipboard.writeText(EA_SHA256);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
   };
 
-  const runAction = async (action) => {
-    setIsBusy(true);
+  const handleCreate = async () => {
     setError('');
-    try {
-      const result = await action();
-      if (onConnectionsChanged) await onConnectionsChanged();
-      return result;
-    } catch (err) {
-      setError(err.message || t('modal_error_generic'));
-      return null;
-    } finally {
-      setIsBusy(false);
-    }
+    const created = await create(newLabel.trim() || t('modal_default_label'));
+    if (created) setNewLabel('');
+    return created;
   };
 
-  const handleCreate = () =>
-    runAction(async () => {
-      const created = await api.createConnection(newLabel.trim() || t('modal_default_label'));
-      setRevealedToken(created.token);
-      setPresetFile(created.preset || null);
-      setNewLabel('');
-      if (onSelectConnection) onSelectConnection(created.id);
-      return created;
-    });
-
-  const handleRotate = (connection) => {
-    if (!window.confirm(t('modal_rotate_confirm', { label: connection.label }))) {
-      return;
-    }
-    return runAction(async () => {
-      const rotated = await api.rotateConnectionToken(connection.id);
-      setRevealedToken(rotated.token);
-      setPresetFile(rotated.preset || null);
-      return rotated;
-    });
-  };
-
-  const handleRevoke = (connection) => {
-    if (!window.confirm(t('modal_delete_confirm', { label: connection.label }))) {
-      return;
-    }
-    return runAction(() => api.revokeConnection(connection.id));
-  };
+  const pendingMessage = pendingConfirm
+    ? (pendingConfirm.action === 'rotate'
+      ? t('modal_rotate_confirm', { label: pendingConfirm.connection.label })
+      : t('modal_delete_confirm', { label: pendingConfirm.connection.label }))
+    : null;
 
   return (
     <div className="modal-backdrop animate-fade-in" id="mt5-connect-modal-backdrop">
@@ -255,6 +234,13 @@ export default function Mt5ConnectModal({
             </div>
           )}
 
+          <ConfirmInline
+            message={pendingMessage}
+            busy={isBusy}
+            onConfirm={confirmPending}
+            onCancel={cancelPending}
+          />
+
           {/* Connections manager */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -350,7 +336,7 @@ export default function Mt5ConnectModal({
                       <button
                         type="button"
                         className="btn alt"
-                        onClick={() => handleRotate(connection)}
+                        onClick={() => requestRotate(connection)}
                         disabled={isBusy}
                         title={t('modal_rotate')}
                         style={{ padding: '5px 7px' }}
@@ -360,7 +346,7 @@ export default function Mt5ConnectModal({
                       <button
                         type="button"
                         className="btn alt"
-                        onClick={() => handleRevoke(connection)}
+                        onClick={() => requestRevoke(connection)}
                         disabled={isBusy}
                         title={t('modal_delete')}
                         style={{ padding: '5px 7px', color: '#ff8fa3' }}
@@ -437,7 +423,7 @@ export default function Mt5ConnectModal({
               <button
                 type="button"
                 className="btn alt"
-                onClick={handleCopyToken}
+                onClick={copyToken}
                 disabled={!revealedToken}
                 style={{ fontSize: '11px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '5px' }}
               >

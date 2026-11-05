@@ -40,4 +40,22 @@ Expected: exit 0; `i18n OK`; tidak ada file > ~300 baris di `features/profile/`.
 - (tidak memblokir; menyelesaikan gate fase 006)
 
 ## Status
-todo
+done
+
+**Catatan implementasi (2026-11-05):**
+- `features/profile/` dibuat: `Mt5ConnectionsSection` (197), `ActiveAccountSection` (83),
+  `RiskWatchdogSection` (50), `AccountEmailSection` (109), `PasswordSection` (162),
+  `sectionPrimitives` (58), `styles` (19). `ProfileTab.jsx` = 91 baris komposisi tipis.
+- `features/connections/useConnections.js` (106) — satu connection manager dipakai
+  **dua** konsumen (`Mt5ConnectionsSection` + `Mt5ConnectModal`).
+- 3 cluster `useState` (connection/password/email) pindah ke section masing-masing.
+- `window.confirm` dihapus → `components/ConfirmInline.jsx` (alertdialog non-blocking).
+- **Deviasi tiket:** `PreferencesSection` tidak ada di file asal (tidak pernah ada section
+  preferensi); tidak dibuat. `Mt5ConnectModal` masih 679 baris (di luar lingkup pemecahan
+  tiket ini — hanya logika koneksinya yang dipindah ke hook).
+- **Bug gate ditemukan & diperbaiki:** rule `no-feature-to-feature` memakai lookahead
+  `(?!\1$)` yang tak didukung dependency-cruiser → semua import intra-feature ikut merah.
+  Diganti `to: { path: ^src/features/, pathNot: ^src/features/$1/ }`. Diuji negatif:
+  `features/journal → features/connections` MERAH, lalu dihapus.
+- String hard-code Indonesia: tidak ditemukan di komponen (semua lewat `t()`); key baru
+  `common_confirm`/`common_cancel` (EN+ID) → i18n 457 key.

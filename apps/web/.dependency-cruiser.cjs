@@ -36,8 +36,9 @@ module.exports = {
 
     // -------------------------------------------------------------------------
     // Feature isolation: features/X must not import features/Y.
-    // The features/ directory does not exist yet; this rule will activate once
-    // it is created in Fase 006.
+    // The rule activates as soon as features/ exists (Fase 006, ticket 03).
+    // Intra-feature imports (features/X/a -> features/X/b) stay legal, and
+    // features/* may import the shared lib/ + domain/ layers.
     // -------------------------------------------------------------------------
     {
       name: "no-feature-to-feature",
@@ -45,7 +46,10 @@ module.exports = {
         "A feature module must not depend on another feature module (ADR 0009 §2).",
       severity: "error",
       from: { path: "^src/features/([^/]+)/" },
-      to: { path: "^src/features/(?!\\1$)[^/]+/" },
+      to: {
+        path: "^src/features/",
+        pathNot: "^src/features/$1/",
+      },
     },
 
     // -------------------------------------------------------------------------

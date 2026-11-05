@@ -8,6 +8,8 @@ export const translations = {
     common_copied: 'Copied',
     common_close: 'Close',
     common_offline: 'Offline',
+    common_confirm: 'Confirm',
+    common_cancel: 'Cancel',
 
     // ------------------------------------------------------------------ nav
     nav_home: 'Home',
@@ -491,6 +493,8 @@ export const translations = {
     common_copied: 'Tersalin',
     common_close: 'Tutup',
     common_offline: 'Offline',
+    common_confirm: 'Konfirmasi',
+    common_cancel: 'Batal',
 
     // ------------------------------------------------------------------ nav
     nav_home: 'Beranda',
