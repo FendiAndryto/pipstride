@@ -11,7 +11,6 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Optional
 
-from fastapi import HTTPException, status
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,7 +30,11 @@ from app.models.bridge import (
     PositionItem,
     TradeHistoryResponse,
 )
-from app.services.connection_service import connection_service
+from app.services.connection_service import (
+    ConnectionBindingError,
+    ConnectionTokenInvalidError,
+    connection_service,
+)
 
 SNAPSHOT_MIN_INTERVAL_SECONDS = settings.SNAPSHOT_MIN_INTERVAL_SECONDS
 
@@ -104,10 +107,7 @@ class BridgeService:
     ) -> HeartbeatResponse:
         connection = connection_service.get_by_token(db, raw_token or "")
         if connection is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or revoked connection token.",
-            )
+            raise ConnectionTokenInvalidError("Invalid or revoked connection token.")
 
         # Skip duplicate-account conflict check when already bound (saves 1
         # SELECT per heartbeat for the common case).
@@ -120,12 +120,9 @@ class BridgeService:
                     broker_server=payload.server,
                     currency=payload.currency,
                 )
-            except Exception as exc:  # ConnectionBindingError
+            except ConnectionBindingError:
                 db.rollback()
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=str(exc),
-                )
+                raise
 
         # Throttle last_seen writes: only flush to PG every N seconds. Live
         # freshness comes from the Redis captured_at timestamp, not this column.
@@ -676,15 +673,6 @@ class BridgeService:
             "message": "Riwayat jurnal dihapus. Data akan tersinkron ulang dari MT5.",
             "account_number": connection.account_number,
         }
-
-    # ----------------------------------------------------------------- guards
-    def submit_order(self, *args, **kwargs):
-        """Pure read-only enforcement: execution is permanently disabled."""
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Pipstride is a 100% Pure Read-Only Journal platform. "
-            "Trade execution and liquidations are disabled.",
-        )
 
 
 bridge_service = BridgeService()

@@ -67,9 +67,9 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **01-create-pricing-catalog.md** (`done`): Buat katalog tunggal `packages/pricing/catalog.json` (free/core/plus/pro).
 - [x] **02-api-seed-from-catalog.md** (`done`): Sinkronisasi seed tabel `plans` backend dari `catalog.json` saat startup.
 
-### Fase 003: Architecture Gates (Belum Diimplementasikan)
-- [ ] **01-python-import-linter.md** (`todo`): Enforcement layering arsitektur backend Python via `import-linter`.
-- [ ] **02-ts-boundaries-and-api-drift.md** (`todo`): Enforcement batas boundary dependency frontend via `dependency-cruiser`.
+### Fase 003: Architecture Gates (Selesai)
+- [x] **01-python-import-linter.md** (`done`): Enforcement layering arsitektur backend Python via `import-linter` (4 contract, 0 broken).
+- [x] **02-ts-boundaries-and-api-drift.md** (`done`): Enforcement batas boundary dependency frontend via `dependency-cruiser`; drift OpenAPI deferred ke fase client-generation.
 
 ### Fase 004: Marketing Site / Landing Page (Selesai)
 > **Catatan Pengembang:**

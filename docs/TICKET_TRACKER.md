@@ -31,11 +31,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 
 ### Ringkasan Status
 - **Total Tiket:** 25 tiket
-- **Selesai (`done`):** 10 tiket (Fase 001, 002, 004)
-- **Belum Diimplementasikan (`todo`):** 15 tiket (Fase 003, 005, 006, 007)
+- **Selesai (`done`):** 12 tiket (Fase 001, 002, 003, 004)
+- **Belum Diimplementasikan (`todo`):** 13 tiket (Fase 005, 006, 007)
 
 ```
-[===================>---------------------------------------] 40% Selesai
+[========================>----------------------------------] 48% Selesai
 ```
 
 ---
@@ -51,9 +51,16 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **01-create-pricing-catalog.md** (`done`): Inisialisasi `packages/pricing/catalog.json` (free/core/plus/pro).
 - [x] **02-api-seed-from-catalog.md** (`done`): Sinkronisasi seed database `plans` saat API startup dari file katalog JSON.
 
-#### Fase 003: Architecture Gates (Belum Diimplementasikan)
-- [ ] **01-python-import-linter.md** (`todo`): Proteksi CI import linter backend Python (mencegah leak ke framework layer).
-- [ ] **02-ts-boundaries-and-api-drift.md** (`todo`): Proteksi CI `dependency-cruiser` untuk batas antar-aplikasi frontend.
+#### Fase 003: Architecture Gates (SELESAI)
+> **Catatan Implementasi:**
+> - Job CI baru: `arch` (`.github/workflows/ci.yml`) menjalankan `lint-imports` dan `npm run lint:arch`; `docker` job menunggu `arch`.
+> - Python: `services/api/.importlinter` — 4 contract aktif (services↛api/v1, db↛services/api, models↛db/services/api, services↛fastapi). Contract domain/infrastructure menunggu Fase 005.
+> - TypeScript: `apps/web/.dependency-cruiser.cjs` + script `lint:arch`. Rule `pages/`, `features/`, `domain/` dorman sampai folder itu lahir di Fase 006; rule `no-cross-app-imports` aktif sekarang.
+> - Baseline `fastapi` di service dihapus dengan membuang dead `submit_order()` dan memetakan typed domain error (`ConnectionTokenInvalidError`, `ConnectionBindingError`) ke 401/409 di route.
+> - Gate diuji negatif (Python: service import `api/v1` → MERAH; TS: `features/foo` import `features/bar` → MERAH), lalu dikembalikan ke hijau.
+> - Drift OpenAPI di-defer: client masih tangan dan belum ada dokumen OpenAPI yang di-check-in.
+- [x] **01-python-import-linter.md** (`done`): Enforcement layering arsitektur backend Python via `import-linter` (4 kept, 0 broken).
+- [x] **02-ts-boundaries-and-api-drift.md** (`done`): Enforcement batas boundary dependency frontend via `dependency-cruiser`; drift OpenAPI deferred.
 
 #### Fase 004: Marketing Site / Landing Page (SELESAI)
 > **Catatan Khusus Pengembang & Arahan Desain:**

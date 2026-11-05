@@ -24,6 +24,10 @@ class ConnectionBindingError(Exception):
     pass
 
 
+class ConnectionTokenInvalidError(Exception):
+    pass
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 

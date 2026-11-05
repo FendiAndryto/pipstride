@@ -23,7 +23,11 @@ from app.models.bridge import (
     TradeHistoryResponse,
 )
 from app.models.risk import RiskWatchdogStatusResponse
-from app.services.bridge_service import bridge_service
+from app.services.bridge_service import (
+    ConnectionBindingError as _ConnectionBindingError,
+    ConnectionTokenInvalidError as _ConnectionTokenInvalidError,
+    bridge_service,
+)
 from app.services.connection_service import connection_service
 
 router = APIRouter(prefix="/bridge", tags=["Bridge"])
@@ -85,7 +89,18 @@ def receive_heartbeat(
                 headers={"Retry-After": str(anon_retry)},
             )
 
-    return bridge_service.process_heartbeat(db, payload, raw_token=token)
+    try:
+        return bridge_service.process_heartbeat(db, payload, raw_token=token)
+    except _ConnectionTokenInvalidError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+    except _ConnectionBindingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post(

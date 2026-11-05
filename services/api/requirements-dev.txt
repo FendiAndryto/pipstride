@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest>=8.0.0
+import-linter>=2.2
+grimp>=3.8

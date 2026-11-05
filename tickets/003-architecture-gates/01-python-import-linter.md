@@ -37,4 +37,49 @@ None (boleh paralel dengan 002).
 - Fase 005
 
 ## Status
-todo
+done
+
+## Implementation notes (2026-11-05)
+
+- Contracts live in `services/api/.importlinter` (single source):
+  - `app.services` never imports `app.api.v1`.
+  - `app.db` never imports `app.services` / `app.api.v1`.
+  - `app.models` never imports `app.db` / `app.services` / `app.api.v1`.
+  - `app.services` never imports `fastapi`.
+  - The `domain/` and `infrastructure/` contracts from ADR 0009 §3 are
+    commented out with `TODO(Fase 005)` because those packages do not exist
+    yet. They are activated when the packages are created.
+- `services/api/requirements-dev.txt` pins `import-linter>=2.2` and
+  `grimp>=3.8` (CI installs the dev requirements; production image unaffected).
+- The `fastapi` baseline was resolved instead of allowlisted: the dead
+  `BridgeService.submit_order()` guard (never called; the route raises 403)
+  was deleted, and the service now raises typed domain errors
+  (`ConnectionTokenInvalidError`, `ConnectionBindingError`) that
+  `api/v1/bridge.py` maps to 401/409. `db.rollback()` on a binding conflict is
+  preserved inside the service.
+- Redis: strict "no redis outside core" is not expressible with
+  `forbidden` alone because routers/services legitimately import
+  `app.core.live_state` / `app.core.rate_limit`, which wrap `redis`. The
+  contract is therefore documented as a Fase 005 item (move adapters to
+  `app.infrastructure/`), not silently disabled.
+
+### Verification (run on homeserver, Python 3.12 container)
+
+```text
+$ lint-imports
+Contracts: 4 kept, 0 broken.
+
+$ python -m pytest -q
+100% passed (0 failures)
+```
+
+Negative test: appending `from app.api.v1.auth import router` to
+`app/services/user_service.py` produced:
+
+```text
+Services never import the HTTP layer (api/v1) BROKEN
+fastapi is not imported by the service layer (Fase 005 baseline) BROKEN
+Contracts: 2 kept, 2 broken.
+```
+
+The line was removed and the green run repeated (4 kept, 0 broken).

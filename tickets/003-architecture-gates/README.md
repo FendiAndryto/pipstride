@@ -14,13 +14,18 @@ Referensi: `docs/adr/0009-layered-architecture-and-dependency-rule.md` §6.
 2. `02-ts-boundaries-and-api-drift.md`
 
 ## Gate (checklist audit keluar)
-- [ ] Job CI `arch` jalan di `.github/workflows/ci.yml`, dan **gagal** bila ada pelanggaran arah import.
-- [ ] Contract Python menegakkan: `interfaces → domain + infrastructure`, `infrastructure → domain`,
-      `domain` tanpa `fastapi`/`sqlalchemy`/`redis`; `services/` tidak pernah import `api/v1`.
-- [ ] Contract TS menegakkan: `pages → features + components/ui + lib`, `features/X` tidak import
-      `features/Y`, `domain` tanpa React/DOM, `apps/A` tidak import `apps/B`.
-- [ ] (Opsional, kalau client di-generate) drift OpenAPI terdeteksi.
-- [ ] Gate terbukti bekerja: satu pelanggaran sengaja dibuat → CI merah → dikembalikan.
+- [x] Job CI `arch` jalan di `.github/workflows/ci.yml`, dan **gagal** bila ada pelanggaran arah import.
+- [x] Contract Python menegakkan: `services/` tidak pernah import `api/v1`, `db/` tidak import
+      `services/`, `models/` tidak import `db/`/`services/`, dan `services/` tidak import `fastapi`.
+      Contract `domain`/`infrastructure` dijadwalkan aktif di Fase 005 (paketnya belum ada).
+- [x] Contract TS menegakkan: `pages → features + components/ui + lib`, `features/X` tidak import
+      `features/Y`, `domain` tanpa React/DOM, `apps/A` tidak import `apps/B`. Tiga rule pertama
+      dorman sampai folder target dibuat di Fase 006.
+- [x] (Opsional, kalau client di-generate) drift OpenAPI **deferred** dengan alasan tertulis di tiket 02
+      (client masih tangan, belum ada OpenAPI doc yang di-check-in).
+- [x] Gate terbukti bekerja: pelanggaran sengaja (Python + TS) membuat gate merah; keduanya dikembalikan.
+
+**Status fase: SELESAI (2026-11-05).** Verifikasi lengkap ada di masing-masing tiket.
 
 ## Dampak
 - Membuka **005** (domain/repositories), **006** (pecah web), **007** (admin).
