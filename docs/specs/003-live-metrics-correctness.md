@@ -154,6 +154,16 @@ memenuhi "dikalkulasi setiap penutupan order".
 (`SNAPSHOT_MIN_INTERVAL_SECONDS = 30`). Trade yang ditutup lalu langsung pulih
 dalam < 30 detik bisa terlewat. Ini keterbatasan yang didokumentasikan, bukan bug.
 
+**Bug pasca-deploy (akun baru):** EA heartbeat sebelum MT5 selesai login dan
+mengirim `balance=0`/`equity=0`. Baris itu dipakai sebagai anchor fallback
+(`session_start` gagal, jatuh ke `deposit_reconstruction`) **dan** sebagai trough
+intraday, sehingga akun yang baru connect terbaca "drawdown harian 100,00%"
+sampai pergantian hari. Data produksi 2026-11-05: 20 snapshot nol pada
+15:28–15:39 UTC menghasilkan 100,00%; setelah baris nol diabaikan, angka yang
+benar untuk hari itu adalah 7,89%. Query snapshot sekarang mengabaikan baris
+dengan balance/equity ≤ 0 — nol berarti "belum ada data akun", bukan akun habis
+(MT5 stop out jauh sebelum equity menyentuh nol).
+
 ### D5 — Overall drawdown = peak-to-trough
 
 "Drawdown keseluruhan" yang diminta adalah **max peak-to-trough ekuitas sejak
@@ -261,6 +271,12 @@ dengan semantik yang diperbaiki.
   (+1,38%, higher highs) — sedangkan window H1 masih +1,44% dan H4 +5,69%.
   Menurunkan `BIAS_BARS` membuat badge lebih cepat berbalik (lebih berisik);
   menaikkannya membuat lebih lambat.
+- **Suffix broker (bug pasca-deploy ketiga):** watchlist memakai nama dasar
+  (`XAUUSD`) sedangkan chart Exness melaporkan `XAUUSDc`. Perbandingan literal
+  membuat **semua** timeframe "TANPA DATA" pada akun yang baru connect.
+  `isSameInstrument` di `src/domain/market.js` meniru `FindBrokerSymbol` di EA
+  (nama sama, atau prefix + maksimal 4 karakter tambahan), dan tab Market
+  mengikuti simbol chart sampai user memilih simbol lain.
 
 ### D9 — `broker_time` menggantikan `timestamp` sebagai sumber offset
 
