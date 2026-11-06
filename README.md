@@ -121,6 +121,8 @@ If host port `5432` is already taken (another local PostgreSQL), set `POSTGRES_P
 
 The web container's nginx proxies `/api/` to the API service, so the dashboard works from a single origin without extra configuration.
 
+The web and marketing containers publish on `127.0.0.1` by default. If the reverse proxy lives outside this compose project (another container, another host, or a tunnel pointing at the host's VPN address), set `WEB_BIND_IP` / `MARKETING_BIND_IP` to that address — a proxy cannot reach a loopback-only port and every request fails with `502`/`000`.
+
 ### Option B — Local development
 
 Start Postgres and Redis (any local install or `docker compose up postgres redis`), then:
