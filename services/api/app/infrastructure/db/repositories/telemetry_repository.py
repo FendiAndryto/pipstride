@@ -39,12 +39,16 @@ def snapshot_at_or_before(
     The daily drawdown anchor is rolled forward from this row, so ``equity`` and
     ``floating_pnl`` are required alongside ``balance`` — a balance-only lookup
     cannot express a floating loss at rollover (spec 003, ticket 09-01).
+
+    Rows with a zero balance are skipped: the EA heartbeats before MT5 has an
+    account, and that empty reading is not a starting equity.
     """
     return db.scalar(
         select(TelemetrySnapshot)
         .where(
             TelemetrySnapshot.connection_id == connection_id,
             TelemetrySnapshot.captured_at <= moment,
+            TelemetrySnapshot.balance > 0,
         )
         .order_by(TelemetrySnapshot.captured_at.desc())
         .limit(1)
@@ -54,11 +58,19 @@ def snapshot_at_or_before(
 def equity_minimum_since(
     db: Session, connection_id: str, moment: datetime
 ) -> Optional[float]:
-    """Lowest equity snapshot recorded since ``moment`` (intraday trough)."""
+    """Lowest *usable* equity snapshot recorded since ``moment``.
+
+    A non-positive equity is excluded. The EA keeps heartbeating while the
+    terminal has no account yet (balance 0, equity 0), and counting that zero as
+    a trough reported a fresh connection as a 100% daily drawdown until the
+    broker day rolled over. MT5 stops out long before equity reaches zero, so a
+    zero here always means "no account data", never "the account was wiped".
+    """
     return db.scalar(
         select(func.min(TelemetrySnapshot.equity)).where(
             TelemetrySnapshot.connection_id == connection_id,
             TelemetrySnapshot.captured_at >= moment,
+            TelemetrySnapshot.equity > 0,
         )
     )
 
@@ -66,17 +78,19 @@ def equity_minimum_since(
 def snapshot_at_or_after(
     db: Session, connection_id: str, moment: datetime
 ) -> Optional[TelemetrySnapshot]:
-    """First snapshot recorded at or after ``moment`` (session start).
+    """First usable snapshot recorded at or after ``moment`` (session start).
 
     Used when no snapshot covers the day boundary because the EA was not
     running: the first observation of the day becomes the anchor instead of a
-    derived guess (spec 003, ticket 09-01).
+    derived guess (spec 003, ticket 09-01). Zero-balance rows from the moments
+    before MT5 finished logging in are skipped.
     """
     return db.scalar(
         select(TelemetrySnapshot)
         .where(
             TelemetrySnapshot.connection_id == connection_id,
             TelemetrySnapshot.captured_at >= moment,
+            TelemetrySnapshot.balance > 0,
         )
         .order_by(TelemetrySnapshot.captured_at.asc())
         .limit(1)

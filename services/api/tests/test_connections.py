@@ -392,6 +392,53 @@ def test_daily_max_drawdown_holds_an_intraday_trough(client, account):
     assert data["is_alert_active"] is True
 
 
+def test_startup_snapshots_without_an_account_are_not_a_drawdown(client, account):
+    """A zero-equity row is "no account yet", not a wiped account.
+
+    Production report (2026-11-05): a freshly connected account read "daily
+    drawdown 100.00%" because the EA heartbeats before MT5 finishes logging in
+    (balance 0, equity 0), and those rows became both the day anchor fallback
+    and the intraday trough. The account was never below its deposit.
+    """
+    created = create_connection(client, account)
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888004,
+            balance=10_500.0,
+            equity=10_450.0,
+            initial_deposit=10_000.0,
+            closed_trades=[],
+        ),
+    )
+
+    with SessionLocal() as db:
+        connection = db.scalar(
+            select(Mt5Connection).where(Mt5Connection.account_number == 888004)
+        )
+        db.add(
+            TelemetrySnapshot(
+                connection_id=connection.id,
+                captured_at=datetime.now(timezone.utc) - timedelta(seconds=10),
+                balance=0.0,
+                equity=0.0,
+                margin=0.0,
+                free_margin=0.0,
+                margin_level=0.0,
+                floating_pnl=0.0,
+                open_positions=0,
+            )
+        )
+        db.commit()
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+    assert data["daily_starting_equity"] == 10_450.0
+    assert data["daily_drawdown_percent"] == 0.0
+    assert data["daily_max_drawdown_percent"] == 0.0
+    assert data["is_alert_active"] is False
+
+
 def test_stale_snapshot_is_rolled_forward_to_the_day_boundary(client, account):
     """A snapshot from before the boundary must not leak older P&L into today.
 
