@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, BarChart2, Compass } from 'lucide-react';
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
-import { STRUCTURE, describeWindow } from '../domain/market';
+import { STRUCTURE, describeWindow, isSameInstrument } from '../domain/market';
 
 const getSymbolIcon = (sym) => {
   const s = sym.toUpperCase();
@@ -56,12 +56,28 @@ const STRUCTURE_KEYS = {
 export default function MarketTab({ bridgeStatus, hasConnection = false }) {
   const { t } = useLanguage();
   const [fetchedQuotes, setFetchedQuotes] = useState([]);
-  const [selectedSymbol, setSelectedSymbol] = useState('XAUUSD');
+  const [selectedSymbol, setSelectedSymbol] = useState(null);
   const [activeTf, setActiveTf] = useState('M15');
 
   const quotes = (bridgeStatus?.market_quotes && bridgeStatus.market_quotes.length > 0)
     ? bridgeStatus.market_quotes
     : fetchedQuotes;
+
+  // A fresh account usually opens on the broker's default chart (often gold
+  // with a suffix). Follow the chart's watchlist entry until the user picks a
+  // symbol explicitly, so the structure card has data without clicking around
+  // (ticket 09-03 follow-up). Derived during render — an effect here would
+  // cascade an extra render on every poll.
+  const chartSymbol = bridgeStatus?.metrics?.chart_symbol;
+  const activeSymbol = useMemo(() => {
+    if (selectedSymbol && quotes.some((quote) => quote.symbol === selectedSymbol)) {
+      return selectedSymbol;
+    }
+    const chartMatch = quotes.find((quote) => isSameInstrument(quote.symbol, chartSymbol));
+    if (chartMatch) return chartMatch.symbol;
+    if (quotes.length > 0) return quotes[0].symbol;
+    return selectedSymbol || 'XAUUSD';
+  }, [selectedSymbol, quotes, chartSymbol]);
 
   useEffect(() => {
     if (!bridgeStatus?.market_quotes?.length && hasConnection && bridgeStatus?.is_connected) {
@@ -78,8 +94,8 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
   }, [bridgeStatus?.market_quotes?.length, bridgeStatus?.is_connected, hasConnection]);
 
   const activeQuote = useMemo(() => {
-    return quotes.find((q) => q.symbol === selectedSymbol) || quotes[0] || { ...FALLBACK_QUOTE, symbol: selectedSymbol };
-  }, [quotes, selectedSymbol]);
+    return quotes.find((q) => q.symbol === activeSymbol) || quotes[0] || { ...FALLBACK_QUOTE, symbol: activeSymbol };
+  }, [quotes, activeSymbol]);
 
   const isPositive = activeQuote.daily_change_pct >= 0;
 
@@ -89,8 +105,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
   // Neither may borrow another timeframe's numbers (ticket 09-03).
   const tfAvailability = useMemo(() => {
     const metrics = bridgeStatus?.metrics || {};
-    const chartSym = (metrics.chart_symbol || '').trim().toUpperCase().replace(/M$/, '');
-    const isChartSym = Boolean(chartSym && (selectedSymbol || '').toUpperCase().replace(/M$/, '') === chartSym);
+    const isChartSym = isSameInstrument(activeSymbol, metrics.chart_symbol);
     const map = {};
     TIMEFRAMES.forEach(({ id, field }) => {
       const raw = metrics[field];
@@ -99,15 +114,14 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
       else map[id] = 'ok';
     });
     return map;
-  }, [bridgeStatus, selectedSymbol]);
+  }, [bridgeStatus, activeSymbol]);
 
   // Market-structure read over the newest `bars` candles (M5, M15, H1, H4).
   // The domain helper normalises the wire order — the EA sends oldest-first,
   // and reading that as newest-first was what flipped the bias.
   const tfMetrics = useMemo(() => {
     const metrics = bridgeStatus?.metrics || {};
-    const chartSym = (metrics.chart_symbol || '').trim().toUpperCase().replace(/M$/, '');
-    const isChartSym = Boolean(chartSym && (selectedSymbol || '').toUpperCase().replace(/M$/, '') === chartSym);
+    const isChartSym = isSameInstrument(activeSymbol, metrics.chart_symbol);
 
     const spec = TIMEFRAMES.find((tf) => tf.id === activeTf) || TIMEFRAMES[1];
     const currentCandles = isChartSym && Array.isArray(metrics[spec.field]) ? metrics[spec.field] : [];
@@ -131,7 +145,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
       rangeSpan: read.rangeSpan === null ? null : read.rangeSpan.toFixed(activeQuote.digits),
       avgRange: read.avgRange === null ? null : read.avgRange.toFixed(activeQuote.digits)
     };
-  }, [activeTf, selectedSymbol, activeQuote, bridgeStatus, t]);
+  }, [activeTf, activeSymbol, activeQuote, bridgeStatus, t]);
 
   return (
     <div className="market-tab-container animate-fade-in">
@@ -284,7 +298,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
               const hasTf = state === 'ok';
               const isActive = activeTf === tf;
               const hint = state === 'symbol_mismatch'
-                ? t('market_tf_needs_chart_symbol', { tf, symbol: selectedSymbol })
+                ? t('market_tf_needs_chart_symbol', { tf, symbol: activeSymbol })
                 : t('market_tf_needs_new_ea', { tf });
               return (
                 <button

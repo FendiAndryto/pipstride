@@ -45,6 +45,25 @@ function num(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Compare a watchlist base symbol (`XAUUSD`) with the raw chart symbol the EA
+ * reports (`XAUUSDc`, `XAUUSD.a`, `XAUUSD#`, ...).
+ *
+ * MT5 names the chart symbol with the broker's suffix while the watchlist uses
+ * the plain base name, so comparing the two strings literally marked a healthy
+ * feed as a different instrument and blanked the whole structure card. The rule
+ * mirrors the EA's `FindBrokerSymbol`: equal names, or the base as a prefix with
+ * at most four extra characters.
+ */
+export function isSameInstrument(baseSymbol, chartSymbol) {
+  const base = typeof baseSymbol === 'string' ? baseSymbol.toUpperCase().replace(/[^A-Z0-9]+/g, '') : '';
+  const chart = typeof chartSymbol === 'string' ? chartSymbol.toUpperCase().replace(/[^A-Z0-9]+/g, '') : '';
+  if (!base || !chart) return false;
+  if (base === chart) return true;
+  if (!chart.startsWith(base)) return false;
+  return chart.length - base.length <= 4;
+}
+
 function isUsable(candle) {
   if (!candle) return false;
   const time = num(candle.time);

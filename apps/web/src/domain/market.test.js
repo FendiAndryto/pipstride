@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { STRUCTURE, describeWindow, normalizeCandles } from './market';
+import { STRUCTURE, describeWindow, isSameInstrument, normalizeCandles } from './market';
 
 // Regression for the bug where the Market tab read the EA's candle array
 // backwards. The EA emits candles oldest-first (see `BuildCandlesJson`), but the
@@ -41,6 +41,26 @@ describe('normalizeCandles', () => {
 
     expect(normalizeCandles(candles)).toHaveLength(1);
     expect(normalizeCandles(null)).toEqual([]);
+  });
+});
+
+describe('isSameInstrument', () => {
+  it('matches the base name against the broker chart suffix', () => {
+    // Production: Exness reports the chart as XAUUSDc while the watchlist says
+    // XAUUSD. The literal comparison hid every candle behind "NO DATA".
+    expect(isSameInstrument('XAUUSD', 'XAUUSDc')).toBe(true);
+    expect(isSameInstrument('XAUUSD', 'XAUUSDm')).toBe(true);
+    expect(isSameInstrument('XAUUSD', 'XAUUSD.a')).toBe(true);
+    expect(isSameInstrument('XAUUSD', 'XAUUSD#')).toBe(true);
+    expect(isSameInstrument('XAUUSD', 'XAUUSD')).toBe(true);
+  });
+
+  it('keeps different instruments apart', () => {
+    expect(isSameInstrument('XAUUSD', 'EURUSDc')).toBe(false);
+    expect(isSameInstrument('EURUSD', 'USDJPY')).toBe(false);
+    expect(isSameInstrument('XAUUSD', '')).toBe(false);
+    expect(isSameInstrument('', 'XAUUSDc')).toBe(false);
+    expect(isSameInstrument(null, undefined)).toBe(false);
   });
 });
 
