@@ -21,12 +21,27 @@ configureHttp({
   },
 });
 
+function formatDetail(detail, fallback) {
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map((item) =>
+        item && typeof item === 'object' ? item.msg || JSON.stringify(item) : String(item),
+      )
+      .join('; ');
+  }
+  if (detail && typeof detail === 'object') {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return fallback;
+}
+
 export async function parseError(res, fallback = 'Request failed') {
   let detail = fallback;
   try {
     const data = await res.json();
     if (data && typeof data === 'object') {
-      detail = data.detail || data.message || fallback;
+      detail = formatDetail(data.detail ?? data.message, fallback);
     }
   } catch {
     // Non-JSON error body
@@ -40,7 +55,11 @@ export async function parseError(res, fallback = 'Request failed') {
 export async function apiFetch(path, options = {}, { authed = true } = {}) {
   const url = `${API_BASE}${path}`;
   const requestFn = authed ? authRequest : rawRequest;
-  const res = await requestFn(url, options);
+  const headers = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers || {}),
+  };
+  const res = await requestFn(url, { ...options, headers });
 
   if (!res.ok) {
     throw await parseError(res, `HTTP ${res.status}: Request failed`);
