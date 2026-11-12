@@ -6,6 +6,34 @@ from pydantic import BaseModel, Field
 class LoginRequest(BaseModel):
     username: str = Field(..., description="Username", min_length=1)
     password: str = Field(..., description="Password", min_length=1)
+    totp_code: Optional[str] = Field(
+        None,
+        description="Six-digit TOTP code; mandatory for admin/support accounts",
+        max_length=8,
+    )
+
+
+class TotpEnrollStartRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1)
+
+
+class TotpEnrollStartResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+    issuer: str
+
+
+class TotpEnrollVerifyRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1)
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class TotpEnrollVerifyResponse(BaseModel):
+    status: str = "ok"
+    enrolled_at: Optional[str] = None
+    message: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):
@@ -50,6 +78,7 @@ class TokenResponse(BaseModel):
     expires_in: int
     username: Optional[str] = None
     role: Optional[str] = "trader"
+    totp_enrolled: bool = False
 
 
 class UserResponse(BaseModel):
@@ -58,6 +87,7 @@ class UserResponse(BaseModel):
     role: Optional[str] = "trader"
     email: Optional[str] = None
     email_verified: bool = False
+    totp_enrolled: bool = False
 
 
 class ConnectionResponse(BaseModel):

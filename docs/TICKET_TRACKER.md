@@ -31,11 +31,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 
 ### Ringkasan Status
 - **Total Tiket:** 29 tiket
-- **Selesai (`done`):** 24 tiket (Fase 001, 002, 003, 004, 005, 006, 008, 009)
-- **Belum Diimplementasikan (`todo`):** 5 tiket (Fase 007)
+- **Selesai (`done`):** 29 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009)
+- **Belum Diimplementasikan (`todo`):** 0 tiket
 
 ```
-[================================================>----------] 83% Selesai
+[============================================================] 100% Selesai
 ```
 
 ---
@@ -137,9 +137,26 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **02-overall-drawdown-and-single-formula.md** (`done`): `drawdownView` di `domain/pnl.js` (satu sumber, tanpa fallback lokal); `DrawdownCard` di Journal; `RiskWatchdogSection` dihapus; margin level pindah ke Active Account.
 - [x] **03-market-structure-timeframes.md** (`done`): `candles_h1`/`candles_h4` (24 bar, cache 30s) dari EA → `HeartbeatPayload` → `MarketTab` 4 timeframe, dengan state jujur untuk TF tanpa data.
 
-#### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
-- [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): Validasi role admin via database & endpoint analitik read-only.
-- [ ] **02-totp-enrollment.md** (`todo`): Wajib autentikasi dua faktor (TOTP / 2FA) untuk admin & support.
-- [ ] **03-admin-mutations-and-audit.md** (`todo`): Mutasi akun user dengan kewajiban audit log terstruktur.
-- [ ] **04-support-mode-and-access-log.md** (`todo`): Sesi support mode 30 menit & log akses transparan untuk trader.
-- [ ] **05-admin-frontend-app.md** (`todo`): Aplikasi web terpisah `apps/admin` (React 19 + Vite di `admin.pipstride.com`).
+#### Fase 007: Admin Console + Privilege Boundary (SELESAI)
+> **Catatan Implementasi:** urutan internal ADR 0008 (read-only → TOTP → mutasi → support mode)
+> diikuti dan tiap langkah dijaga tes. `require_role(*roles)` membaca role dari DB tiap request;
+> `tests/test_admin_guard.py` memeriksa AST setiap router di `api/v1/admin/` (kontrol negatif: router
+> polos → merah) dan membuktikan demote/deactivate langsung berlaku pada JWT yang masih valid.
+> TOTP wajib untuk admin/support: migrasi `0002_admin_totp` menambah `users.totp_secret` (Fernet,
+> bukan hash) + `totp_enrolled_at`; login tanpa kode → 401, akun belum enroll → 403, dan enrollment
+> memakai re-auth password (`/auth/totp/enroll/start|verify`) supaya admin tidak terkunci.
+> Setiap mutasi (entitlement, deactivate/activate, revoke koneksi, grant/revoke support) menulis
+> `audit_logs` dengan kolom baru `target_user_id`; migrasi `0003_support_sessions` menambah tabel
+> `support_sessions`. Support mode 30 menit, alasan wajib, opt-in lewat `SUPPORT_MODE_ENABLED=false`
+> sampai access log user terpasang: `GET /api/v1/access-log` + `AccessLogSection` di `ProfileTab`
+> (`apps/web`). `apps/admin` adalah bundle & origin terpisah (React 19 + Vite, hash routing, oxlint +
+> dependency-cruiser), dilayani Caddy di `ADMIN_DOMAIN` dengan allowlist `ADMIN_ALLOWED_IPS` (di luar
+> allowlist → 404); tidak ada route `/admin` di `apps/web`. Verifikasi: pytest penuh hijau,
+> `lint-imports` 6/0, web lint/test/build + i18n hijau, admin `lint`/`lint:arch`/`build` hijau.
+> **Belum diverifikasi di mesin ini:** docker image build dan drift migrasi Postgres (Docker Desktop
+> tidak berjalan) — divalidasi job CI `migrations` dan `docker`.
+- [x] **01-require-role-and-readonly-endpoints.md** (`done`): `require_role(*roles)` + router admin read-only (users/connections/audit/metrics) dengan architecture test.
+- [x] **02-totp-enrollment.md** (`done`): TOTP wajib untuk admin/support; seed terenkripsi Fernet + jalur enrollment password-only.
+- [x] **03-admin-mutations-and-audit.md** (`done`): Mutasi entitlement/deactivate/activate/revoke koneksi, semuanya menulis `audit_logs` beserta IP aktor.
+- [x] **04-support-mode-and-access-log.md** (`done`): Sesi support 30 menit dengan alasan wajib; detail elevated satu-satunya jalur ke isi trade/settings, plus access log `GET /api/v1/access-log` untuk trader.
+- [x] **05-admin-frontend-app.md** (`done`): `apps/admin` (React 19 + Vite) di origin terpisah, gating IP di Caddy, job CI `admin`, dan layanan compose baru.

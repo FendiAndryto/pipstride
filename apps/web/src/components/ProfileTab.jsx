@@ -9,6 +9,7 @@ import Mt5ConnectionsSection from '../features/profile/Mt5ConnectionsSection';
 import ActiveAccountSection from '../features/profile/ActiveAccountSection';
 import AccountEmailSection from '../features/profile/AccountEmailSection';
 import PasswordSection from '../features/profile/PasswordSection';
+import AccessLogSection from '../features/profile/AccessLogSection';
 
 export default function ProfileTab({
   user,
@@ -82,6 +83,9 @@ export default function ProfileTab({
 
       <SectionHeading>{t('profile_password_section')}</SectionHeading>
       <PasswordSection user={user} />
+
+      <SectionHeading>{t('profile_access_log_section')}</SectionHeading>
+      <AccessLogSection />
     </div>
   );
 }

@@ -42,4 +42,4 @@ grant/revoke ada di `audit_logs`; user melihat baris akses di UI.
 - Ini menambah state machine (grant/expire/revoke/display) — biaya yang diterima sadar (ADR 0008).
 
 ## Status
-todo
+done

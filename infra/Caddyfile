@@ -44,3 +44,34 @@
         header_up X-Real-IP {client_ip}
     }
 }
+
+# 3. Admin console: separate origin and bundle (ADR 0008 §7). Access is gated by
+# an IP allowlist until TOTP is enrolled on every privileged account (§5); after
+# that the allowlist remains as defence in depth. Compose with Cloudflare Access
+# on this hostname for identity-aware gating at the edge.
+{$ADMIN_DOMAIN:admin-pipstride.homever.my.id} {
+    encode gzip zstd
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        X-Robots-Tag "noindex, nofollow"
+        -Server
+    }
+
+    @allowed remote_ip {$ADMIN_ALLOWED_IPS:127.0.0.1/32}
+
+    handle @allowed {
+        reverse_proxy admin:80 {
+            header_up X-Real-IP {client_ip}
+        }
+    }
+
+    # Anything outside the allowlist sees no hint that an admin surface exists.
+    handle {
+        respond "Not Found" 404
+    }
+}

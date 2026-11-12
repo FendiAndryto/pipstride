@@ -18,18 +18,26 @@ Pipstride never places, modifies, or closes orders. The order route returns `403
   - Astro 7 (`7.4.5`), `@astrojs/sitemap`, static output, zero-JS by default
   - Node `>=22.23.4` required (`package.json` engines)
   - Own nested `apps/marketing/AGENTS.md` with Astro-specific dev-server guidance
+- **Admin console (`apps/admin`)**:
+  - React 19 + Vite 8, plain JavaScript + JSX; `oxlint` + `dependency-cruiser` (`npm run lint:arch`)
+  - Separate origin **and** bundle from `apps/web` (ADR 0008 §7); there is no `/admin` route in `apps/web`
+  - Served by Caddy on `ADMIN_DOMAIN` behind the `ADMIN_ALLOWED_IPS` allowlist (non-allowlisted → `404`);
+    dev server on port `5180`
 - **Backend (`services/api`)**:
   - Python 3.12+ (`3.12` in CI), FastAPI (`0.161.1`), Uvicorn (`0.54.0`)
   - ORM / Migrations: SQLAlchemy `2.1.6`, Alembic `1.20.1`, `psycopg[binary]` `3.3.6`
   - Auth: JWT (`pyjwt` `2.15.1`), `bcrypt` `5.0.0`
+  - Admin surface: TOTP (`pyotp` `2.10.0`) with Fernet-encrypted seeds (`cryptography` `50.0.2`)
   - Live state / cache: Redis 7 (`redis` `8.1.0`) with in-process fallback
 - **Shared package (`packages/pricing`)**:
   - `catalog.json` is the single source of truth for plans and prices (ADR 0007).
   - Consumed by the API at startup (seeds `plans`) and by `apps/marketing` at build time.
+  - `apps/admin` mirrors the four plan **codes** in its entitlement picker; the API validates every
+    submitted `plan_code` against the seeded `plans` table (unknown → `400`).
   - Defining a price anywhere else is prohibited.
 - **Infrastructure (`infra`)**:
   - Docker Compose: `docker-compose.yml` + `docker-compose.prod.yml` (Caddy + TLS)
-  - PostgreSQL 16, Redis 7, API, web, marketing; loopback-bound by default
+  - PostgreSQL 16, Redis 7, API, web, marketing, admin; loopback-bound by default
   - `infra/cron/pipstride-crontab` — checked-in host crontab (prune 03:15 UTC, DB dump 03:45 UTC)
 - **Sensor (`mt5-ea`)**:
   - `PipstrideMonitor.mq5` — MQL5 telemetry reader, zero execution capability.
@@ -56,6 +64,8 @@ pipstride/
 │   │       ├── hooks/          # useIdleLogout.js
 │   │       ├── lib/            # http, storage, download, csv (IO only)
 │   │       └── services/       # api.js — thin HTTP client over lib/http
+│   ├── admin/                  # React 19 + Vite admin console (separate bundle & origin)
+│   │   └── src/                # app/, pages/, features/, domain/, lib/, components/ui/, styles/
 │   └── marketing/              # Astro static site (landing, features, pricing, about)
 │       ├── src/components/     # Header, Footer, sections/*, showcase/*
 │       ├── src/layouts/        # BaseLayout.astro
@@ -67,16 +77,16 @@ pipstride/
 ├── services/
 │   └── api/
 │       ├── app/
-│       │   ├── api/v1/         # auth, bridge, connections, journal, telegram routers (thin)
-│       │   ├── core/           # config, deps, live_state, logging, rate_limit, security, tokens
+│       │   ├── api/v1/         # auth, bridge, connections, journal, telegram, access_log + admin/* routers (thin)
+│       │   ├── core/           # config, deps, crypto, live_state, logging, rate_limit, security, tokens
 │       │   ├── db/             # base.py (engine, session_scope unit-of-work), models.py
 │       │   ├── domain/         # pure: metrics, policies, time, errors (no framework/ORM)
-│       │   ├── infrastructure/ # db/repositories/{trade,connection,telemetry,user}_repository.py
-│       │   ├── models/         # Pydantic schemas (auth, bridge, journal, risk, telegram)
-│       │   └── services/       # telemetry ingest, bridge status, account settings, connection, user, auth tokens, email, mt5_package, pricing_catalog, telegram
-│       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens)
+│       │   ├── infrastructure/ # db/repositories/{trade,connection,telemetry,user,admin}_repository.py
+│       │   ├── models/         # Pydantic schemas (auth, admin, bridge, journal, risk, telegram)
+│       │   └── services/       # telemetry ingest, bridge status, account settings, connection, user, auth tokens, admin, totp, email, mt5_package, pricing_catalog, telegram
+│       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens, 0002_admin_totp, 0003_support_sessions)
 │       ├── scripts/            # backup_db, check_migrations, prune_snapshots, reset_admin_password
-│       └── tests/              # 11 test modules + conftest, 121 tests
+│       └── tests/              # 15 test modules + conftest, 154 tests
 ├── mt5-ea/PipstrideMonitor.mq5 # canonical read-only sensor
 ├── infra/                      # compose files, Caddyfile, cron/pipstride-crontab
 ├── docs/
@@ -86,7 +96,7 @@ pipstride/
 │   ├── GLOSSARY.md             # domain vocabulary
 │   └── TICKET_TRACKER.md
 ├── tickets/                    # phased execution tickets, 001–009 (+ README workflow)
-├── .github/workflows/ci.yml    # api tests, migration drift, web, marketing, docker images
+├── .github/workflows/ci.yml    # api tests, migration drift, web, marketing, admin, docker images
 ├── backups/                    # gitignored local DB dumps
 └── .venv/                      # gitignored, working local Python env (see below)
 ```
@@ -95,7 +105,8 @@ pipstride/
 
 ## Verified Verification Commands
 
-All commands below were executed on 2026-11-05 and exited **0**.
+All commands below were executed on 2026-11-05 and exited **0**; the web, API and admin numbers
+were re-verified on 2026-11-12 when Fase 007 landed.
 
 ### 1. Web lint
 ```bash
@@ -107,8 +118,8 @@ npm --prefix apps/web run lint
 ```bash
 npm --prefix apps/web test
 ```
-`vitest run` — **4 files, 57 tests, exit 0** in ~0.6s. Pure modules only (`environment: 'node'`,
-no jsdom): `domain/{analytics,pnl,validation}` and `features/journal/dayBuckets`. Vitest is used
+`vitest run` — **5 files, 69 tests, exit 0** in ~1s. Pure modules only (`environment: 'node'`,
+no jsdom): `domain/{analytics,pnl,validation}`, `features/journal/dayBuckets` and
 instead of `node:test` because 95 of 96 relative imports in `src/` are extensionless and plain
 `node:test` fails with `ERR_MODULE_NOT_FOUND` outside `domain/`. **Run this after touching
 `src/domain/` or `src/features/`** — it is the only guard on backend parity.
@@ -118,13 +129,13 @@ instead of `node:test` because 95 of 96 relative imports in `src/` are extension
 ```bash
 npm --prefix apps/web run build
 ```
-1976 modules → `apps/web/dist` in ~1.4s.
+1979 modules → `apps/web/dist` in ~1.4s.
 
 ### 3. Web i18n parity
 ```bash
 node apps/web/scripts/check-i18n.cjs
 ```
-`i18n OK — 476 keys per language, 425 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
+`i18n OK — 491 keys per language, 433 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
 
 ### 4. Marketing build
 ```bash
@@ -139,7 +150,7 @@ cd services/api
 $env:ENVIRONMENT="test"; $env:SECRET_KEY="ci-secret-key-not-for-production"
 ../../.venv/Scripts/python.exe -m pytest
 ```
-`121 passed, 1 warning in ~26s`. Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
+`154 passed in ~43s`. Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
 
 Docker alternative (matches the old note, only when the daemon is up):
 ```bash
@@ -153,6 +164,15 @@ cd services/api
 ../../.venv/Scripts/lint-imports.exe
 ```
 `6 kept, 0 broken` — includes `no-frameworks-in-domain` and `domain-imports-no-app-layer`.
+
+### 5c. Admin console lint, boundaries and build
+```bash
+npm --prefix apps/admin run lint
+npm --prefix apps/admin run lint:arch
+npm --prefix apps/admin run build
+```
+`oxlint` 0 warnings, `depcruise` 43 modules / 0 violations, Vite build → `apps/admin/dist`.
+`npm ci` in that directory needs the checked-in `apps/admin/package-lock.json`.
 `import-linter` is in `requirements-dev.txt`; the root `.venv` has it installed.
 
 ### 6. API health / readiness (requires the stack running)
@@ -181,7 +201,7 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
    - `apps/marketing` is explicitly exempt from the React-centric layout.
    - `apps/A` must not import `apps/B`; `packages/*` must not import `apps/*`; `mt5-ea/` imports nothing from the Python/JS code.
    - Enforced by CI today? **Backend yes** (`import-linter`, 6 contracts). **Frontend yes** (`npm run lint:arch`): `no-cross-app-imports`, `no-feature-to-feature`, and the `domain/` + `lib/` leaf rules are all live.
-4. **Pricing lives in exactly one file** — `packages/pricing/catalog.json` (ADR 0007). Add or change a plan there, never in a page, component, or migration.
+4. **Pricing lives in exactly one file** — `packages/pricing/catalog.json` (ADR 0007). Add or change a plan there, never in a page, component, or migration. `apps/admin` may not import it (its `no-cross-app-imports` rule forbids non-`src` imports), so it mirrors the plan codes and the API remains the validator.
 5. **Frontend shape**: single-page dashboard driven by active-tab state (`PipstrideHeader` + `PipstrideBottomNav`), custom CSS classes and tokens rather than utility frameworks, one HTTP client (`src/services/api.js`, transport in `src/lib/http.js`) with `X-Connection-Id` selecting the active account.
 6. **Code quality**: smallest diff possible, zero unnecessary abstractions. Verify with lint + build (web) or `pytest` (API) before committing.
 7. **Docs are bilingual-ish**: ADRs, specs, and tickets are written in Indonesian; code, comments, API docs, and README are English. Match the language of the file you are editing.
@@ -193,13 +213,13 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–006, 008, and 009 done. 007 still `todo`.**
+- Current state: **001–009 all `done`** (Fase 007 admin console closed the board).
 - Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 
 ## Build & release expectations
 
-- CI (`.github/workflows/ci.yml`) runs six jobs: `api` (pytest, Python 3.12), `migrations` (upgrade head + drift + backup/restore round-trip against Postgres 16), `web` (`npm ci && lint && test && build`, Node 22), `marketing` (`npm ci && build`, Node 22), `arch` (`lint-imports` + `npm run lint:arch`), and `docker` (three image builds, gated on the first three).
+- CI (`.github/workflows/ci.yml`) runs seven jobs: `api` (pytest, Python 3.12), `migrations` (upgrade head + drift + backup/restore round-trip against Postgres 16), `web` (`npm ci && lint && test && build`, Node 22), `marketing` (`npm ci && build`, Node 22), `admin` (`npm ci && lint && lint:arch && build`, Node 22), `arch` (`lint-imports` + `npm run lint:arch`), and `docker` (four image builds, gated on `api`, `web`, `marketing`, `admin` and `arch`).
 - Commit messages follow Conventional Commits with a scope: `fix(api):`, `feat(marketing):`, `docs(tickets):`.
 
 ---
@@ -216,7 +236,20 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - **`ADMIN_PASSWORD` in `.env` only seeds the admin once.** Rotating it does not change an existing admin — use `scripts/reset_admin_password.py`, which also bumps `token_version` and repairs a deactivated/demoted row.
 - **Raw bridge tokens are never stored** (SHA-256 digest only). Create/rotate must return the token *and* the generated `.set` preset, or the user cannot recover it.
 - **`apps/web/Dockerfile` still builds on `node:20-alpine`** while CI uses Node 22 and Vite 8 wants ≥20.19. Marketing was already bumped to `node:22-alpine` for Astro 7. Local builds on Node 24 are fine; the image build is the risky path.
-- **`packages/pricing/README.md` references `apps/admin`,** which does not exist. It is planned in ticket 007, not present.
+- **`apps/admin` is a separate origin, not a route.** It is built and served on its own host
+  (`ADMIN_DOMAIN`); Caddy answers `404` for anything outside `ADMIN_ALLOWED_IPS`. Do not add an
+  `/admin` route to `apps/web`.
+- **Admin/support logins need TOTP.** `ADMIN_PASSWORD` only seeds the account; an admin without a
+  paired device gets `403` ("Two-factor enrollment required") from `/auth/login` and must pair via
+  `POST /auth/totp/enroll/start` + `/auth/totp/enroll/verify` (password re-auth, no session needed).
+  Seeds are Fernet-encrypted with `TOTP_ENCRYPTION_KEY`; when it is empty the key is derived from
+  `SECRET_KEY`, so rotating `SECRET_KEY` forces every privileged account to re-enroll.
+- **Support mode ships disabled.** `SUPPORT_MODE_ENABLED=false` by default; every
+  `/admin/support/*` endpoint returns `403` until an operator enables it *after* the user-visible
+  access log (`GET /api/v1/access-log`, Profile → Support Access Log) is verified in production.
+- **The admin host must be in `ALLOWED_HOSTS`** (and its origin in `CORS_ORIGINS` if it ever calls the
+  API cross-origin — the shipped setup proxies `/api` through its own nginx, so same-origin is used).
+  `ADMIN_PORT` defaults to `3002` and `ADMIN_BIND_IP` to `127.0.0.1`.
 - **`services/api/app/data/pipstride.db`** is a local dev SQLite file (gitignored via `*.db`). Do not commit it or treat it as a migration artifact.
 - **`backups/` is gitignored** and holds local dumps; cron writes outside the repo in production (`/home/fendi/my-apps/pipstride-backups`).
 

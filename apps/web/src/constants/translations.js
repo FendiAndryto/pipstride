@@ -505,7 +505,24 @@ export const translations = {
     err_new_password_alnum: 'The new password must combine letters and numbers.',
     err_new_password_mismatch: 'The new password confirmation does not match.',
     err_change_password: 'Failed to change the password.',
-    err_save_email: 'Failed to save the email.'
+    err_save_email: 'Failed to save the email.',
+
+    // ----------------------------------------------------------- access log
+    profile_access_log_section: 'Data Access & Support Audit',
+    profile_access_log_title: 'Support Access Log',
+    profile_access_log_intro: 'Only authorized support staff with an active, time-boxed session can access your data. Every access event is permanently recorded here.',
+    profile_access_log_refresh: 'Refresh',
+    profile_access_log_loading: 'Loading access log...',
+    profile_access_log_error: 'Failed to load data access log.',
+    profile_access_log_retry: 'Retry',
+    profile_access_log_empty: 'No support access recorded yet',
+    profile_access_log_th_action: 'Action',
+    profile_access_log_th_actor: 'Staff Member',
+    profile_access_log_th_time: 'Timestamp',
+    profile_access_log_th_detail: 'Details & Reason',
+    profile_access_log_action_granted: 'Support access granted',
+    profile_access_log_action_detail_viewed: 'Your private data was viewed',
+    profile_access_log_action_revoked: 'Support access ended'
   },
 
   id: {
@@ -1011,6 +1028,23 @@ export const translations = {
     err_new_password_alnum: 'Password baru wajib berisi kombinasi huruf dan angka.',
     err_new_password_mismatch: 'Konfirmasi password baru tidak cocok.',
     err_change_password: 'Gagal mengubah password.',
-    err_save_email: 'Gagal menyimpan email.'
+    err_save_email: 'Gagal menyimpan email.',
+
+    // ----------------------------------------------------------- access log
+    profile_access_log_section: 'Akses Data & Audit Dukungan',
+    profile_access_log_title: 'Log Akses Dukungan',
+    profile_access_log_intro: 'Hanya staf dukungan berwenang dengan sesi berbatas waktu yang dapat mengakses data Anda. Setiap akses dicatat secara permanen di sini.',
+    profile_access_log_refresh: 'Segarkan',
+    profile_access_log_loading: 'Memuat log akses...',
+    profile_access_log_error: 'Gagal memuat log akses data.',
+    profile_access_log_retry: 'Coba Lagi',
+    profile_access_log_empty: 'Belum ada akses dukungan yang tercatat',
+    profile_access_log_th_action: 'Aktivitas',
+    profile_access_log_th_actor: 'Staf Dukungan',
+    profile_access_log_th_time: 'Waktu',
+    profile_access_log_th_detail: 'Detail & Alasan',
+    profile_access_log_action_granted: 'Akses dukungan diberikan',
+    profile_access_log_action_detail_viewed: 'Data pribadi Anda dilihat',
+    profile_access_log_action_revoked: 'Akses dukungan selesai'
   }
 };

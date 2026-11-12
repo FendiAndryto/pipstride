@@ -9,9 +9,11 @@ import os
 import tempfile
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import pyotp
 
 _TMP_DIR = Path(tempfile.mkdtemp(prefix="pipstride-tests-"))
 
@@ -25,19 +27,62 @@ os.environ["ALLOWED_HOSTS"] = "*"
 os.environ["TELEGRAM_NOTIFICATIONS_ENABLED"] = "false"
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
+from app.core.crypto import encrypt_secret  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.db.base import SessionLocal  # noqa: E402
-from app.db.models import Entitlement  # noqa: E402
+from app.db.models import Entitlement, User  # noqa: E402
 from app.main import app  # noqa: E402
 
 TEST_PASSWORD = "Passw0rd123"
+
+# The seeded admin always has a paired device in tests, so baseline modules that
+# log in directly keep working. Un-enrolled admin/support accounts are created
+# explicitly by the TOTP tests.
+TEST_TOTP_SECRET = pyotp.random_base32()
+
+
+def current_totp(secret: str) -> str:
+    return pyotp.TOTP(secret).now()
+
+
+def ensure_default_admin() -> None:
+    """Make the seeded admin usable regardless of test ordering.
+
+    ``test_reset_admin_password`` rewrites the row mid-suite, so each admin
+    login repairs password, role, active state and TOTP enrollment first.
+    """
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == settings.ADMIN_USERNAME))
+        if user is None:
+            user = User(
+                username=settings.ADMIN_USERNAME,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
+                role="admin",
+            )
+            db.add(user)
+            db.flush()
+            db.add(Entitlement(user_id=user.id, plan_code="pro", max_connections=5))
+        user.role = "admin"
+        user.is_active = True
+        user.password_hash = hash_password(settings.ADMIN_PASSWORD)
+        user.totp_secret = encrypt_secret(TEST_TOTP_SECRET)
+        user.totp_enrolled_at = datetime.now(timezone.utc)
+        db.commit()
 
 
 @pytest.fixture(scope="session")
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _default_admin_is_enrolled(client):
+    ensure_default_admin()
+    yield
 
 
 @pytest.fixture
@@ -60,12 +105,55 @@ def account(client):
 
 @pytest.fixture
 def admin_headers(client):
+    ensure_default_admin()
     res = client.post(
         "/api/v1/auth/login",
-        json={"username": settings.ADMIN_USERNAME, "password": settings.ADMIN_PASSWORD},
+        json={
+            "username": settings.ADMIN_USERNAME,
+            "password": settings.ADMIN_PASSWORD,
+            "totp_code": current_totp(TEST_TOTP_SECRET),
+        },
     )
     assert res.status_code == 200, res.text
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+@pytest.fixture
+def make_user():
+    """Factory for role-specific accounts, enrolled in TOTP on demand."""
+
+    def _make(
+        role: str = "trader",
+        *,
+        username: str | None = None,
+        password: str = TEST_PASSWORD,
+        enrolled: bool = False,
+        active: bool = True,
+    ) -> dict:
+        name = username or f"{role}_{uuid.uuid4().hex[:10]}"
+        secret = pyotp.random_base32()
+        with SessionLocal() as db:
+            user = User(
+                username=name,
+                password_hash=hash_password(password),
+                role=role,
+                is_active=active,
+                totp_secret=encrypt_secret(secret) if enrolled else None,
+                totp_enrolled_at=datetime.now(timezone.utc) if enrolled else None,
+            )
+            db.add(user)
+            db.flush()
+            db.add(Entitlement(user_id=user.id, plan_code="free", max_connections=1))
+            db.commit()
+            user_id = user.id
+        return {
+            "id": user_id,
+            "username": name,
+            "password": password,
+            "secret": secret if enrolled else None,
+        }
+
+    return _make
 
 
 def grant_connections(username: str, limit: int) -> None:

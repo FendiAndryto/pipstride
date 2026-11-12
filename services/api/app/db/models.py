@@ -42,6 +42,10 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="trader")
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Mandatory 2FA for admin/support (ADR 0008 §5). The seed is encrypted with
+    # a configured key - never a hash, because login must recompute the code.
+    totp_secret: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    totp_enrolled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
@@ -180,12 +184,43 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
+    # The acting user (for admin mutations: the admin; for product events: the owner).
     user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # Whose data the action touched, when that differs from the actor. This is
+    # what the user-visible access log in apps/web reads (ADR 0008 §6).
+    target_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     connection_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     detail: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class SupportSession(Base):
+    """Time-boxed, reason-required elevation to one user's private detail.
+
+    A row is usable only while ``revoked_at`` is null and ``expires_at`` is in
+    the future. Every grant and revoke is mirrored to ``audit_logs`` so the
+    affected user can see it in the access log (ADR 0008 §6).
+    """
+
+    __tablename__ = "support_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    admin_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_support_sessions_admin_target", "admin_id", "target_user_id"),
+    )
 
 
 class Plan(Base):

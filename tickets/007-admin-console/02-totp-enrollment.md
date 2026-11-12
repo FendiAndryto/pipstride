@@ -43,4 +43,4 @@ Expected: pass; test: login admin tanpa TOTP ditolak; setelah enroll, diterima.
 - Jangan buat akun admin baru di luar origin yang dibatasi (ADR 0008 §5).
 
 ## Status
-todo
+done

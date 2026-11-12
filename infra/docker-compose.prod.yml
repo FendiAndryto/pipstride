@@ -14,6 +14,8 @@ services:
     environment:
       - PIPSTRIDE_DOMAIN=${PIPSTRIDE_DOMAIN:-app-pipstride.homever.my.id}
       - MARKETING_DOMAIN=${MARKETING_DOMAIN:-pipstride.homever.my.id}
+      - ADMIN_DOMAIN=${ADMIN_DOMAIN:-admin-pipstride.homever.my.id}
+      - ADMIN_ALLOWED_IPS=${ADMIN_ALLOWED_IPS:-127.0.0.1/32}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -21,6 +23,7 @@ services:
     depends_on:
       - web
       - marketing
+      - admin
     networks:
       - pipstride_net
 

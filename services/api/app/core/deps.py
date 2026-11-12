@@ -46,13 +46,29 @@ def get_current_user(
     return user
 
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if getattr(user, "role", "") != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required.",
-        )
-    return user
+def require_role(*roles: str):
+    """Dependency factory enforcing ``User.role`` membership.
+
+    ``get_current_user`` already re-reads ``role``, ``is_active`` and
+    ``token_version`` from the database on every request, so a demotion or
+    deactivation takes effect immediately instead of waiting out the 24-hour
+    JWT (ADR 0008 §3). This factory is mounted per admin router, and
+    ``tests/test_admin_guard.py`` fails CI when a router forgets it.
+    """
+    allowed = frozenset(roles)
+
+    def _guard(user: User = Depends(get_current_user)) -> User:
+        if getattr(user, "role", "") not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient privileges for this endpoint.",
+            )
+        return user
+
+    return _guard
+
+
+require_admin = require_role("admin")
 
 
 def get_active_connection(

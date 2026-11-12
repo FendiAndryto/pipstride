@@ -114,9 +114,16 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **02-overall-drawdown-and-single-formula.md** (`done`): `drawdownView` menggantikan `dailyDrawdownFallback` + `deriveDrawdownWatch`; kartu `DrawdownCard` di Journal setelah KPI; section risk Profile dihapus, `margin_level` pindah ke kartu Active Account; `is_data_available` mencegah 0,00% palsu.
 - [x] **03-market-structure-timeframes.md** (`done`): EA mengirim `candles_h1`/`candles_h4` (24 bar, cache 30s), `HeartbeatPayload` meneruskannya, `MarketTab` menampilkan M5/M15/H1/H4 dengan state jujur untuk TF tanpa data; kedua file EA identik.
 
-### Fase 007: Admin Console + Privilege Boundary (Belum Diimplementasikan - Urutan Terakhir)
-- [ ] **01-require-role-and-readonly-endpoints.md** (`todo`): RBAC role DB (`admin`/`support`) dan endpoint query read-only.
-- [ ] **02-totp-enrollment.md** (`todo`): Sistem pendaftaran 2FA / TOTP wajib untuk role admin & support.
-- [ ] **03-admin-mutations-and-audit.md** (`todo`): Mutasi data user/entitlement dengan pencatatan audit log mutlak.
-- [ ] **04-support-mode-and-access-log.md** (`todo`): Support mode time-boxed 30 menit & log akses transparan untuk user.
-- [ ] **05-admin-frontend-app.md** (`todo`): Aplikasi web dashboard admin mandiri (`apps/admin`, React 19 + Vite di `admin.pipstride.com`).
+### Fase 007: Admin Console + Privilege Boundary (Selesai)
+> **Catatan Implementasi (2026-11-12):** kelima tiket selesai, gate fase ditutup. Urutan ADR 0008
+> (read-only → TOTP → mutasi → support mode) dijaga tes. Detail ada di
+> `tickets/007-admin-console/README.md`; ringkasan: `require_role` + architecture test AST,
+> migrasi `0002_admin_totp` (seed Fernet + `totp_enrolled_at`) dan `0003_support_sessions`,
+> audit wajib pada setiap mutasi dengan kolom `target_user_id`, support mode 30 menit opt-in
+> (`SUPPORT_MODE_ENABLED=false`), access log user `GET /api/v1/access-log` di Profile, dan
+> `apps/admin` sebagai bundle/origin terpisah di balik allowlist Caddy.
+- [x] **01-require-role-and-readonly-endpoints.md** (`done`): RBAC role DB (`admin`/`support`) dan endpoint query read-only.
+- [x] **02-totp-enrollment.md** (`done`): Sistem pendaftaran 2FA / TOTP wajib untuk role admin & support.
+- [x] **03-admin-mutations-and-audit.md** (`done`): Mutasi data user/entitlement dengan pencatatan audit log mutlak.
+- [x] **04-support-mode-and-access-log.md** (`done`): Support mode time-boxed 30 menit & log akses transparan untuk user.
+- [x] **05-admin-frontend-app.md** (`done`): Aplikasi web dashboard admin mandiri (`apps/admin`, React 19 + Vite di origin terpisah).

@@ -20,17 +20,17 @@ Referensi: `docs/adr/0008-admin-console-surface-and-privilege-boundary.md`.
 5. `05-admin-frontend-app.md`
 
 ## Gate (checklist audit keluar)
-- [ ] Semua modul di `api/v1/admin/` memasang `require_role(...)` (architecture test gagal bila ada
+- [x] Semua modul di `api/v1/admin/` memasang `require_role(...)` (architecture test gagal bila ada
       `APIRouter` telanjang — ADR 0008 §2).
-- [ ] Role dibaca dari **DB tiap request** (bukan claim JWT); demote/deactivate langsung berlaku (ADR 0008 §3).
-- [ ] TOTP wajib untuk admin/support; migrasi `users.totp_secret` (terenkripsi) + `totp_enrolled_at` (ADR 0008 §5).
-- [ ] Setiap mutasi menulis `audit_logs` (actor, action, detail, ip) — endpoint tanpa audit tidak boleh ship (ADR 0008 §4).
-- [ ] Support mode time-boxed 30 menit, reason wajib, tercatat di `support_sessions` + `audit_logs` (ADR 0008 §6).
-- [ ] Access log user-visible di `apps/web` **ada sebelum** support mode diaktifkan (prasyarat ADR 0008 §6).
-- [ ] Admin **tidak pernah** menerima token koneksi plaintext; `token_hash` tetap hash-only (ADR 0008 §6).
-- [ ] Sebelum TOTP ship: origin admin dibatasi (IP allowlist / Cloudflare Access), tidak ada akun admin di luar itu (ADR 0008 §5).
-- [ ] `apps/admin` bundle & origin terpisah dari `apps/web`; tidak ada route `/admin` di dalam `apps/web` (ADR 0008 §7).
-- [ ] `pytest` + gate `arch` + build admin hijau.
+- [x] Role dibaca dari **DB tiap request** (bukan claim JWT); demote/deactivate langsung berlaku (ADR 0008 §3).
+- [x] TOTP wajib untuk admin/support; migrasi `users.totp_secret` (terenkripsi) + `totp_enrolled_at` (ADR 0008 §5).
+- [x] Setiap mutasi menulis `audit_logs` (actor, action, detail, ip) — endpoint tanpa audit tidak boleh ship (ADR 0008 §4).
+- [x] Support mode time-boxed 30 menit, reason wajib, tercatat di `support_sessions` + `audit_logs` (ADR 0008 §6).
+- [x] Access log user-visible di `apps/web` **ada sebelum** support mode diaktifkan (prasyarat ADR 0008 §6).
+- [x] Admin **tidak pernah** menerima token koneksi plaintext; `token_hash` tetap hash-only (ADR 0008 §6).
+- [x] Sebelum TOTP ship: origin admin dibatasi (IP allowlist / Cloudflare Access), tidak ada akun admin di luar itu (ADR 0008 §5).
+- [x] `apps/admin` bundle & origin terpisah dari `apps/web`; tidak ada route `/admin` di dalam `apps/web` (ADR 0008 §7).
+- [x] `pytest` + gate `arch` + build admin hijau.
 
 ## Dampak
 - Ops/support. Blast radius backend dibagi dengan produk (satu proses FastAPI) — diterima sadar
@@ -40,3 +40,22 @@ Referensi: `docs/adr/0008-admin-console-surface-and-privilege-boundary.md`.
 - **Satu service backend**; tambah router, bukan service baru (ADR 0008 §1).
 - Tanpa tabel `admins` terpisah; pakai `User.role` (`admin`/`support`).
 - Tunda bila belum ada user yang perlu di-support; jangan bangun lebih awal.
+
+## Catatan implementasi (keluar fase)
+- Backend: `api/v1/admin/{users,connections,audit,metrics,support}.py` semuanya memakai
+  `dependencies=[Depends(require_role(...))]`; `tests/test_admin_guard.py` memeriksa AST dan punya
+  kontrol negatif (router polos → merah), plus uji demote/deactivate langsung berlaku.
+- TOTP: migrasi `0002_admin_totp` (`users.totp_secret` terenkripsi Fernet + `totp_enrolled_at`).
+  Login admin/support tanpa kode → 401; akun belum enroll → 403 dengan jalur enrollment
+  password-only (`/auth/totp/enroll/start|verify`) agar admin tidak terkunci.
+- Mutasi: entitlement, deactivate/activate, revoke koneksi, grant/revoke support → semua menulis
+  `audit_logs` (actor, action, detail, ip, `target_user_id`).
+- Support mode: `support_sessions` (migrasi `0003_support_sessions`), 30 menit, alasan wajib,
+  grant/revoke/detail-view dicerminkan ke audit. Opt-in via `SUPPORT_MODE_ENABLED` (default false).
+- Access log user: `GET /api/v1/access-log` + `AccessLogSection` di `ProfileTab` (`apps/web`).
+- Admin reads: hanya `token_prefix`, tidak ada field token plaintext/`token_hash` di schema admin.
+- Origin: host Caddy terpisah (`ADMIN_DOMAIN`) dengan allowlist `ADMIN_ALLOWED_IPS`; di luar
+  allowlist dijawab 404. `apps/admin` bundle sendiri, tanpa route `/admin` di `apps/web`.
+- Verifikasi: pytest penuh hijau, `lint-imports` 6/0, web lint/test/build + i18n hijau, admin
+  `lint` + `lint:arch` + `build` hijau. Docker image build & drift migrasi Postgres **belum**
+  dijalankan di mesin ini (Docker Desktop mati) — divalidasi oleh job CI `migrations`/`docker`.

@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.v1.access_log import router as access_log_router
+from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.bridge import router as bridge_router
 from app.api.v1.connections import router as connections_router
@@ -121,6 +123,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(access_log_router, prefix=settings.API_V1_STR)
+app.include_router(admin_router, prefix=settings.API_V1_STR)
 app.include_router(connections_router, prefix=settings.API_V1_STR)
 app.include_router(journal_router, prefix=settings.API_V1_STR)
 app.include_router(bridge_router, prefix=settings.API_V1_STR)

@@ -1,0 +1,61 @@
+:root {
+  /* Pipstride Admin Obsidian Palette */
+  --bg-base: #060a0e;
+  --bg-surface: #0a1318;
+  --bg-surface-elevated: #0f1c24;
+  --bg-surface-card: #0c171e;
+  --bg-surface-hover: #142530;
+  --bg-surface-active: #192f3d;
+
+  /* Hairlines and gridlines */
+  --border-subtle: #172c36;
+  --border-strong: #234250;
+  --border-focus: #45e0ad;
+  --border-glow: rgba(69, 224, 173, 0.4);
+
+  /* Typography Colors */
+  --text-primary: #eff7f5;
+  --text-secondary: #9db5be;
+  --text-muted: #607c87;
+  --text-disabled: #3d515a;
+
+  /* Precision Accents */
+  --accent-emerald: #45e0ad;
+  --accent-emerald-dark: #1e6950;
+  --accent-emerald-subtle: rgba(69, 224, 173, 0.12);
+  --accent-emerald-glow: rgba(69, 224, 173, 0.25);
+
+  --accent-rose: #ff7180;
+  --accent-rose-subtle: rgba(255, 113, 128, 0.12);
+  --accent-rose-glow: rgba(255, 113, 128, 0.25);
+
+  --accent-amber: #f2c875;
+  --accent-amber-subtle: rgba(242, 200, 117, 0.12);
+  --accent-amber-glow: rgba(242, 200, 117, 0.25);
+
+  --accent-blue: #83bdff;
+  --accent-blue-subtle: rgba(131, 189, 255, 0.12);
+
+  --accent-purple: #ab8eff;
+  --accent-purple-subtle: rgba(171, 142, 255, 0.12);
+
+  /* Elevation Shadows */
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--border-subtle);
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Fonts */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* Layout */
+  --max-width: 1400px;
+  --header-height: 56px;
+}

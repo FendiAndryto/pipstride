@@ -10,6 +10,7 @@ from app.core.security import create_access_token
 from app.core.tokens import hash_token
 from app.db.base import get_db
 from app.db.models import User
+from app.domain.time import as_utc
 from app.models.auth import (
     ChangePasswordRequest,
     EmailStatusResponse,
@@ -19,6 +20,10 @@ from app.models.auth import (
     ResetPasswordRequest,
     SetEmailRequest,
     TokenResponse,
+    TotpEnrollStartRequest,
+    TotpEnrollStartResponse,
+    TotpEnrollVerifyRequest,
+    TotpEnrollVerifyResponse,
     UserResponse,
     VerifyEmailRequest,
 )
@@ -28,6 +33,7 @@ from app.services.auth_token_service import (
     auth_token_service,
 )
 from app.services.email_service import email_service
+from app.services.totp_service import requires_totp, totp_service
 from app.services.user_service import user_service, validate_password_complexity
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -49,6 +55,7 @@ def _token_response(user: User) -> TokenResponse:
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         username=user.username,
         role=user.role,
+        totp_enrolled=totp_service.is_enrolled(user),
     )
 
 
@@ -58,6 +65,7 @@ def _user_response(user: User) -> UserResponse:
         role=user.role,
         email=user.email,
         email_verified=user.email_verified_at is not None,
+        totp_enrolled=totp_service.is_enrolled(user),
     )
 
 
@@ -141,8 +149,118 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Privileged accounts must present a verified TOTP code (ADR 0008 §5). A
+    # pending enrollment does not unlock login; the enrollment endpoints accept
+    # the password instead, so a locked-out admin can still pair a device.
+    if requires_totp(user):
+        if not totp_service.is_enrolled(user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Two-factor enrollment required before signing in.",
+            )
+        if not totp_service.verify_code(user, credentials.totp_code):
+            rate_limiter.record_failure(rate_key)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing two-factor code",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     rate_limiter.record_success(rate_key)
     return _token_response(user)
+
+
+def _enrollment_user(db: Session, username: str, password: str) -> User:
+    """Password-only authentication for TOTP enrollment.
+
+    An admin without a paired device cannot obtain a session (login is gated),
+    so the enrollment flow re-authenticates with the password instead. It never
+    applies to trader accounts: TOTP is mandatory only for admin/support.
+    """
+    user = user_service.authenticate(db, (username or "").strip(), password)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not requires_totp(user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account does not require two-factor authentication.",
+        )
+    return user
+
+
+@router.post(
+    "/totp/enroll/start",
+    response_model=TotpEnrollStartResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate a TOTP seed for an admin/support account (shown once)",
+)
+def totp_enroll_start(
+    req: TotpEnrollStartRequest, request: Request, db: Session = Depends(get_db)
+):
+    limited, retry_after = consume(
+        f"totp-start:{_client_ip(request)}", limit=10, window_seconds=900
+    )
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many enrollment attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    user = _enrollment_user(db, req.username, req.password)
+    try:
+        secret, uri = totp_service.start_enrollment(db, user)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        )
+
+    return TotpEnrollStartResponse(
+        secret=secret, otpauth_uri=uri, issuer=settings.TOTP_ISSUER
+    )
+
+
+@router.post(
+    "/totp/enroll/verify",
+    response_model=TotpEnrollVerifyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Confirm a TOTP code and activate two-factor for the account",
+)
+def totp_enroll_verify(
+    req: TotpEnrollVerifyRequest, request: Request, db: Session = Depends(get_db)
+):
+    limited, retry_after = consume(
+        f"totp-verify:{_client_ip(request)}:{req.username.strip().lower()}",
+        limit=10,
+        window_seconds=900,
+    )
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many verification attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    user = _enrollment_user(db, req.username, req.password)
+    if not totp_service.verify_enrollment(db, user, req.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That code is not valid. Check the device clock and try again.",
+        )
+
+    return TotpEnrollVerifyResponse(
+        status="ok",
+        enrolled_at=(
+            as_utc(user.totp_enrolled_at).isoformat()
+            if user.totp_enrolled_at is not None
+            else None
+        ),
+        message="Two-factor authentication is now active.",
+    )
 
 
 @router.post(

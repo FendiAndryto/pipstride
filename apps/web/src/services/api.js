@@ -249,5 +249,12 @@ export const api = {
     const res = await authRequest(`${API_BASE}/api/v1/bridge/risk`, { method: 'GET' });
     if (!res.ok) throw new Error('Failed to retrieve risk watchdog status');
     return res.json();
+  },
+
+  // User-visible support access log (read-only)
+  async getAccessLog(limit = 50) {
+    const res = await authRequest(`${API_BASE}/api/v1/access-log?limit=${encodeURIComponent(limit)}`, { method: 'GET' });
+    if (!res.ok) throw await jsonError(res, 'Failed to fetch access log');
+    return res.json();
   }
 };

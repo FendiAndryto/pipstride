@@ -14,3 +14,8 @@ psycopg[binary]==3.3.6
 
 # Shared live state across API workers
 redis==8.1.0
+
+# Admin console: mandatory TOTP for admin/support (ADR 0008 §5). The seed is
+# encrypted at rest with cryptography's fernet; pyotp only derives codes.
+pyotp==2.10.0
+cryptography==50.0.2

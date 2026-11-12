@@ -21,3 +21,20 @@ export const formatSignedMoney = (value) => {
 /** The one null-safe ratio formatter: null/undefined (infinite ratio) reads as '∞'. */
 export const formatRatio = (value) =>
   value === null || value === undefined ? '∞' : Number(value).toFixed(2);
+
+/**
+ * Formats an ISO date-time string according to the given locale.
+ * Fallback to '—' if invalid or missing.
+ */
+export const formatDateTime = (value, locale = 'en-US') => {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};

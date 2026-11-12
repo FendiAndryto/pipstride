@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "change_this_password"
 
+    # Admin console (ADR 0008). TOTP secrets are encrypted at rest with fernet
+    # key material derived from TOTP_ENCRYPTION_KEY. When that is empty the key
+    # is derived from SECRET_KEY so single-node installs keep working - but then
+    # rotating SECRET_KEY invalidates every enrolled TOTP secret.
+    TOTP_ENCRYPTION_KEY: str = ""
+    TOTP_ISSUER: str = "Pipstride"
+    # Support mode is a time-boxed elevation. It stays opt-in: the user-visible
+    # access log in apps/web must exist before an operator turns this on.
+    SUPPORT_MODE_ENABLED: bool = False
+    SUPPORT_SESSION_MINUTES: int = 30
+
     # Single-source plan catalogue (ADR 0007). Relative paths resolve from the
     # repository root; the production image keeps the same layout under /repo.
     PRICING_CATALOG_PATH: str = "packages/pricing/catalog.json"
@@ -122,9 +133,9 @@ class Settings(BaseSettings):
             "dev-only-secret-key-change-me-please",
         }
         if self.SECRET_KEY in insecure_secrets or len(self.SECRET_KEY) < 32:
-            problems.append("SECRET_KEY is insecure or too short (need ≥32 chars)")
+            problems.append("SECRET_KEY is insecure or too short (need â‰¥32 chars)")
         if self.ADMIN_PASSWORD in {"change_this_password", "AdminPass123"} or len(self.ADMIN_PASSWORD) < 12:
-            problems.append("ADMIN_PASSWORD is insecure or too short (need ≥12 chars)")
+            problems.append("ADMIN_PASSWORD is insecure or too short (need â‰¥12 chars)")
         if self.ALLOWED_HOSTS == "*":
             problems.append("ALLOWED_HOSTS must be restricted in production")
         if self.DATABASE_URL.startswith("sqlite"):
@@ -158,7 +169,7 @@ class Settings(BaseSettings):
     def cors_origins(self) -> List[str]:
         origins: list[str] = []
 
-        # Dev-only convenience origins — excluded in production.
+        # Dev-only convenience origins â€” excluded in production.
         if not self.is_production:
             origins.extend([
                 "http://localhost:5173",

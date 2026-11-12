@@ -1,6 +1,7 @@
 """Baseline API contract tests: health, read-only guarantee, auth."""
 
 from app.core.config import settings
+from tests.conftest import TEST_TOTP_SECRET, current_totp
 
 
 def test_health_check(client):
@@ -33,12 +34,17 @@ def test_order_execution_permanently_forbidden(client):
 def test_login_with_seeded_admin(client):
     res = client.post(
         "/api/v1/auth/login",
-        json={"username": settings.ADMIN_USERNAME, "password": settings.ADMIN_PASSWORD},
+        json={
+            "username": settings.ADMIN_USERNAME,
+            "password": settings.ADMIN_PASSWORD,
+            "totp_code": current_totp(TEST_TOTP_SECRET),
+        },
     )
     assert res.status_code == 200
     data = res.json()
     assert data["username"] == settings.ADMIN_USERNAME
     assert data["role"] == "admin"
+    assert data["totp_enrolled"] is True
     # The user-level bridge token no longer exists; tokens belong to connections.
     assert "bridge_token" not in data
 
