@@ -135,7 +135,7 @@ export function UserDetailPage({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', minWidth: 0 }}>
           <Button
             variant="ghost"
             size="sm"
@@ -144,9 +144,9 @@ export function UserDetailPage({
           >
             Back to Users
           </Button>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <h1>{user?.username || 'User Detail'}</h1>
-            <div className="page-subtitle font-mono">
+            <div className="page-subtitle font-mono" style={{ overflowWrap: 'anywhere' }}>
               ID: {user?.id}
             </div>
           </div>

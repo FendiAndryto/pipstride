@@ -22,10 +22,10 @@ export function Shell({
   children,
 }) {
   const navItems = [
-    { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'audit', label: 'Audit Trail', icon: ShieldAlert },
-    { id: 'support', label: 'Support Sessions', icon: LifeBuoy },
+    { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: Activity },
+    { id: 'users', label: 'Users', shortLabel: 'Users', icon: Users },
+    { id: 'audit', label: 'Audit Trail', shortLabel: 'Audit', icon: ShieldAlert },
+    { id: 'support', label: 'Support Sessions', shortLabel: 'Support', icon: LifeBuoy },
   ];
 
   return (
@@ -86,7 +86,9 @@ export function Shell({
           <div className="header-actions">
             <div className="user-pill">
               <UserCheck size={14} style={{ color: 'var(--accent-emerald)' }} />
-              <span style={{ fontWeight: 600 }}>{currentUser?.username || 'Operator'}</span>
+              <span className="user-pill-name" style={{ fontWeight: 600 }}>
+                {currentUser?.username || 'Operator'}
+              </span>
               <Badge variant={currentUser?.role === 'admin' ? 'danger' : 'warning'}>
                 {currentUser?.role?.toUpperCase() || 'STAFF'}
               </Badge>
@@ -98,8 +100,9 @@ export function Shell({
               icon={LogOut}
               onClick={onLogout}
               aria-label="Sign out"
+              className="signout-btn"
             >
-              Sign Out
+              <span className="signout-label">Sign Out</span>
             </Button>
           </div>
         </div>
@@ -113,6 +116,28 @@ export function Shell({
       />
 
       <main className="admin-main">{children}</main>
+
+      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentRoute === item.id;
+          return (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigate(item.id);
+              }}
+              className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <Icon size={18} />
+              <span>{item.shortLabel}</span>
+            </a>
+          );
+        })}
+      </nav>
     </div>
   );
 }
