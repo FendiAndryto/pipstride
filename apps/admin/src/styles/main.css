@@ -319,6 +319,12 @@ html, body {
   gap: 16px;
 }
 
+.metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
 /* Tables */
 .table-container {
   width: 100%;
@@ -671,6 +677,10 @@ html, body {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  .admin-header {
+    height: 52px;
+  }
+
   .admin-header-inner {
     padding: 0 12px;
     gap: 8px;
@@ -681,17 +691,74 @@ html, body {
   }
 
   .admin-main {
-    padding: 16px 12px calc(84px + env(safe-area-inset-bottom, 0px));
-    gap: 16px;
+    padding: 14px 12px calc(78px + env(safe-area-inset-bottom, 0px));
+    gap: 14px;
   }
 
   .page-header {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .page-title-group {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .page-title-group h1 {
+    font-size: 18px;
+  }
+
+  .page-subtitle:not(.font-mono) {
+    display: none;
+  }
+
+  .btn-refresh {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px;
+  }
+
+  .btn-refresh .btn-label {
+    display: none;
   }
 
   .metric-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .metric-card {
+    padding: 12px;
+    gap: 6px;
+  }
+
+  .metric-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .metric-label {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .metric-value {
+    font-size: 20px;
+  }
+
+  .metric-footer {
+    font-size: 11px;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 6px;
+    margin-top: 2px;
+  }
+
+  .metadata-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .card-header {
@@ -699,28 +766,29 @@ html, body {
   }
 
   .card-body {
-    padding: 14px;
+    padding: 12px 14px;
   }
 
   /* Touch-friendly controls & prevent iOS zoom */
   .btn {
-    min-height: 44px;
-    padding: 10px 14px;
-  }
-
-  .btn-sm {
     min-height: 40px;
     padding: 8px 12px;
   }
 
+  .btn-sm {
+    min-height: 36px;
+    padding: 6px 10px;
+  }
+
   .form-input {
-    min-height: 44px;
+    min-height: 42px;
     font-size: 16px;
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
 
   .support-banner {
-    padding: 10px 12px;
+    top: 52px;
+    padding: 8px 12px;
   }
 
   .modal-backdrop {

@@ -45,8 +45,10 @@ export function OverviewPage() {
           icon={RefreshCw}
           loading={loading}
           onClick={loadData}
+          className="btn-refresh"
+          aria-label="Refresh telemetry"
         >
-          Refresh Telemetry
+          <span className="btn-label">Refresh</span>
         </Button>
       </div>
 

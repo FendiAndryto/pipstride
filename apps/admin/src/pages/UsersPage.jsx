@@ -73,8 +73,10 @@ export function UsersPage({ onNavigate }) {
           icon={RefreshCw}
           loading={loading}
           onClick={loadUsers}
+          className="btn-refresh"
+          aria-label="Refresh directory"
         >
-          Refresh Directory
+          <span className="btn-label">Refresh</span>
         </Button>
       </div>
 

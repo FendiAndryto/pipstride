@@ -3,7 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SupportSessionsTable } from '../features/support/SupportSessionsTable';
 import { fetchSupportSessions, revokeSupportSession } from '../features/support/api';
-import { RefreshCw, ShieldAlert, LifeBuoy } from 'lucide-react';
+import { RefreshCw, LifeBuoy } from 'lucide-react';
 
 export function SupportSessionsPage({
   onSessionRevoked,
@@ -70,18 +70,11 @@ export function SupportSessionsPage({
           icon={RefreshCw}
           loading={loading}
           onClick={loadSessions}
+          className="btn-refresh"
+          aria-label="Refresh sessions"
         >
-          Refresh
+          <span className="btn-label">Refresh</span>
         </Button>
-      </div>
-
-      <div className="alert alert-info">
-        <ShieldAlert size={18} style={{ flexShrink: 0 }} />
-        <div style={{ fontSize: '13px' }}>
-          <strong>Operator Privacy Protocol:</strong> Support mode grants access to private user
-          trades and account settings for a maximum of 30 minutes. Every grant and revocation is
-          mirrored to the audit log and made visible to the affected user in their access log.
-        </div>
       </div>
 
       {message ? (

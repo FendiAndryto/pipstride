@@ -94,8 +94,10 @@ export function AuditPage() {
           icon={RefreshCw}
           loading={loading}
           onClick={loadLogs}
+          className="btn-refresh"
+          aria-label="Refresh logs"
         >
-          Refresh Logs
+          <span className="btn-label">Refresh</span>
         </Button>
       </div>
 

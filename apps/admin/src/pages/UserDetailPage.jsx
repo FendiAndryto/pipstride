@@ -217,13 +217,7 @@ export function UserDetailPage({
       {/* Account Metadata Card */}
       {user ? (
         <Card title="Account Metadata" subtitle="User state and billing entitlement">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
-            }}
-          >
+          <div className="metadata-grid">
             <div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ROLE</div>
               <div style={{ marginTop: '4px' }}>
