@@ -213,7 +213,7 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–009 `done`**, **010 `todo`** (Fase 010: User Expiry & Admin Account Creation).
+- Current state: **001–010 `done`** (All 10 phases completed).
 - Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 

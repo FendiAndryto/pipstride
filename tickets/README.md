@@ -129,10 +129,10 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **04-support-mode-and-access-log.md** (`done`): Support mode time-boxed 30 menit & log akses transparan untuk user.
 - [x] **05-admin-frontend-app.md** (`done`): Aplikasi web dashboard admin mandiri (`apps/admin`, React 19 + Vite di origin terpisah).
 
-#### Fase 010: User Expiry & Admin Account Creation (DIJADWALKAN)
+### Fase 010: User Expiry & Admin Account Creation (Selesai)
 > **Catatan Fase:** Didefinisikan dalam `docs/specs/004-user-expiry-and-admin-creation.md`.
 > Menyediakan fitur pendaftaran user baru langsung dari admin console, pengaturan masa aktif (durasi/expiration date), trial default 3 hari untuk registrasi mandiri via `.env`, penolakan login jelas untuk akun kedaluwarsa, dan dialog copy kredensial cepat.
 - [x] **01-user-expiry-schema-and-policy.md** (`done`): Migrasi `expires_at`, config trial `.env`, guard login & bridge telemetri.
 - [x] **02-admin-user-create-and-extend-api.md** (`done`): Endpoint `POST /admin/users` & `POST /admin/users/{id}/extend-expiry` + AuditLog.
-- [ ] **03-admin-frontend-create-user-modal.md** (`todo`): UI Create User Modal & Copy Credentials Dialog di Admin Console.
-- [ ] **04-admin-frontend-user-expiry-management.md** (`todo`): Badge status masa aktif & Modal Extend Expiry di Admin Console.
+- [x] **03-admin-frontend-create-user-modal.md** (`done`): UI Create User Modal & Copy Credentials Dialog di Admin Console.
+- [x] **04-admin-frontend-user-expiry-management.md** (`done`): Badge status masa aktif & Modal Extend Expiry di Admin Console.
