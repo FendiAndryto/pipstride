@@ -150,7 +150,7 @@ cd services/api
 $env:ENVIRONMENT="test"; $env:SECRET_KEY="ci-secret-key-not-for-production"
 ../../.venv/Scripts/python.exe -m pytest
 ```
-`154 passed in ~43s`. Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
+`176 passed` (1 pre-existing Starlette deprecation warning from `fastapi.testclient`). Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
 
 Docker alternative (matches the old note, only when the daemon is up):
 ```bash

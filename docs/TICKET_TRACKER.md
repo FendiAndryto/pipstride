@@ -35,7 +35,7 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - **Belum Diimplementasikan (`todo`):** 0 tiket (100% selesai)
 
 ```
-[==========================================================..] 94% Selesai
+[============================================================] 100% Selesai
 ```
 
 ---
