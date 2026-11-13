@@ -11,15 +11,27 @@ import {
   UserPlus,
   Sparkles,
   ShieldCheck,
-  Mail
+  Mail,
+  MessageSquare
 } from 'lucide-react';
 import { api, setToken } from '../services/api';
 import { isValidEmail, passwordError } from '../domain/validation';
 import { useLanguage } from '../context/LanguageContext';
 
+// Set to true to re-enable the public self-registration tab and form (SPEC-006).
+// The form, its state and handleRegisterSubmit are kept intact on purpose: flipping
+// this flag must be the only change needed to reopen signup.
+const PUBLIC_REGISTRATION_ENABLED = false;
+const DISCORD_ADMIN_URL = 'https://discord.com/users/757954690037186580';
+
 export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice }) {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register' | 'forgot'
+  // With public registration closed (SPEC-006) the register tab is unreachable;
+  // coerce a stale 'register' state to 'login' so it can never fall through to
+  // the recovery form.
+  const activeView =
+    !PUBLIC_REGISTRATION_ENABLED && activeTab === 'register' ? 'login' : activeTab;
   
   // Login form state
   const [username, setUsername] = useState('');
@@ -219,8 +231,10 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
           </p>
         </div>
 
-        {/* Tab Switcher: Login vs Register (hidden in the recovery flow) */}
-        {activeTab !== 'forgot' && (
+        {/* Tab Switcher: Login vs Register (hidden in the recovery flow).
+            Public self-registration is closed (SPEC-006), so the switcher only
+            renders when the flag is on. */}
+        {PUBLIC_REGISTRATION_ENABLED && activeTab !== 'forgot' && (
         <div
           style={{
             display: 'flex',
@@ -327,7 +341,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
         )}
 
         {/* Form 1: Sign In */}
-        {activeTab === 'login' ? (
+        {activeView === 'login' ? (
           <form onSubmit={handleLoginSubmit} id="signin-form">
             <div style={{ marginBottom: '14px' }}>
               <label htmlFor="signin-username" className="label" style={{ display: 'block' }}>
@@ -521,7 +535,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
             </div>
             )}
           </form>
-        ) : activeTab === 'register' ? (
+        ) : PUBLIC_REGISTRATION_ENABLED && activeTab === 'register' ? (
           /* Form 2: Sign Up / Register */
           <form onSubmit={handleRegisterSubmit} id="signup-form">
             <div style={{ marginBottom: '12px' }}>
@@ -762,6 +776,77 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               <span>{t('auth_back_to_signin')}</span>
             </button>
           </form>
+        )}
+
+        {/* Private-beta notice (SPEC-006). Public registration is closed, so a
+            prospect who lands here is routed to the administrator's Discord
+            profile instead of being left with a dead end. */}
+        {!PUBLIC_REGISTRATION_ENABLED && activeView === 'login' && (
+          <div
+            className="auth-private-notice"
+            style={{
+              marginTop: '18px',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              background: 'rgba(15, 34, 28, 0.65)',
+              border: '1px solid rgba(69, 224, 173, 0.22)',
+              textAlign: 'center'
+            }}
+            id="private-access-notice"
+          >
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: 'var(--g)',
+                marginBottom: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <ShieldCheck size={14} />
+              <span>{t('auth_private_access_title')}</span>
+            </div>
+            <p
+              style={{
+                fontSize: '10.5px',
+                color: 'var(--muted)',
+                margin: '0 0 10px 0',
+                lineHeight: 1.4
+              }}
+            >
+              {t('auth_private_access_desc')}
+            </p>
+            <a
+              href={DISCORD_ADMIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn alt"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#ffffff',
+                background: '#5865F2',
+                border: '1px solid #4752c4',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.2s ease'
+              }}
+              id="discord-admin-contact-btn"
+            >
+              <MessageSquare size={13} />
+              <span>{t('auth_contact_discord_btn')}</span>
+            </a>
+          </div>
         )}
       </div>
     </div>

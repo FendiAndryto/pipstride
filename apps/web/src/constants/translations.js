@@ -107,6 +107,10 @@ export const translations = {
     err_register_failed: 'Registration failed. The username or email may already be taken.',
     err_forgot_failed: 'Could not request a reset link. Please try again later.',
     auth_forgot_sent: 'If that email is registered, a reset link has been sent. Check your inbox.',
+    auth_private_access_title: 'Early Access / Invitation Only',
+    auth_private_access_desc:
+      'Public registration is currently closed. New accounts are provisioned directly by the administrator.',
+    auth_contact_discord_btn: 'Request Account via Discord',
 
     // ------------------------------------------------------- reset password
     reset_title_done: 'Password Updated',
@@ -630,6 +634,10 @@ export const translations = {
     err_register_failed: 'Registrasi gagal. Username atau email mungkin sudah digunakan.',
     err_forgot_failed: 'Gagal meminta tautan reset password. Coba lagi nanti.',
     auth_forgot_sent: 'Jika email tersebut terdaftar, tautan reset password telah dikirim. Periksa inbox Anda.',
+    auth_private_access_title: 'Akses Terbatas / Melalui Undangan',
+    auth_private_access_desc:
+      'Pendaftaran publik saat ini ditutup. Akun baru dibuatkan langsung oleh administrator.',
+    auth_contact_discord_btn: 'Hubungi Admin via Discord',
 
     // ------------------------------------------------------- reset password
     reset_title_done: 'Password Diperbarui',
