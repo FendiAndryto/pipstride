@@ -101,7 +101,7 @@ def register(
     if not settings.ENABLE_PUBLIC_REGISTRATION:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Public registration is currently disabled. Please contact the administrator via Discord.",
+            detail="Public registration is currently disabled. Please join our Discord server for account access.",
         )
 
     rate_key = f"reg:{_client_ip(request)}"

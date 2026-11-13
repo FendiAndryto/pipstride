@@ -110,7 +110,7 @@ export const translations = {
     auth_private_access_title: 'Early Access / Invitation Only',
     auth_private_access_desc:
       'Public registration is currently closed. New accounts are provisioned directly by the administrator.',
-    auth_contact_discord_btn: 'Request Account via Discord',
+    auth_contact_discord_btn: 'Join Discord to Request Access',
 
     // ------------------------------------------------------- reset password
     reset_title_done: 'Password Updated',
@@ -637,7 +637,7 @@ export const translations = {
     auth_private_access_title: 'Akses Terbatas / Melalui Undangan',
     auth_private_access_desc:
       'Pendaftaran publik saat ini ditutup. Akun baru dibuatkan langsung oleh administrator.',
-    auth_contact_discord_btn: 'Hubungi Admin via Discord',
+    auth_contact_discord_btn: 'Gabung Discord untuk Minta Akun',
 
     // ------------------------------------------------------- reset password
     reset_title_done: 'Password Diperbarui',

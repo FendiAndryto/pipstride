@@ -22,7 +22,7 @@ import { useLanguage } from '../context/LanguageContext';
 // The form, its state and handleRegisterSubmit are kept intact on purpose: flipping
 // this flag must be the only change needed to reopen signup.
 const PUBLIC_REGISTRATION_ENABLED = false;
-const DISCORD_ADMIN_URL = 'https://discord.com/users/757954690037186580';
+const DISCORD_INVITE_URL = 'https://discord.gg/pZ6FBJFwGD';
 
 export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice }) {
   const { t } = useLanguage();
@@ -820,7 +820,7 @@ export default function LoginPage({ onLoginSuccess, sessionExpiredMsg, notice })
               {t('auth_private_access_desc')}
             </p>
             <a
-              href={DISCORD_ADMIN_URL}
+              href={DISCORD_INVITE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="btn alt"
