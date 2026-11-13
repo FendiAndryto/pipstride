@@ -26,8 +26,9 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **008** | `008-web-test-harness/` | Test runner `apps/web` + paritas domain terjaga | 006 | 007-05 |
 | **009** | `009-live-metrics-correctness/` | Daily DD hari broker, overall DD peak-to-trough, market structure 4 TF | 005, 006, 008 | 007 |
 | **010** | `010-user-expiry-and-admin-creation/` | Expiry akun, default trial 3 hari, & create user admin | 007 | onboarding & monetisasi |
+| **011** | `011-dashboard-polish-and-consistency/` | Dynamic currency, minus ganda fix, sinkronisasi equity & rebranding header | 006, 008 | open billing / produksi |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -136,3 +137,11 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **02-admin-user-create-and-extend-api.md** (`done`): Endpoint `POST /admin/users` & `POST /admin/users/{id}/extend-expiry` + AuditLog.
 - [x] **03-admin-frontend-create-user-modal.md** (`done`): UI Create User Modal & Copy Credentials Dialog di Admin Console.
 - [x] **04-admin-frontend-user-expiry-management.md** (`done`): Badge status masa aktif & Modal Extend Expiry di Admin Console.
+
+### Fase 011: Dashboard Polish & Data Consistency (Selesai)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/005-dashboard-currency-equity-branding-fixes.md`.
+> Menyelesaikan inkonsistensi visual simbol mata uang (`USC` vs `$`), eliminasi bug minus ganda `−$-1009.00`, sinkronisasi real-time ekuitas di kartu vs footer kurva grafik, serta pembersihan class warisan `.tradegear-header`.
+- [x] **01-currency-formatting-and-double-minus-fix.md** (`done`): Formatter dynamic currency `formatCurrency`/`formatSignedMoney` (+ `fractionDigits`), helper `formatGrossLoss` pengganti minus ganda di `HomeTab.jsx`, dan 19 unit test baru di `format.test.js`.
+- [x] **02-journal-currency-propagation.md** (`done`): Propagasi mata uang akun aktif ke `JournalTab`, `KpiCards`, `JournalAnalytics` (termasuk `BucketBars`), `TradeTable`, dan `MonthCalendar`.
+- [x] **03-home-equity-live-state-synchronization.md** (`done`): `liveEquity` masuk dependency `useMemo`, titik ujung kurva SVG di-override ke ekuitas live, fallback snapshot saat offline.
+- [x] **04-header-branding-cleanup.md** (`done`): Kelima selector `.tradegear-header` → `.pipstride-header` di `index.css` + markup header; 0 sisa selector lama.

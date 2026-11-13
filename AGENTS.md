@@ -95,7 +95,7 @@ pipstride/
 │   ├── specs/                  # feature specs (+ README workflow)
 │   ├── GLOSSARY.md             # domain vocabulary
 │   └── TICKET_TRACKER.md
-├── tickets/                    # phased execution tickets, 001–010 (+ README workflow)
+├── tickets/                    # phased execution tickets, 001–011 (+ README workflow)
 ├── .github/workflows/ci.yml    # api tests, migration drift, web, marketing, admin, docker images
 ├── backups/                    # gitignored local DB dumps
 └── .venv/                      # gitignored, working local Python env (see below)
@@ -118,8 +118,8 @@ npm --prefix apps/web run lint
 ```bash
 npm --prefix apps/web test
 ```
-`vitest run` — **5 files, 69 tests, exit 0** in ~1s. Pure modules only (`environment: 'node'`,
-no jsdom): `domain/{analytics,pnl,validation}`, `features/journal/dayBuckets` and
+`vitest run` — **6 files, 88 tests, exit 0** in ~1s. Pure modules only (`environment: 'node'`,
+no jsdom): `domain/{analytics,pnl,validation,format}`, `domain/market` and `features/journal/dayBuckets`; Vitest is used
 instead of `node:test` because 95 of 96 relative imports in `src/` are extensionless and plain
 `node:test` fails with `ERR_MODULE_NOT_FOUND` outside `domain/`. **Run this after touching
 `src/domain/` or `src/features/`** — it is the only guard on backend parity.
@@ -213,7 +213,7 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–010 `done`** (All 10 phases completed).
+- Current state: **001–011 `done`** (all 11 phases completed; Fase 011 closed 2026-11-13).
 - Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 

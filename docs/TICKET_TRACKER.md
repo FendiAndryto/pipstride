@@ -30,8 +30,8 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 33 tiket
-- **Selesai (`done`):** 33 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009, 010)
+- **Total Tiket:** 37 tiket
+- **Selesai (`done`):** 37 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011)
 - **Belum Diimplementasikan (`todo`):** 0 tiket (100% selesai)
 
 ```
@@ -168,3 +168,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **02-admin-user-create-and-extend-api.md** (`done`): Endpoint `POST /admin/users` & `POST /admin/users/{id}/extend-expiry` + AuditLog.
 - [x] **03-admin-frontend-create-user-modal.md** (`done`): UI Create User Modal & Copy Credentials Dialog di Admin Console.
 - [x] **04-admin-frontend-user-expiry-management.md** (`done`): Badge status masa aktif & Modal Extend Expiry di Admin Console.
+
+#### Fase 011: Dashboard Polish & Data Consistency (SELESAI)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/005-dashboard-currency-equity-branding-fixes.md`.
+> Menyelesaikan inkonsistensi visual simbol mata uang (`USC` vs `$`), eliminasi bug minus ganda `−$-1009.00`, sinkronisasi real-time ekuitas di kartu vs footer kurva grafik, serta pembersihan class warisan `.tradegear-header`.
+- [x] **01-currency-formatting-and-double-minus-fix.md** (`done`): Formatter dynamic currency `formatCurrency`/`formatSignedMoney` (+ `fractionDigits`), helper `formatGrossLoss` pengganti minus ganda di `HomeTab.jsx`, dan 19 unit test baru di `format.test.js`.
+- [x] **02-journal-currency-propagation.md** (`done`): Propagasi mata uang akun aktif ke `JournalTab`, `KpiCards`, `JournalAnalytics` (termasuk `BucketBars`), `TradeTable`, dan `MonthCalendar`.
+- [x] **03-home-equity-live-state-synchronization.md** (`done`): `liveEquity` masuk dependency `useMemo`, titik ujung kurva SVG di-override ke ekuitas live, fallback snapshot saat offline.
+- [x] **04-header-branding-cleanup.md** (`done`): Kelima selector `.tradegear-header` → `.pipstride-header` di `index.css` + markup header; 0 sisa selector lama.
