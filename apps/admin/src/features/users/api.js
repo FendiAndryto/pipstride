@@ -39,6 +39,20 @@ export async function activateUser(id) {
   }, { authed: true });
 }
 
+export async function createUser(payload) {
+  return apiFetch('/api/v1/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, { authed: true });
+}
+
+export async function extendUserExpiry(id, payload) {
+  return apiFetch(`/api/v1/admin/users/${encodeURIComponent(id)}/extend-expiry`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, { authed: true });
+}
+
 export async function revokeConnection(connectionId) {
   return apiFetch(`/api/v1/admin/connections/${encodeURIComponent(connectionId)}/revoke`, {
     method: 'POST',

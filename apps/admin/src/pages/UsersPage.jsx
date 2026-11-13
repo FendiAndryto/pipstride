@@ -3,8 +3,10 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { UsersTable } from '../features/users/UsersTable';
+import { UserCreateModal } from '../features/users/UserCreateModal';
+import { UserCredentialsModal } from '../features/users/UserCredentialsModal';
 import { fetchUsers } from '../features/users/api';
-import { Search, RefreshCw, X } from 'lucide-react';
+import { Search, RefreshCw, X, UserPlus } from 'lucide-react';
 
 export function UsersPage({ onNavigate }) {
   const [users, setUsers] = useState([]);
@@ -15,6 +17,9 @@ export function UsersPage({ onNavigate }) {
   const [activeSearch, setActiveSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+  const [newCredentials, setNewCredentials] = useState(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -57,6 +62,12 @@ export function UsersPage({ onNavigate }) {
     onNavigate('users', user.id);
   };
 
+  const handleCreateSuccess = (_createdUser, creds) => {
+    setNewCredentials(creds);
+    setCredentialsModalOpen(true);
+    void loadUsers();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="page-header">
@@ -67,17 +78,28 @@ export function UsersPage({ onNavigate }) {
           </div>
         </div>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={RefreshCw}
-          loading={loading}
-          onClick={loadUsers}
-          className="btn-refresh"
-          aria-label="Refresh directory"
-        >
-          <span className="btn-label">Refresh</span>
-        </Button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={UserPlus}
+            onClick={() => setCreateModalOpen(true)}
+          >
+            Tambah Pengguna
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={RefreshCw}
+            loading={loading}
+            onClick={loadUsers}
+            className="btn-refresh"
+            aria-label="Refresh directory"
+          >
+            <span className="btn-label">Refresh</span>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -135,6 +157,21 @@ export function UsersPage({ onNavigate }) {
           loading={loading}
         />
       </Card>
+
+      <UserCreateModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSuccess={handleCreateSuccess}
+      />
+
+      <UserCredentialsModal
+        isOpen={credentialsModalOpen}
+        onClose={() => {
+          setCredentialsModalOpen(false);
+          setNewCredentials(null);
+        }}
+        credentials={newCredentials}
+      />
     </div>
   );
 }

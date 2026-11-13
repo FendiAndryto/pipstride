@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { PLAN_OPTIONS } from '../../constants/plans';
 import { updateEntitlement } from './api';
 import { AlertCircle, Sliders } from 'lucide-react';
 
@@ -82,10 +83,11 @@ export function UserEntitlementModal({
             value={planCode}
             onChange={(e) => setPlanCode(e.target.value)}
           >
-            <option value="free">FREE — 1 Connection default</option>
-            <option value="core">CORE — 1 Connection default</option>
-            <option value="plus">PLUS — 3 Connections default</option>
-            <option value="pro">PRO — 5 Connections default</option>
+            {PLAN_OPTIONS.map((opt) => (
+              <option key={opt.code} value={opt.code}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </div>
 

@@ -37,3 +37,8 @@ npm run build
 # Preview build
 npm run preview
 ```
+
+## Environment Variables
+
+- `VITE_APP_URL`: The public URL of the trader web dashboard shown in the credential copy modal. Defaults to `https://app-pipstride.homever.my.id` if not set. Note that Vite bakes environment variables starting with `VITE_` at build time.
+
