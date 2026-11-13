@@ -85,9 +85,10 @@ export function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Poll / load active support sessions when authed
+  // Poll / load active support sessions when authed. Wait for the mount-time
+  // getMe() check so a stale token cannot fire an extra unauthenticated request.
   const refreshActiveSupport = useCallback(async () => {
-    if (!currentUser) return;
+    if (!authChecked || !currentUser) return;
     try {
       const res = await fetchSupportSessions({ mine: true, active_only: true });
       const active = (res.items || []).find((s) => isSessionActive(s));
@@ -95,15 +96,15 @@ export function App() {
     } catch {
       setActiveSupportSession(null);
     }
-  }, [currentUser]);
+  }, [authChecked, currentUser]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!authChecked || !currentUser) return;
     const timer = setTimeout(() => {
       void refreshActiveSupport();
     }, 0);
     return () => clearTimeout(timer);
-  }, [currentUser, refreshActiveSupport]);
+  }, [authChecked, currentUser, refreshActiveSupport]);
 
   // Session expired event handler from lib/http
   useEffect(() => {
