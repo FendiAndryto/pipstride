@@ -6,9 +6,10 @@ console can ever see. Trade contents and account settings appear exclusively in
 the elevated support-mode response.
 """
 
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AdminUserItem(BaseModel):
@@ -17,6 +18,8 @@ class AdminUserItem(BaseModel):
     email: Optional[str] = None
     role: str
     is_active: bool
+    expires_at: Optional[str] = None
+    is_expired: bool = False
     created_at: Optional[str] = None
     last_seen_at: Optional[str] = None
     plan_code: str = "free"
@@ -97,6 +100,44 @@ class AdminMetricsResponse(BaseModel):
 class EntitlementUpdateRequest(BaseModel):
     plan_code: str = Field(..., min_length=1, max_length=32)
     max_connections: Optional[int] = Field(None, ge=1, le=100)
+
+
+class AdminCreateUserRequest(BaseModel):
+    username: str = Field(
+        ..., min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_.-]+$"
+    )
+    password: str = Field(..., min_length=8)
+    email: Optional[str] = None
+    role: Literal["trader"] = "trader"
+    plan_code: str = "free"
+    duration_days: Optional[int] = Field(None, ge=1)
+    exact_expires_at: Optional[datetime] = None
+    set_lifetime: bool = False
+
+    @field_validator("exact_expires_at")
+    @classmethod
+    def validate_tz_aware(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is None:
+            raise ValueError(
+                "exact_expires_at must be timezone-aware (e.g. ISO-8601 with offset or 'Z')"
+            )
+        return v
+
+
+class AdminExtendExpiryRequest(BaseModel):
+    duration_days: Optional[int] = Field(None, ge=1)
+    exact_expires_at: Optional[datetime] = None
+    set_lifetime: bool = False
+
+    @field_validator("exact_expires_at")
+    @classmethod
+    def validate_tz_aware(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is None:
+            raise ValueError(
+                "exact_expires_at must be timezone-aware (e.g. ISO-8601 with offset or 'Z')"
+            )
+        return v
+
 
 
 class SupportSessionCreateRequest(BaseModel):

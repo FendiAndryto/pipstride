@@ -17,6 +17,8 @@ from app.db.base import get_db
 from app.db.models import User
 from app.infrastructure.db.repositories import admin_repository
 from app.models.admin import (
+    AdminCreateUserRequest,
+    AdminExtendExpiryRequest,
     AdminUserDetailResponse,
     AdminUserItem,
     AdminUserListResponse,
@@ -158,3 +160,66 @@ def activate_user(
         ip_address=get_client_ip(request),
     )
     return user_item(admin_repository.get_user(db, target.id))
+
+
+@router.post(
+    "",
+    response_model=AdminUserItem,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new user account (audited)",
+    dependencies=[Depends(require_role("admin"))],
+)
+def create_user(
+    req: AdminCreateUserRequest,
+    request: Request,
+    actor: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    try:
+        user = admin_service.create_user(
+            db,
+            actor=actor,
+            req=req,
+            ip_address=get_client_ip(request),
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        duplicate = "already registered" in msg
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT if duplicate else status.HTTP_400_BAD_REQUEST,
+            detail=msg,
+        )
+
+    row = admin_repository.get_user(db, user.id)
+    return user_item(row)
+
+
+@router.post(
+    "/{user_id}/extend-expiry",
+    response_model=AdminUserItem,
+    status_code=status.HTTP_200_OK,
+    summary="Extend or update a user's account expiration (audited)",
+    dependencies=[Depends(require_role("admin"))],
+)
+def extend_user_expiry(
+    user_id: str,
+    req: AdminExtendExpiryRequest,
+    request: Request,
+    actor: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    target = _target_user_or_404(db, user_id)
+    try:
+        admin_service.extend_user_expiry(
+            db,
+            actor=actor,
+            target=target,
+            req=req,
+            ip_address=get_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    row = admin_repository.get_user(db, target.id)
+    return user_item(row)
+

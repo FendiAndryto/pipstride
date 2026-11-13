@@ -27,7 +27,10 @@ from app.db.models import (
     SupportSession,
     User,
 )
+from app.domain.time import as_utc
 from app.infrastructure.db.repositories import admin_repository
+from app.models.admin import AdminCreateUserRequest, AdminExtendExpiryRequest
+from app.services.user_service import user_service
 
 DETAIL_LIMIT = 512
 
@@ -59,16 +62,108 @@ def _audit(
 
 
 def _is_active(session: SupportSession) -> bool:
-    from app.domain.time import as_utc
-
     if session.revoked_at is not None:
         return False
     expires_at = as_utc(session.expires_at)
     return expires_at is not None and expires_at > _now()
 
 
+def _resolve_expiry(
+    duration_days: Optional[int],
+    exact_expires_at: Optional[datetime],
+    set_lifetime: bool,
+    current_expires_at: Optional[datetime] = None,
+    now: Optional[datetime] = None,
+) -> Optional[datetime]:
+    """Return computed expires_at or raise ValueError.
+
+    Accepts optional 'now' for deterministic testing.
+    """
+    if set_lifetime:
+        return None
+    now_utc = as_utc(now) or datetime.now(timezone.utc)
+    if exact_expires_at is not None:
+        target = as_utc(exact_expires_at)
+        if target <= now_utc:
+            raise ValueError("exact_expires_at must be in the future")
+        return target
+    if duration_days is not None and duration_days > 0:
+        base = (
+            current_expires_at
+            if (current_expires_at and as_utc(current_expires_at) > now_utc)
+            else now_utc
+        )
+        return as_utc(base) + timedelta(days=duration_days)
+    raise ValueError("Provide duration_days, exact_expires_at, or set_lifetime")
+
+
 class AdminService:
     # ------------------------------------------------------------------ users
+    def create_user(
+        self,
+        db: Session,
+        *,
+        actor: User,
+        req: AdminCreateUserRequest,
+        ip_address: Optional[str],
+    ) -> User:
+        expires_at = _resolve_expiry(
+            req.duration_days, req.exact_expires_at, req.set_lifetime
+        )
+        with session_scope(db):
+            user = user_service.prepare_user(
+                db,
+                username=req.username,
+                plain_password=req.password,
+                role=req.role,
+                email=req.email,
+                plan_code=req.plan_code,
+                expires_at=expires_at,
+            )
+            exp_str = expires_at.isoformat() if expires_at else "lifetime"
+            _audit(
+                db,
+                actor_id=actor.id,
+                target_user_id=user.id,
+                action="admin.user.created",
+                ip_address=ip_address,
+                detail=f"plan={req.plan_code}, expires_at={exp_str}",
+            )
+        db.refresh(user)
+        return user
+
+    def extend_user_expiry(
+        self,
+        db: Session,
+        *,
+        actor: User,
+        target: User,
+        req: AdminExtendExpiryRequest,
+        ip_address: Optional[str],
+        now: Optional[datetime] = None,
+    ) -> User:
+        new_expires_at = _resolve_expiry(
+            req.duration_days,
+            req.exact_expires_at,
+            req.set_lifetime,
+            current_expires_at=target.expires_at,
+            now=now,
+        )
+        previous = target.expires_at.isoformat() if target.expires_at else "lifetime"
+        new_str = new_expires_at.isoformat() if new_expires_at else "lifetime"
+
+        with session_scope(db):
+            target.expires_at = new_expires_at
+            _audit(
+                db,
+                actor_id=actor.id,
+                target_user_id=target.id,
+                action="admin.user.expiry_updated",
+                ip_address=ip_address,
+                detail=f"{previous} -> {new_str}",
+            )
+        db.refresh(target)
+        return target
     def update_entitlement(
         self,
         db: Session,

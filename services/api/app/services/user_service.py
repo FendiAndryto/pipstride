@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
 from app.db.base import session_scope
-from app.db.models import Entitlement, User
+from app.db.models import Entitlement, Plan, User
 from app.infrastructure.db.repositories import user_repository
 
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{3,32}$")
@@ -69,15 +69,21 @@ class UserService:
             return user
         return None
 
-    def register(
+    def prepare_user(
         self,
         db: Session,
         username: str,
         plain_password: str,
         role: str = "trader",
         email: Optional[str] = None,
+        plan_code: str = "free",
         expires_at: Optional[datetime] = None,
     ) -> User:
+        """Validate, create User + Entitlement, flush only (no commit).
+
+        Caller must wrap in session_scope. Public method used by registration
+        and admin_service.create_user.
+        """
         cleaned = validate_username(username)
         validate_password_complexity(plain_password)
         normalized_email = normalize_email(email)
@@ -87,6 +93,10 @@ class UserService:
         if normalized_email and self.get_user_by_email(db, normalized_email):
             raise ValueError("Email already registered")
 
+        plan = db.get(Plan, plan_code)
+        if plan is None:
+            raise ValueError(f"Unknown plan code '{plan_code}'")
+
         user = User(
             username=cleaned,
             email=normalized_email,
@@ -94,10 +104,37 @@ class UserService:
             role=role,
             expires_at=expires_at,
         )
+        db.add(user)
+        db.flush()
+        db.add(
+            Entitlement(
+                user_id=user.id,
+                plan_code=plan.code,
+                max_connections=plan.max_connections,
+            )
+        )
+        return user
+
+    def register(
+        self,
+        db: Session,
+        username: str,
+        plain_password: str,
+        role: str = "trader",
+        email: Optional[str] = None,
+        plan_code: str = "free",
+        expires_at: Optional[datetime] = None,
+    ) -> User:
         with session_scope(db):
-            db.add(user)
-            db.flush()
-            db.add(Entitlement(user_id=user.id, plan_code="free", max_connections=1))
+            user = self.prepare_user(
+                db,
+                username=username,
+                plain_password=plain_password,
+                role=role,
+                email=email,
+                plan_code=plan_code,
+                expires_at=expires_at,
+            )
         db.refresh(user)
         return user
 

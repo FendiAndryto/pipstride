@@ -16,7 +16,7 @@ Fase ini mengimplementasikan manajemen masa aktif akun (*account expiry*) dan pe
 | Tiket | Deskripsi | Status | Dependensi |
 |---|---|---|---|
 | [`01-user-expiry-schema-and-policy.md`](./01-user-expiry-schema-and-policy.md) | Migrasi `expires_at`, config trial `.env`, guard login (403) & sesi (401) & bridge (403) | `done` | Fase 007 |
-| [`02-admin-user-create-and-extend-api.md`](./02-admin-user-create-and-extend-api.md) | Endpoint `POST /admin/users` (201) & `POST /admin/users/{id}/extend-expiry` (200) + AuditLog atomik | `todo` | Tiket 01 |
+| [`02-admin-user-create-and-extend-api.md`](./02-admin-user-create-and-extend-api.md) | Endpoint `POST /admin/users` (201) & `POST /admin/users/{id}/extend-expiry` (200) + AuditLog atomik | `done` | Tiket 01 |
 | [`03-admin-frontend-create-user-modal.md`](./03-admin-frontend-create-user-modal.md) | UI Create User Modal & Copy Credentials Dialog di Admin Console | `todo` | Tiket 02 |
 | [`04-admin-frontend-user-expiry-management.md`](./04-admin-frontend-user-expiry-management.md) | Badge status masa aktif & Modal Extend Expiry di Admin Console | `todo` | Tiket 03 |
 

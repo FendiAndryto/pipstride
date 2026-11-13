@@ -30,12 +30,19 @@ def _remaining_seconds(expires_at: Optional[datetime]) -> int:
 
 def user_item(row: dict) -> AdminUserItem:
     user = row["user"]
+    is_exp = (
+        (as_utc(user.expires_at) <= datetime.now(timezone.utc))
+        if user.expires_at is not None
+        else False
+    )
     return AdminUserItem(
         id=user.id,
         username=user.username,
         email=user.email,
         role=user.role,
         is_active=user.is_active,
+        expires_at=iso(user.expires_at),
+        is_expired=is_exp,
         created_at=iso(user.created_at),
         last_seen_at=iso(row["last_seen_at"]),
         plan_code=row["plan_code"],

@@ -86,7 +86,7 @@ pipstride/
 │       │   └── services/       # telemetry ingest, bridge status, account settings, connection, user, auth tokens, admin, totp, email, mt5_package, pricing_catalog, telegram
 │       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens, 0002_admin_totp, 0003_support_sessions, 0004_user_expires_at)
 │       ├── scripts/            # backup_db, check_migrations, prune_snapshots, reset_admin_password
-│       └── tests/              # 15 test modules + conftest, 154 tests
+│       └── tests/              # 17 test modules + conftest, 176 tests
 ├── mt5-ea/PipstrideMonitor.mq5 # canonical read-only sensor
 ├── infra/                      # compose files, Caddyfile, cron/pipstride-crontab
 ├── docs/
