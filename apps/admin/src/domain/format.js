@@ -78,3 +78,40 @@ export function truncateId(id, len = 8) {
   if (s.length <= len) return s;
   return `${s.slice(0, len)}…`;
 }
+
+export function formatExpiryStatus(expiresAt, isActive, isExpired = false) {
+  // 1. Nonaktif manual (is_active=false) mengalahkan status tanggal
+  if (!isActive) {
+    return { label: 'Nonaktif', variant: 'neutral' };
+  }
+  // 2. Lifetime / permanen
+  if (!expiresAt) {
+    return { label: 'Permanen', variant: 'neutral' };
+  }
+  // 3. Flag is_expired dari backend atau kalkulasi tanggal sudah lewat
+  if (isExpired) {
+    return { label: 'Kedaluwarsa', variant: 'danger' };
+  }
+  const expiry = new Date(expiresAt);
+  // Guard: tanggal tidak valid → safe fallback
+  if (isNaN(expiry.getTime())) {
+    return { label: 'Tidak Diketahui', variant: 'neutral' };
+  }
+  const now = new Date();
+  const diffMs = expiry.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  // 4. Perhitungan tanggal browser jika sudah lewat
+  if (diffDays <= 0) {
+    return { label: 'Kedaluwarsa', variant: 'danger' };
+  }
+  // 5. Kurang dari 1 hari (sisa jam < 24 jam)
+  if (diffMs < 86_400_000) {
+    return { label: 'Kurang dari 1 hari', variant: 'danger' };
+  }
+  // 6. Segera berakhir (≤3 hari) — berlaku untuk semua plan
+  if (diffDays <= 3) {
+    return { label: `Segera Berakhir (${diffDays} hari)`, variant: 'warning' };
+  }
+  // 7. Aktif normal
+  return { label: `Aktif (${diffDays} hari)`, variant: 'success' };
+}

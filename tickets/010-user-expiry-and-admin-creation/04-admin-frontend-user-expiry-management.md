@@ -96,4 +96,4 @@ Expected:
 - Fase 010 Gate
 
 ## Status
-todo
+done

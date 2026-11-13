@@ -2,7 +2,7 @@ import React from 'react';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatNumber, formatRelativeTime, truncateId } from '../../domain/format';
+import { formatNumber, formatRelativeTime, truncateId, formatExpiryStatus } from '../../domain/format';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function UsersTable({
@@ -43,11 +43,10 @@ export function UsersTable({
     {
       header: 'Status',
       key: 'is_active',
-      render: (u) => (
-        <Badge variant={u.is_active ? 'success' : 'neutral'}>
-          {u.is_active ? 'Active' : 'Deactivated'}
-        </Badge>
-      ),
+      render: (u) => {
+        const status = formatExpiryStatus(u.expires_at, u.is_active, u.is_expired);
+        return <Badge variant={status.variant}>{status.label}</Badge>;
+      },
     },
     {
       header: 'Plan',

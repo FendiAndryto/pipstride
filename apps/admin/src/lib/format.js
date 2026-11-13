@@ -6,4 +6,5 @@ export {
   formatNumber,
   formatCurrency,
   truncateId,
+  formatExpiryStatus,
 } from '../domain/format';

@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { UserConnectionsTable } from '../features/users/UserConnectionsTable';
 import { UserEntitlementModal } from '../features/users/UserEntitlementModal';
+import { UserExtendExpiryModal } from '../features/users/UserExtendExpiryModal';
 import { UserActionConfirmModal } from '../features/users/UserActionConfirmModal';
 import { ElevatedDetailPanel } from '../features/support/ElevatedDetailPanel';
 import { SupportGrantModal } from '../features/support/SupportGrantModal';
@@ -17,6 +18,7 @@ import {
   formatDateTime,
   formatRelativeTime,
   formatNumber,
+  formatExpiryStatus,
 } from '../lib/format';
 import {
   ArrowLeft,
@@ -25,6 +27,7 @@ import {
   UserX,
   UserCheck,
   LifeBuoy,
+  Clock,
 } from 'lucide-react';
 
 export function UserDetailPage({
@@ -41,6 +44,7 @@ export function UserDetailPage({
 
   // Modals state
   const [entitlementOpen, setEntitlementOpen] = useState(false);
+  const [extendExpiryOpen, setExtendExpiryOpen] = useState(false);
   const [supportGrantOpen, setSupportGrantOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -170,6 +174,15 @@ export function UserDetailPage({
                   <Button
                     variant="secondary"
                     size="sm"
+                    icon={Clock}
+                    onClick={() => setExtendExpiryOpen(true)}
+                  >
+                    Edit Masa Aktif
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     icon={Sliders}
                     onClick={() => setEntitlementOpen(true)}
                   >
@@ -233,6 +246,23 @@ export function UserDetailPage({
                 <Badge variant={user.is_active ? 'success' : 'neutral'}>
                   {user.is_active ? 'Active' : 'Deactivated'}
                 </Badge>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>MASA AKTIF</div>
+              <div style={{ marginTop: '4px' }}>
+                {(() => {
+                  const status = formatExpiryStatus(user.expires_at, user.is_active, user.is_expired);
+                  return <Badge variant={status.variant}>{status.label}</Badge>;
+                })()}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>KEDALUWARSA (EXPIRES AT)</div>
+              <div className="font-mono" style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)' }}>
+                {user.expires_at ? formatDateTime(user.expires_at) : 'Permanen (Lifetime)'}
               </div>
             </div>
 
@@ -311,6 +341,18 @@ export function UserDetailPage({
       </Card>
 
       {/* Modals */}
+      {extendExpiryOpen && user ? (
+        <UserExtendExpiryModal
+          isOpen={extendExpiryOpen}
+          onClose={() => setExtendExpiryOpen(false)}
+          user={user}
+          onSuccess={(updated) => {
+            setUser((prev) => ({ ...prev, ...updated }));
+            notifySuccess('Masa aktif pengguna berhasil diperbarui.');
+          }}
+        />
+      ) : null}
+
       {entitlementOpen && user ? (
         <UserEntitlementModal
           isOpen={entitlementOpen}
