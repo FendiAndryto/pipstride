@@ -25,6 +25,10 @@ os.environ["ADMIN_USERNAME"] = "admin"
 os.environ["ADMIN_PASSWORD"] = "AdminPass123"
 os.environ["ALLOWED_HOSTS"] = "*"
 os.environ["TELEGRAM_NOTIFICATIONS_ENABLED"] = "false"
+# Public signup is closed by default in production (SPEC-006). The suite exercises
+# the registration lifecycle, so the flag is opened here and re-closed only by the
+# dedicated 403 guard test.
+os.environ["ENABLE_PUBLIC_REGISTRATION"] = "true"
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import select  # noqa: E402

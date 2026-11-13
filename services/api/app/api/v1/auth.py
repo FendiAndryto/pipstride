@@ -96,6 +96,14 @@ def register(
     background: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    # Public self-registration is closed by default (SPEC-006). The flag is read
+    # per request so an operator can reopen signup without a code change.
+    if not settings.ENABLE_PUBLIC_REGISTRATION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is currently disabled. Please contact the administrator via Discord.",
+        )
+
     rate_key = f"reg:{_client_ip(request)}"
     is_limited, retry_after = rate_limiter.is_rate_limited(rate_key)
     if is_limited:

@@ -1,5 +1,7 @@
 """Baseline API contract tests: health, read-only guarantee, auth."""
 
+import uuid
+
 from app.core.config import settings
 from tests.conftest import TEST_TOTP_SECRET, current_totp
 
@@ -63,6 +65,18 @@ def test_register_rejects_weak_password(client):
         json={"username": "weakling", "password": "short"},
     )
     assert res.status_code == 422
+
+
+def test_register_is_forbidden_when_public_registration_is_disabled(client, monkeypatch):
+    """SPEC-006: closing the toggle must reject self-registration at the API edge."""
+    monkeypatch.setattr(settings, "ENABLE_PUBLIC_REGISTRATION", False)
+
+    res = client.post(
+        "/api/v1/auth/register",
+        json={"username": f"closed_{uuid.uuid4().hex[:10]}", "password": "Passw0rd123"},
+    )
+    assert res.status_code == 403, res.text
+    assert "Public registration is currently disabled" in res.json()["detail"]
 
 
 def test_me_requires_authentication(client):

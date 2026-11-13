@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_ALGORITHM: str = "HS256"
 
+    # Public self-registration toggle (SPEC-006). If False, POST /api/v1/auth/register
+    # returns 403; accounts are then provisioned by an admin instead. The route and
+    # the web form stay in place so flipping this back to True re-opens signup.
+    ENABLE_PUBLIC_REGISTRATION: bool = False
     # Default trial duration for public self-registration (SPEC-004). <= 0 disables trial (lifetime).
     DEFAULT_REGISTRATION_TRIAL_DAYS: int = 3
     
