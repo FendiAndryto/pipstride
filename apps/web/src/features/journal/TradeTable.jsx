@@ -3,6 +3,7 @@
 import React from 'react';
 import { BookOpen, Layers } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatSignedMoney } from '../../domain/format';
 
 export default function TradeTable({
   filteredTrades,
@@ -12,7 +13,8 @@ export default function TradeTable({
   pageSize,
   onPageChange,
   isHistoryLoading,
-  activeAccountNumber
+  activeAccountNumber,
+  currency = 'USD'
 }) {
   const { t, locale } = useLanguage();
 
@@ -76,7 +78,7 @@ export default function TradeTable({
                       color: trade.profit >= 0 ? 'var(--g)' : 'var(--red)'
                     }}
                   >
-                    {trade.profit >= 0 ? '+' : '−'}${Math.abs(trade.profit).toFixed(2)}
+                    {formatSignedMoney(trade.profit, currency)}
                   </td>
                 </tr>
               );

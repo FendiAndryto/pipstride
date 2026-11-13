@@ -25,7 +25,7 @@ function MetricTile({ label, value, tone, hint, id }) {
   );
 }
 
-function BucketBars({ title, subtitle, buckets, icon: Icon }) {
+function BucketBars({ title, subtitle, buckets, icon: Icon, currency = 'USD' }) {
   const { t } = useLanguage();
   if (!buckets.length) {
     return null;
@@ -75,7 +75,7 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
                     color: positive ? 'var(--g)' : 'var(--red)'
                   }}
                 >
-                  {formatSignedMoney(bucket.net_profit)}
+                  {formatSignedMoney(bucket.net_profit, currency)}
                 </span>
               </div>
               <span className="tiny" style={{ fontSize: '9px', color: 'var(--muted)', marginLeft: '115px' }}>
@@ -89,7 +89,7 @@ function BucketBars({ title, subtitle, buckets, icon: Icon }) {
   );
 }
 
-export default function JournalAnalytics({ stats, loading, periodLabel, selectedSymbol = 'ALL', onSelectSymbol = null }) {
+export default function JournalAnalytics({ stats, loading, periodLabel, selectedSymbol = 'ALL', onSelectSymbol = null, currency = 'USD' }) {
   const { t } = useLanguage();
   const totals = stats?.totals;
   const hasTrades = Boolean(totals && totals.trades > 0);
@@ -124,21 +124,21 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
         <MetricTile
           id="journal-metric-expectancy"
           label={t('ja_expectancy')}
-          value={formatSignedMoney(totals.expectancy)}
+          value={formatSignedMoney(totals.expectancy, currency)}
           tone={totals.expectancy >= 0 ? 'positive' : 'negative'}
           hint={t('ja_trades_period', { count: totals.trades, period: periodLabel })}
         />
         <MetricTile
           id="journal-metric-avg-win"
           label={t('ja_avg_win')}
-          value={formatSignedMoney(totals.avg_win)}
+          value={formatSignedMoney(totals.avg_win, currency)}
           tone="positive"
           hint={t('ja_trades_won', { count: totals.wins })}
         />
         <MetricTile
           id="journal-metric-avg-loss"
           label={t('ja_avg_loss')}
-          value={formatSignedMoney(totals.avg_loss)}
+          value={formatSignedMoney(totals.avg_loss, currency)}
           tone="negative"
           hint={t('ja_trades_lost', { count: totals.losses })}
         />
@@ -164,13 +164,13 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
         <MetricTile
           id="journal-metric-best"
           label={t('ja_best_trade')}
-          value={formatSignedMoney(totals.best_trade ?? 0)}
+          value={formatSignedMoney(totals.best_trade ?? 0, currency)}
           tone="positive"
         />
         <MetricTile
           id="journal-metric-worst"
           label={t('ja_worst_trade')}
-          value={formatSignedMoney(totals.worst_trade ?? 0)}
+          value={formatSignedMoney(totals.worst_trade ?? 0, currency)}
           tone="negative"
         />
       </div>
@@ -224,7 +224,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
                           color: bucket.net_profit >= 0 ? 'var(--g)' : 'var(--red)'
                         }}
                       >
-                        {formatSignedMoney(bucket.net_profit)}
+                        {formatSignedMoney(bucket.net_profit, currency)}
                       </td>
                     </tr>
                   );
@@ -269,7 +269,7 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
                         color: positive ? 'var(--g)' : 'var(--red)'
                       }}
                     >
-                      {formatSignedMoney(bucket.net_profit)}
+                      {formatSignedMoney(bucket.net_profit, currency)}
                     </span>
                   </div>
                   <div className="tiny" style={{ marginTop: '3px', color: 'var(--muted)' }}>
@@ -291,12 +291,13 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
           subtitle={t('ja_broker_time')}
           buckets={stats.by_weekday || []}
           icon={BarChart3}
+          currency={currency}
         />
       </div>
 
       <div className="tiny" style={{ color: 'var(--muted)', fontSize: '10px' }}>
         {t('ja_footnote')}{' '}
-        <span style={{ color: netTone === 'positive' ? 'var(--g)' : 'var(--red)' }}>{formatSignedMoney(totals.net_profit)}</span>{' '}
+        <span style={{ color: netTone === 'positive' ? 'var(--g)' : 'var(--red)' }}>{formatSignedMoney(totals.net_profit, currency)}</span>{' '}
         {t('ja_footnote_rest', { count: totals.trades, breakeven: totals.breakeven })}
       </div>
     </div>

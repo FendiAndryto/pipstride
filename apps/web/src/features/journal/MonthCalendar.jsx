@@ -4,6 +4,7 @@
 import React from 'react';
 import { Calendar } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatSignedMoney } from '../../domain/format';
 
 const WEEKDAYS = [
   'journal_weekday_mon',
@@ -15,7 +16,7 @@ const WEEKDAYS = [
   'journal_weekday_sun'
 ];
 
-export default function MonthCalendar({ daysInMonth, monthName, dailyPnlMap, selectedDate, onSelectDate }) {
+export default function MonthCalendar({ daysInMonth, monthName, dailyPnlMap, selectedDate, onSelectDate, currency = 'USD' }) {
   const { t } = useLanguage();
 
   return (
@@ -67,7 +68,7 @@ export default function MonthCalendar({ daysInMonth, monthName, dailyPnlMap, sel
                     fontWeight: hasTrades ? 700 : 400
                   }}
                 >
-                  {hasTrades ? (dayPnl >= 0 ? `+$${dayPnl.toFixed(0)}` : `−$${Math.abs(dayPnl).toFixed(0)}`) : '·'}
+                  {hasTrades ? formatSignedMoney(dayPnl, currency, 0) : '·'}
                 </span>
               </button>
             );
@@ -79,7 +80,7 @@ export default function MonthCalendar({ daysInMonth, monthName, dailyPnlMap, sel
               day: selectedDate,
               month: monthName,
               pnl: dailyPnlMap[selectedDate] !== undefined
-                ? `$${dailyPnlMap[selectedDate].toFixed(2)}`
+                ? formatSignedMoney(dailyPnlMap[selectedDate], currency)
                 : t('journal_no_closed_trade')
             })}
           </div>

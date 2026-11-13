@@ -34,6 +34,9 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
   const [period, setPeriod] = useState('1M');
 
   const month = useMonthStepper(locale);
+  // Account currency drives every nominal on this screen (ticket 011-02):
+  // Cent accounts quote in USC, so hardcoded "$" would misreport 1,298.80 USC as dollars.
+  const currency = bridgeStatus?.metrics?.currency || 'USD';
   const data = useJournalData({
     activeTab,
     closedTradesCount,
@@ -183,6 +186,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         winningTrades={data.winningTrades}
         losingTrades={data.losingTrades}
         periodLabel={periodLabel}
+        currency={currency}
       />
 
       <DrawdownCard bridgeStatus={bridgeStatus} riskStatus={riskStatus} />
@@ -196,6 +200,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         periodLabel={periodLabel}
         selectedSymbol={selectedSymbol}
         onSelectSymbol={setSelectedSymbol}
+        currency={currency}
       />
 
       {/* Source filter */}
@@ -245,6 +250,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         onPageChange={data.setPage}
         isHistoryLoading={data.isHistoryLoading}
         activeAccountNumber={data.activeAccountNumber}
+        currency={currency}
       />
 
       <MonthCalendar
@@ -253,6 +259,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         dailyPnlMap={data.dailyPnlMap}
         selectedDate={month.selectedDate}
         onSelectDate={month.setSelectedDate}
+        currency={currency}
       />
     </div>
   );

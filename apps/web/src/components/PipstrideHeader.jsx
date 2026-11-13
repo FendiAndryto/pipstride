@@ -52,7 +52,7 @@ export default function PipstrideHeader({
 
   const activeConn = connections.find((c) => c.id === activeConnectionId) || connections[0];
   return (
-    <header className="tradegear-header" id="pipstride-header">
+    <header className="pipstride-header" id="pipstride-header">
       <div className="header-inner">
         <div className="header-left">
           {/* Brand & Logo */}

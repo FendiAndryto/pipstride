@@ -9,8 +9,16 @@ import {
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import RichText from './RichText';
-import { formatCurrency, formatRatio } from '../domain/format';
+import { formatCurrency, formatSignedMoney, formatRatio } from '../domain/format';
 import { summarizeAccountPnl, drawdownView } from '../domain/pnl';
+
+// Gross loss is a magnitude the backend reports as a negative number. Render it
+// as one signed value so a zero-loss day reads "+USC 0.00" instead of a
+// nonsensical "-USC 0.00", and never as the double-minus "−$-1009.00" (ticket 011-01).
+const formatGrossLoss = (grossLoss, currency) => {
+  const magnitude = Math.abs(grossLoss ?? 0);
+  return magnitude === 0 ? formatSignedMoney(0, currency) : formatSignedMoney(-magnitude, currency);
+};
 
 export default function HomeTab({
   bridgeStatus,
@@ -45,6 +53,9 @@ export default function HomeTab({
   const currency = metrics.currency || 'USD';
   const balance = metrics.balance ?? 0;
   const equity = metrics.equity ?? 0;
+  // Live telemetry equity, null while the bridge has never reported. Kept out of
+  // the chart memo so the dependency is explicit (ticket 011-03).
+  const liveEquity = metrics.equity ?? null;
   const positions = bridgeStatus?.positions || metrics.positions || [];
   const openPositionsCount = positions.length > 0 ? positions.length : (metrics.open_positions ?? 0);
   const calculatedFloatingPnl = positions.reduce((acc, p) => acc + (p.pnl !== undefined ? p.pnl : (p.profit ?? 0)), 0);
@@ -129,14 +140,28 @@ export default function HomeTab({
     );
     const activeCurve = isCurveActive ? equityCurveData : null;
     const startVal = activeCurve?.starting_equity ?? activeCurve?.initial_deposit ?? initialDeposit;
-    const currentVal = activeCurve?.current_equity ?? equity;
+    // The REST equity curve is fetched once per range switch, so its
+    // `current_equity` freezes between fetches. Live telemetry wins while the
+    // bridge is connected; the snapshot is only the offline fallback (ticket 011-03).
+    const currentVal = (isConnected && liveEquity !== null)
+      ? liveEquity
+      : (activeCurve?.current_equity ?? startVal);
     const netVal = currentVal - startVal;
     const isNetPositive = netVal >= 0;
     const strokeColor = isNetPositive ? '#45e0ad' : '#ff5b6b';
     const gradientId = isNetPositive ? 'pipstride-area-pos' : 'pipstride-area-neg';
 
     // Build points: prefer activeCurve points, fallback to reconstructed curve from historyData
-    let points = activeCurve?.points || [];
+    let points = activeCurve?.points ? [...activeCurve.points] : [];
+    // The snapshot's last point is as stale as its `current_equity`. Pin it to
+    // the live equity so the SVG line ends on the number the KPI card shows.
+    if (points.length > 0 && isConnected && liveEquity !== null) {
+      points[points.length - 1] = {
+        ...points[points.length - 1],
+        equity: currentVal,
+        balance
+      };
+    }
     if (points.length === 0 && historyData?.trades && historyData.trades.length > 0) {
       const sorted = [...historyData.trades].sort((a, b) => (a.close_time || 0) - (b.close_time || 0));
       const runs = sorted.reduce((acc, trade) => {
@@ -180,7 +205,7 @@ export default function HomeTab({
     }
 
     return { startVal, currentVal, netVal, isNetPositive, strokeColor, gradientId, pathD, areaD };
-  }, [equityCurveData, historyData, currentAccountNumber, initialDeposit, equity, balance, fetchedAtSec]);
+  }, [equityCurveData, historyData, currentAccountNumber, initialDeposit, balance, liveEquity, isConnected, fetchedAtSec]);
 
   return (
     <div className="home-tab-container animate-fade-in">
@@ -257,7 +282,7 @@ export default function HomeTab({
               <div className="label">{t('journal_profit_factor')}</div>
               <div className="tiny">
                 {activeHistory && activeHistory.total_trades > 0
-                  ? `${t('home_gross')} +$${activeHistory.gross_profit?.toFixed(2) ?? '0.00'} / -$${activeHistory.gross_loss?.toFixed(2) ?? '0.00'}`
+                  ? `${t('home_gross')} ${formatSignedMoney(activeHistory.gross_profit ?? 0, currency)} / ${formatGrossLoss(activeHistory.gross_loss, currency)}`
                   : t('home_gross_ratio')}
               </div>
             </div>

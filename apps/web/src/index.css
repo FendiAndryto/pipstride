@@ -86,7 +86,7 @@ body {
 }
 
 /* Full-width Modern Sticky Header */
-.tradegear-header {
+.pipstride-header {
   position: sticky;
   top: 0;
   z-index: 50;
@@ -1338,7 +1338,7 @@ main.app-main {
 
 /* Mobile (< 640px): Compact header, cards, and typography */
 @media (max-width: 639.98px) {
-  .tradegear-header {
+  .pipstride-header {
     padding: 10px 14px;
   }
   
@@ -1346,8 +1346,8 @@ main.app-main {
     display: none;
   }
 
-  .tradegear-header .status-pill,
-  .tradegear-header .header-connection-badge {
+  .pipstride-header .status-pill,
+  .pipstride-header .header-connection-badge {
     display: none !important;
   }
 
@@ -1394,7 +1394,7 @@ main.app-main {
 
 /* Narrow Mobile (< 400px): Ultra-safe text clipping avoidance */
 @media (max-width: 400px) {
-  .tradegear-header {
+  .pipstride-header {
     padding: 8px 12px;
   }
 

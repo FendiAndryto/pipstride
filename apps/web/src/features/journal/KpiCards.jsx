@@ -5,14 +5,14 @@ import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatSignedMoney, formatRatio } from '../../domain/format';
 
-export default function KpiCards({ netPnl, winRate, profitFactor, totalTrades, winningTrades, losingTrades, periodLabel }) {
+export default function KpiCards({ netPnl, winRate, profitFactor, totalTrades, winningTrades, losingTrades, periodLabel, currency = 'USD' }) {
   const { t } = useLanguage();
   const tinyStyle = { color: 'var(--muted)', marginTop: '2px', fontSize: '9.5px' };
 
   return (
     <div className="grid-cards-responsive-2col four-cols-desktop">
       <div className="card" id="journal-kpi-net-pnl">
-        <div className={`metric ${netPnl >= 0 ? 'positive' : 'negative'}`}>{formatSignedMoney(netPnl)}</div>
+        <div className={`metric ${netPnl >= 0 ? 'positive' : 'negative'}`}>{formatSignedMoney(netPnl, currency)}</div>
         <div className="label">{t('journal_realized_pnl')}</div>
         <div className="tiny" style={tinyStyle}>{periodLabel}</div>
       </div>
