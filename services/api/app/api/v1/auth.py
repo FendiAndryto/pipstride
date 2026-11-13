@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -105,9 +105,14 @@ def register(
             headers={"Retry-After": str(retry_after)},
         )
 
+    trial_days = settings.DEFAULT_REGISTRATION_TRIAL_DAYS
+    expires_at = (
+        datetime.now(timezone.utc) + timedelta(days=trial_days)
+    ) if trial_days > 0 else None
+
     try:
         user = user_service.register(
-            db, req.username, req.password, role="trader", email=req.email
+            db, req.username, req.password, role="trader", email=req.email, expires_at=expires_at
         )
     except ValueError as exc:
         rate_limiter.record_failure(rate_key)
@@ -147,6 +152,12 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user.expires_at is not None and as_utc(user.expires_at) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Masa aktif akun telah berakhir. Silakan hubungi admin untuk memperpanjang langganan.",
         )
 
     # Privileged accounts must present a verified TOTP code (ADR 0008 §5). A

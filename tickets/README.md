@@ -25,8 +25,9 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **007** | `007-admin-console/` | Admin console + privilege boundary | 003, 005, 006 | ops/support |
 | **008** | `008-web-test-harness/` | Test runner `apps/web` + paritas domain terjaga | 006 | 007-05 |
 | **009** | `009-live-metrics-correctness/` | Daily DD hari broker, overall DD peak-to-trough, market structure 4 TF | 005, 006, 008 | 007 |
+| **010** | `010-user-expiry-and-admin-creation/` | Expiry akun, default trial 3 hari, & create user admin | 007 | onboarding & monetisasi |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -127,3 +128,11 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **03-admin-mutations-and-audit.md** (`done`): Mutasi data user/entitlement dengan pencatatan audit log mutlak.
 - [x] **04-support-mode-and-access-log.md** (`done`): Support mode time-boxed 30 menit & log akses transparan untuk user.
 - [x] **05-admin-frontend-app.md** (`done`): Aplikasi web dashboard admin mandiri (`apps/admin`, React 19 + Vite di origin terpisah).
+
+#### Fase 010: User Expiry & Admin Account Creation (DIJADWALKAN)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/004-user-expiry-and-admin-creation.md`.
+> Menyediakan fitur pendaftaran user baru langsung dari admin console, pengaturan masa aktif (durasi/expiration date), trial default 3 hari untuk registrasi mandiri via `.env`, penolakan login jelas untuk akun kedaluwarsa, dan dialog copy kredensial cepat.
+- [x] **01-user-expiry-schema-and-policy.md** (`done`): Migrasi `expires_at`, config trial `.env`, guard login & bridge telemetri.
+- [ ] **02-admin-user-create-and-extend-api.md** (`todo`): Endpoint `POST /admin/users` & `POST /admin/users/{id}/extend-expiry` + AuditLog.
+- [ ] **03-admin-frontend-create-user-modal.md** (`todo`): UI Create User Modal & Copy Credentials Dialog di Admin Console.
+- [ ] **04-admin-frontend-user-expiry-management.md** (`todo`): Badge status masa aktif & Modal Extend Expiry di Admin Console.

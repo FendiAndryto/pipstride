@@ -18,7 +18,10 @@ the 3% breach disappears the moment price comes back.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
+
+from app.domain.time import as_utc
 
 DRAWDOWN_ALERT_REASON = "daily_drawdown_breached"
 OVERALL_DRAWDOWN_ALERT_REASON = "overall_drawdown_breached"
@@ -105,3 +108,23 @@ def evaluate_overall_drawdown(
         current_pct=round(current, 2),
         max_pct=round(worst, 2),
     )
+
+
+def is_account_active(
+    is_active: bool,
+    expires_at: Optional[datetime],
+    now: Optional[datetime] = None,
+) -> bool:
+    """Whether an account is allowed to log in and ingest telemetry (SPEC-004).
+
+    An account is active if ``is_active`` is True and ``expires_at`` is either
+    unset (lifetime) or strictly in the future.
+    """
+    if not is_active:
+        return False
+    if expires_at is None:
+        return True
+    current = as_utc(now) or datetime.now(timezone.utc)
+    target = as_utc(expires_at)
+    return target > current
+

@@ -65,7 +65,7 @@ pipstride/
 │   │       ├── lib/            # http, storage, download, csv (IO only)
 │   │       └── services/       # api.js — thin HTTP client over lib/http
 │   ├── admin/                  # React 19 + Vite admin console (separate bundle & origin)
-│   │   └── src/                # app/, pages/, features/, domain/, lib/, components/ui/, styles/
+│   │   └── src/                # app/, pages/, features/, domain/, lib/, components/ui/, constants/, styles/
 │   └── marketing/              # Astro static site (landing, features, pricing, about)
 │       ├── src/components/     # Header, Footer, sections/*, showcase/*
 │       ├── src/layouts/        # BaseLayout.astro
@@ -84,7 +84,7 @@ pipstride/
 │       │   ├── infrastructure/ # db/repositories/{trade,connection,telemetry,user,admin}_repository.py
 │       │   ├── models/         # Pydantic schemas (auth, admin, bridge, journal, risk, telegram)
 │       │   └── services/       # telemetry ingest, bridge status, account settings, connection, user, auth tokens, admin, totp, email, mt5_package, pricing_catalog, telegram
-│       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens, 0002_admin_totp, 0003_support_sessions)
+│       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens, 0002_admin_totp, 0003_support_sessions, 0004_user_expires_at)
 │       ├── scripts/            # backup_db, check_migrations, prune_snapshots, reset_admin_password
 │       └── tests/              # 15 test modules + conftest, 154 tests
 ├── mt5-ea/PipstrideMonitor.mq5 # canonical read-only sensor
@@ -95,7 +95,7 @@ pipstride/
 │   ├── specs/                  # feature specs (+ README workflow)
 │   ├── GLOSSARY.md             # domain vocabulary
 │   └── TICKET_TRACKER.md
-├── tickets/                    # phased execution tickets, 001–009 (+ README workflow)
+├── tickets/                    # phased execution tickets, 001–010 (+ README workflow)
 ├── .github/workflows/ci.yml    # api tests, migration drift, web, marketing, admin, docker images
 ├── backups/                    # gitignored local DB dumps
 └── .venv/                      # gitignored, working local Python env (see below)
@@ -213,8 +213,8 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–009 all `done`** (Fase 007 admin console closed the board).
-- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007`.
+- Current state: **001–009 `done`**, **010 `todo`** (Fase 010: User Expiry & Admin Account Creation).
+- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 
 ## Build & release expectations

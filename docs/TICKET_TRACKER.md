@@ -30,12 +30,12 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 29 tiket
-- **Selesai (`done`):** 29 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009)
-- **Belum Diimplementasikan (`todo`):** 0 tiket
+- **Total Tiket:** 33 tiket
+- **Selesai (`done`):** 30 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009, dan 010-01)
+- **Belum Diimplementasikan (`todo`):** 3 tiket (Fase 010: 02, 03, 04)
 
 ```
-[============================================================] 100% Selesai
+[========================================================....] 91% Selesai
 ```
 
 ---
@@ -160,3 +160,11 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **03-admin-mutations-and-audit.md** (`done`): Mutasi entitlement/deactivate/activate/revoke koneksi, semuanya menulis `audit_logs` beserta IP aktor.
 - [x] **04-support-mode-and-access-log.md** (`done`): Sesi support 30 menit dengan alasan wajib; detail elevated satu-satunya jalur ke isi trade/settings, plus access log `GET /api/v1/access-log` untuk trader.
 - [x] **05-admin-frontend-app.md** (`done`): `apps/admin` (React 19 + Vite) di origin terpisah, gating IP di Caddy, job CI `admin`, dan layanan compose baru.
+
+#### Fase 010: User Expiry & Admin Account Creation (DIJADWALKAN)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/004-user-expiry-and-admin-creation.md`.
+> Menyediakan fitur pembuatan akun pengguna baru langsung dari dashboard admin, konfigurasi masa aktif (durasi/expiration date), trial default 3 hari untuk registrasi mandiri via `.env`, penolakan login yang jelas untuk akun kedaluwarsa, proteksi telemetri MT5, serta dialog salin kredensial cepat.
+- [x] **01-user-expiry-schema-and-policy.md** (`done`): Migrasi `expires_at`, config trial `.env`, guard login & bridge telemetri.
+- [ ] **02-admin-user-create-and-extend-api.md** (`todo`): Endpoint `POST /admin/users` & `POST /admin/users/{id}/extend-expiry` + AuditLog.
+- [ ] **03-admin-frontend-create-user-modal.md** (`todo`): UI Create User Modal & Copy Credentials Dialog di Admin Console.
+- [ ] **04-admin-frontend-user-expiry-management.md** (`todo`): Badge status masa aktif & Modal Extend Expiry di Admin Console.

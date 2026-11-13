@@ -76,6 +76,7 @@ class UserService:
         plain_password: str,
         role: str = "trader",
         email: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
     ) -> User:
         cleaned = validate_username(username)
         validate_password_complexity(plain_password)
@@ -91,6 +92,7 @@ class UserService:
             email=normalized_email,
             password_hash=hash_password(plain_password),
             role=role,
+            expires_at=expires_at,
         )
         with session_scope(db):
             db.add(user)

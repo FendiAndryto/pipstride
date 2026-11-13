@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, status
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.base import get_db
 from app.db.models import Mt5Connection, User
+from app.domain.time import as_utc
 from app.infrastructure.db.repositories import connection_repository, user_repository
 
 security_bearer = HTTPBearer(auto_error=False)
@@ -39,6 +41,9 @@ def get_current_user(
     user = user_repository.get_by_username(db, username)
     if not user or not user.is_active:
         raise _unauthorized("User not recognized or account deactivated")
+
+    if user.expires_at is not None and as_utc(user.expires_at) <= datetime.now(timezone.utc):
+        raise _unauthorized("Session expired: account has expired. Please contact support to renew.")
 
     if token_ver is None or int(token_ver) != int(user.token_version):
         raise _unauthorized("Session has been revoked or expired. Please log in again.")

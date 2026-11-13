@@ -24,7 +24,7 @@ from app.models.bridge import (
 )
 from app.models.risk import RiskWatchdogStatusResponse
 from app.domain.errors import ConnectionBindingError
-from app.domain.policies import evaluate_drawdown, evaluate_overall_drawdown
+from app.domain.policies import evaluate_drawdown, evaluate_overall_drawdown, is_account_active
 from app.domain.time import to_unix
 from app.services.account_settings_service import account_settings_service
 from app.services.bridge_status_service import bridge_status_service
@@ -32,6 +32,14 @@ from app.services.connection_service import connection_service
 from app.services.telemetry_ingest_service import telemetry_ingest_service
 
 router = APIRouter(prefix="/bridge", tags=["Bridge"])
+
+
+def _check_connection_owner_active(connection: Mt5Connection) -> None:
+    if not is_account_active(connection.user.is_active, connection.user.expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive or has expired.",
+        )
 
 
 @router.post(
@@ -96,6 +104,7 @@ def receive_heartbeat(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or revoked connection token.",
         )
+    _check_connection_owner_active(connection)
 
     try:
         return telemetry_ingest_service.process_heartbeat(db, connection, payload)
@@ -168,6 +177,7 @@ def sync_trades(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or revoked connection token.",
         )
+    _check_connection_owner_active(connection)
     if payload.account_number is not None and connection.account_number is not None:
         if payload.account_number != connection.account_number:
             raise HTTPException(

@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     PRICING_CATALOG_PATH: str = "packages/pricing/catalog.json"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_ALGORITHM: str = "HS256"
+
+    # Default trial duration for public self-registration (SPEC-004). <= 0 disables trial (lifetime).
+    DEFAULT_REGISTRATION_TRIAL_DAYS: int = 3
     
     MT5_MAGIC_NUMBER: int = 778899
     BRIDGE_POLL_INTERVAL_MS: int = 500

@@ -46,6 +46,7 @@ class User(Base):
     # a configured key - never a hash, because login must recompute the code.
     totp_secret: Mapped[str | None] = mapped_column(String(512), nullable=True)
     totp_enrolled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
