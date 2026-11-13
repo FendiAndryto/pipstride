@@ -86,7 +86,7 @@ pipstride/
 │       │   └── services/       # telemetry ingest, bridge status, account settings, connection, user, auth tokens, admin, totp, email, mt5_package, pricing_catalog, telegram
 │       ├── migrations/         # Alembic (0001_initial, aa3be7b45838_account_email_and_auth_tokens, 0002_admin_totp, 0003_support_sessions, 0004_user_expires_at)
 │       ├── scripts/            # backup_db, check_migrations, prune_snapshots, reset_admin_password
-│       └── tests/              # 17 test modules + conftest, 176 tests
+│       └── tests/              # 17 test modules + conftest, 177 tests
 ├── mt5-ea/PipstrideMonitor.mq5 # canonical read-only sensor
 ├── infra/                      # compose files, Caddyfile, cron/pipstride-crontab
 ├── docs/
@@ -95,7 +95,7 @@ pipstride/
 │   ├── specs/                  # feature specs (+ README workflow)
 │   ├── GLOSSARY.md             # domain vocabulary
 │   └── TICKET_TRACKER.md
-├── tickets/                    # phased execution tickets, 001–011 (+ README workflow)
+├── tickets/                    # phased execution tickets, 001–012 (+ README workflow)
 ├── .github/workflows/ci.yml    # api tests, migration drift, web, marketing, admin, docker images
 ├── backups/                    # gitignored local DB dumps
 └── .venv/                      # gitignored, working local Python env (see below)
@@ -106,7 +106,7 @@ pipstride/
 ## Verified Verification Commands
 
 All commands below were executed on 2026-11-05 and exited **0**; the web, API and admin numbers
-were re-verified on 2026-11-12 when Fase 007 landed.
+were re-verified on 2026-11-12 when Fase 007 landed, and again on 2026-11-13 when Fase 012 landed.
 
 ### 1. Web lint
 ```bash
@@ -135,7 +135,7 @@ npm --prefix apps/web run build
 ```bash
 node apps/web/scripts/check-i18n.cjs
 ```
-`i18n OK — 491 keys per language, 433 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
+`i18n OK — 494 keys per language, 436 static keys resolved.` **Run this after touching `constants/translations.js`** — there is no npm script for it.
 
 ### 4. Marketing build
 ```bash
@@ -150,7 +150,7 @@ cd services/api
 $env:ENVIRONMENT="test"; $env:SECRET_KEY="ci-secret-key-not-for-production"
 ../../.venv/Scripts/python.exe -m pytest
 ```
-`176 passed` (1 pre-existing Starlette deprecation warning from `fastapi.testclient`). Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
+`177 passed` (1 pre-existing Starlette deprecation warning from `fastapi.testclient`). Tests use a throwaway SQLite DB and need **no** Postgres/Redis.
 
 Docker alternative (matches the old note, only when the daemon is up):
 ```bash
@@ -213,8 +213,8 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
 - Non-trivial feature: write `docs/specs/<NNN>-<name>.md` first (via `/spec`), covering problem, constraints, interface/schema, and success criteria.
 - Approved specs are split into self-contained tickets under `tickets/<NNN>-<phase>/`. Each ticket has a `Status:` and a `Verification:` section.
 - `tickets/README.md` is the phase board. **Phase gates are ordered** — do not start the next phase before the previous gate passes.
-- Current state: **001–011 `done`** (all 11 phases completed; Fase 011 closed 2026-11-13).
-- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010`.
+- Current state: **001–012 `done`** (all 12 phases completed; Fase 011 closed 2026-11-13, Fase 012 closed 2026-11-13).
+- Recommended order: `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012`.
 - `docs/TICKET_TRACKER.md` mirrors the board; keep both in sync when closing a ticket.
 
 ## Build & release expectations
@@ -244,6 +244,12 @@ Run after `alembic upgrade head`. Also **not re-verified** — no database avail
   `POST /auth/totp/enroll/start` + `/auth/totp/enroll/verify` (password re-auth, no session needed).
   Seeds are Fernet-encrypted with `TOTP_ENCRYPTION_KEY`; when it is empty the key is derived from
   `SECRET_KEY`, so rotating `SECRET_KEY` forces every privileged account to re-enroll.
+- **Public self-registration is closed by default** (`ENABLE_PUBLIC_REGISTRATION=false`, SPEC-006).
+  `POST /api/v1/auth/register` returns `403` and `LoginPage.jsx` hides the signup tab
+  (`PUBLIC_REGISTRATION_ENABLED = false`) while keeping the form and `handleRegisterSubmit` intact.
+  Reopening signup needs both switches flipped; accounts are otherwise created from `apps/admin`
+  (`POST /api/v1/admin/users`). `tests/conftest.py` sets the env flag to `true` so the account
+  lifecycle tests keep working.
 - **Support mode ships disabled.** `SUPPORT_MODE_ENABLED=false` by default; every
   `/admin/support/*` endpoint returns `403` until an operator enables it *after* the user-visible
   access log (`GET /api/v1/access-log`, Profile → Support Access Log) is verified in production.

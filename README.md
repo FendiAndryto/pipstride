@@ -78,7 +78,9 @@ Dashboard requests target the active account with the `X-Connection-Id` header; 
 
 ### Accounts and recovery
 
-Registration takes an optional email; the dashboard asks for one because it is the only self-service recovery path. The address is lower-cased and unique, and stays unverified until the emailed link is opened.
+**Public self-registration is closed by default** (`ENABLE_PUBLIC_REGISTRATION=false`, SPEC-006): the signup form is hidden in the dashboard and `POST /auth/register` answers `403`. Accounts are provisioned by an administrator from the admin console (`POST /api/v1/admin/users`). Set `ENABLE_PUBLIC_REGISTRATION=true` to reopen the form and the endpoint — no code change is needed.
+
+When registration is open it takes an optional email; the dashboard asks for one because it is the only self-service recovery path. The address is lower-cased and unique, and stays unverified until the emailed link is opened.
 
 - **Password reset** — `POST /auth/forgot-password` always returns `202` with the same body, so it cannot be used to probe which addresses exist. It is rate limited per IP (5 per 15 min) and per address (3 per hour) to protect inboxes. Only the token digest is stored; the raw value lives solely in the link.
 - **Single use** — issuing a new token for the same purpose burns older unused ones. Consumption is a conditional update, so two concurrent requests cannot both succeed. Reset links expire after 30 minutes, verification links after 24 hours.

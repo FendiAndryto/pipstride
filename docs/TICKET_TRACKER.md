@@ -30,8 +30,8 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 37 tiket
-- **Selesai (`done`):** 37 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011)
+- **Total Tiket:** 39 tiket
+- **Selesai (`done`):** 39 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012)
 - **Belum Diimplementasikan (`todo`):** 0 tiket (100% selesai)
 
 ```
@@ -176,3 +176,9 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **02-journal-currency-propagation.md** (`done`): Propagasi mata uang akun aktif ke `JournalTab`, `KpiCards`, `JournalAnalytics` (termasuk `BucketBars`), `TradeTable`, dan `MonthCalendar`.
 - [x] **03-home-equity-live-state-synchronization.md** (`done`): `liveEquity` masuk dependency `useMemo`, titik ujung kurva SVG di-override ke ekuitas live, fallback snapshot saat offline.
 - [x] **04-header-branding-cleanup.md** (`done`): Kelima selector `.tradegear-header` → `.pipstride-header` di `index.css` + markup header; 0 sisa selector lama.
+
+#### Fase 012: Public Registration Closure & Discord Onboarding (SELESAI)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/006-public-registration-closure-and-discord-contact.md`.
+> Menutup pendaftaran mandiri publik pada `app-pipstride.homever.my.id` baik di level UI maupun API backend tanpa menghapus kode registrasi, serta menyediakan jalur onboarding langsung via akun Discord administrator (`ID: 757954690037186580`).
+- [x] **01-backend-registration-toggle.md** (`done`): `ENABLE_PUBLIC_REGISTRATION` (default `False`) + guard HTTP 403 pada `POST /api/v1/auth/register`, flag test harness dan test negatif 403 (177 passed, 6 contract kept).
+- [x] **02-web-registration-closure-and-discord-cta.md** (`done`): Flag non-destruktif `PUBLIC_REGISTRATION_ENABLED`, tab registrasi disembunyikan, kartu akses terbatas + CTA Discord, 3 key bilingual baru (494 key/bahasa, 88 test, build 1979 modules).

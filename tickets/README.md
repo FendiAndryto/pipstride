@@ -27,8 +27,9 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **009** | `009-live-metrics-correctness/` | Daily DD hari broker, overall DD peak-to-trough, market structure 4 TF | 005, 006, 008 | 007 |
 | **010** | `010-user-expiry-and-admin-creation/` | Expiry akun, default trial 3 hari, & create user admin | 007 | onboarding & monetisasi |
 | **011** | `011-dashboard-polish-and-consistency/` | Dynamic currency, minus ganda fix, sinkronisasi equity & rebranding header | 006, 008 | open billing / produksi |
+| **012** | `012-public-registration-closure/` | Tutup registrasi publik (UI & API), non-destructive toggle & Discord admin onboarding | 010, 011 | operasional private beta |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -145,3 +146,9 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **02-journal-currency-propagation.md** (`done`): Propagasi mata uang akun aktif ke `JournalTab`, `KpiCards`, `JournalAnalytics` (termasuk `BucketBars`), `TradeTable`, dan `MonthCalendar`.
 - [x] **03-home-equity-live-state-synchronization.md** (`done`): `liveEquity` masuk dependency `useMemo`, titik ujung kurva SVG di-override ke ekuitas live, fallback snapshot saat offline.
 - [x] **04-header-branding-cleanup.md** (`done`): Kelima selector `.tradegear-header` → `.pipstride-header` di `index.css` + markup header; 0 sisa selector lama.
+
+### Fase 012: Public Registration Closure & Discord Onboarding (Selesai)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/006-public-registration-closure-and-discord-contact.md`.
+> Menutup pendaftaran mandiri publik pada `app-pipstride.homever.my.id` baik di level UI maupun API backend tanpa menghapus kode registrasi, serta menyediakan jalur onboarding langsung via akun Discord administrator (`ID: 757954690037186580`).
+- [x] **01-backend-registration-toggle.md** (`done`): Setting config `ENABLE_PUBLIC_REGISTRATION` (default `False`), guard HTTP 403 pada `POST /api/v1/auth/register`, flag di test harness + test negatif 403, passthrough `.env.example` & compose.
+- [x] **02-web-registration-closure-and-discord-cta.md** (`done`): Flag non-destruktif `PUBLIC_REGISTRATION_ENABLED` di `LoginPage.jsx`, tab registrasi disembunyikan, kartu akses terbatas + CTA Discord, 3 key bilingual baru (494 key/bahasa).
