@@ -30,12 +30,12 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 39 tiket
-- **Selesai (`done`):** 39 tiket (Fase 001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012)
-- **Belum Diimplementasikan (`todo`):** 0 tiket (100% selesai)
+- **Total Tiket:** 43 tiket
+- **Selesai (`done`):** 40 tiket (Fase 001–012 + 13-03)
+- **Sedang Berjalan (`in_progress`):** 3 tiket (Fase 013: 01, 02, 04)
 
 ```
-[============================================================] 100% Selesai
+[=====================================================-------] 93.0% Selesai (40/43)
 ```
 
 ---
@@ -182,3 +182,13 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 > Menutup pendaftaran mandiri publik pada `app-pipstride.homever.my.id` baik di level UI maupun API backend tanpa menghapus kode registrasi, serta menyediakan jalur onboarding langsung via akun Discord administrator (`ID: 757954690037186580`).
 - [x] **01-backend-registration-toggle.md** (`done`): `ENABLE_PUBLIC_REGISTRATION` (default `False`) + guard HTTP 403 pada `POST /api/v1/auth/register`, flag test harness dan test negatif 403 (177 passed, 6 contract kept).
 - [x] **02-web-registration-closure-and-discord-cta.md** (`done`): Flag non-destruktif `PUBLIC_REGISTRATION_ENABLED`, tab registrasi disembunyikan, kartu akses terbatas + CTA Discord, 3 key bilingual baru (494 key/bahasa, 88 test, build 1979 modules).
+
+#### Fase 013: MQL5 Background Service (.ex5), Cash Flow Isolation, & Dynamic Market (BERJALAN)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/007-mql5-service-cashflow-and-dynamic-market.md`.
+> Mengonversi sensor MT5 menjadi MQL5 Background Service (.ex5) dengan single input token, memisahkan deposit/penarikan ke stream `cash_flow` tersendiri agar tidak pernah memasuki metrik trading (dan agar saldo/ekuitas jujur), serta menghadirkan kendali simbol aktif serta candle multi-timeframe dinamis dari website.
+> **Urutan wajib serial:** 02 dan 04 sama-sama mengedit `mt5-ea/PipstrideMonitor.mq5` dan me-rebuild `.ex5` + checksum.
+> **Status 2026-11-14:** tiga tiket bagian otomatis sudah hijau (193 `pytest`, 99 `vitest`, `lint-imports` 6/0, `lint:arch` 0 pelanggaran, compile `.ex5` 0 error). Yang tersisa hanya verifikasi manual di terminal MT5 (install service, latensi trade baru, observasi `DEAL_ENTRY`/`DEAL_POSITION_ID`, ganti simbol live) dan `scripts/check_migrations.py` yang butuh PostgreSQL.
+- [ ] **01-mql5-service-refactor-and-ex5-build.md** (`in_progress`): Konversi MQL5 Service (`#property service`), polling diff pengganti `OnTradeTransaction`, single input `InpBridgeToken`, biner `.ex5` ter-track (negasi `.gitignore`) + hapus `.mq5` publik, update preset/`mt5_package` & modal.
+- [ ] **02-cashflow-deal-classification-backend.md** (`in_progress`): Stream `cash_flow` dari `DEAL_TYPE_BALANCE` (deposit/penarikan), tabel `cash_flow_deals` + migrasi Alembic, isolasi struktural metrik trading, balikkan formula saldo/ekuitas, tes ingest + domain + journal.
+- [x] **03-cashflow-journal-ui-and-frontend-parity.md** (`done`): Paritas domain frontend (`analytics.js`/`pnl.js`/`dayBuckets`), baris kas netral `WITHDRAWAL`/`DEPOSIT` di `TradeTable.jsx`, kartu deposit/penarikan, wiring `useJournalData.js`, & i18n (99 tes, 500 → 499 key/bahasa).
+- [ ] **04-dynamic-market-symbols-and-multi-tf.md** (`in_progress`): `PUT /api/v1/bridge/active-symbol` (JWT) + `live_state`, heartbeat response membawa `active_market_symbol`/`watchlist`, candle 4 TF dinamis di Service, eliminasi `Symbol Mismatch` di `MarketTab.jsx`.

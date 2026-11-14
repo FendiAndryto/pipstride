@@ -28,8 +28,9 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **010** | `010-user-expiry-and-admin-creation/` | Expiry akun, default trial 3 hari, & create user admin | 007 | onboarding & monetisasi |
 | **011** | `011-dashboard-polish-and-consistency/` | Dynamic currency, minus ganda fix, sinkronisasi equity & rebranding header | 006, 008 | open billing / produksi |
 | **012** | `012-public-registration-closure/` | Tutup registrasi publik (UI & API), non-destructive toggle & Discord admin onboarding | 010, 011 | operasional private beta |
+| **013** | `013-mql5-service-and-cashflow/` | MQL5 background service (.ex5), isolasi cashflow withdrawal/deposit, & dynamic market | 009, 011, 012 | stabilitas telemetri & akurasi jurnal |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012 → 013`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -152,3 +153,12 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 > Menutup pendaftaran mandiri publik pada `app-pipstride.homever.my.id` baik di level UI maupun API backend tanpa menghapus kode registrasi, serta menyediakan jalur onboarding langsung via akun Discord administrator (`ID: 757954690037186580`).
 - [x] **01-backend-registration-toggle.md** (`done`): Setting config `ENABLE_PUBLIC_REGISTRATION` (default `False`), guard HTTP 403 pada `POST /api/v1/auth/register`, flag di test harness + test negatif 403, passthrough `.env.example` & compose.
 - [x] **02-web-registration-closure-and-discord-cta.md** (`done`): Flag non-destruktif `PUBLIC_REGISTRATION_ENABLED` di `LoginPage.jsx`, tab registrasi disembunyikan, kartu akses terbatas + CTA Discord, 3 key bilingual baru (494 key/bahasa).
+
+### Fase 013: MQL5 Background Service (.ex5), Cash Flow Isolation, & Dynamic Market (Berjalan)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/007-mql5-service-cashflow-and-dynamic-market.md`.
+> Mengonversi sensor MT5 menjadi MQL5 Background Service (.ex5) dengan single input token, memisahkan deposit/penarikan ke stream `cash_flow` tersendiri agar tidak pernah memasuki metrik trading (dan agar saldo/ekuitas jujur), serta menghadirkan kendali simbol aktif serta candle multi-timeframe dinamis dari website.
+> **Urutan wajib serial:** 02 dan 04 sama-sama mengedit `mt5-ea/PipstrideMonitor.mq5` dan me-rebuild `.ex5` + checksum.
+- [ ] **01-mql5-service-refactor-and-ex5-build.md** (`in_progress`): Konversi MQL5 Service (`#property service`), polling diff pengganti `OnTradeTransaction`, single input `InpBridgeToken`, biner `.ex5` ter-track (negasi `.gitignore`) + hapus `.mq5` publik, update preset/`mt5_package` & modal. Bagian otomatis hijau (2026-11-14); checklist manual MT5 belum dijalankan.
+- [ ] **02-cashflow-deal-classification-backend.md** (`in_progress`): Stream `cash_flow` dari `DEAL_TYPE_BALANCE` (deposit/penarikan), tabel `cash_flow_deals` + migrasi Alembic, isolasi struktural metrik trading, balikkan formula saldo/ekuitas, tes ingest + domain + journal. Sensor + backend hijau (2026-11-14); observasi `DEAL_ENTRY`/`DEAL_POSITION_ID` di akun demo belum dijalankan.
+- [x] **03-cashflow-journal-ui-and-frontend-parity.md** (`done`): Paritas domain frontend (`analytics.js`/`pnl.js`/`dayBuckets`), baris kas netral `WITHDRAWAL`/`DEPOSIT` di `TradeTable.jsx`, kartu deposit/penarikan, wiring `useJournalData.js`, & i18n.
+- [ ] **04-dynamic-market-symbols-and-multi-tf.md** (`in_progress`): `PUT /api/v1/bridge/active-symbol` (JWT) + `live_state`, heartbeat response membawa `active_market_symbol`/`watchlist`, candle 4 TF dinamis di Service, eliminasi `Symbol Mismatch` di `MarketTab.jsx`. Otomatis hijau (2026-11-14); verifikasi ganti simbol live belum dijalankan.
