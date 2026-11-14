@@ -1,6 +1,9 @@
 // Per-day aggregation for the journal's weekday chart (ticket 006-04).
 // Pure function: given trades and a locale it returns the same bucket shape the
 // backend's `by_weekday` uses, so JournalAnalytics renders either source.
+//
+// Contract: `trades` are closed positions only. Cash flow rows belong to the
+// separate stream (SPEC-007 D2) and would corrupt wins/losses/net_profit here.
 
 import { winRate, profitFactor } from '../../domain/analytics';
 

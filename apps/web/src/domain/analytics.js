@@ -177,6 +177,11 @@ export function computeTotals(rows) {
 /**
  * Stats payload shaped like `GET /api/v1/journal/stats`:
  * { totals, by_symbol, by_weekday, by_hour, by_direction, by_source }.
+ *
+ * Contract: `rows` are closed *positions* only. Cash flow rows (deposits and
+ * withdrawals from `cash_flow_deals`) must never be passed here — they have no
+ * symbol, volume or direction, and letting one in would turn a withdrawal into
+ * a losing trade in every derived metric.
  */
 export function computeJournalStats(rows) {
   return {
@@ -186,5 +191,25 @@ export function computeJournalStats(rows) {
     by_hour: bucketize(rows, hourKey, HOUR_LABELS),
     by_direction: bucketize(rows, directionKey, ['BUY', 'SELL']),
     by_source: bucketize(rows, sourceKey, ['EA', 'Manual'])
+  };
+}
+
+/**
+ * Deposit / withdrawal totals from the separate cash flow stream.
+ * Mirrors `compute_cash_flow` in services/api/app/domain/metrics.py; amounts are
+ * reported unsigned per direction and never added to any trading metric.
+ */
+export function calculateCashFlow(items) {
+  let deposits = 0;
+  let withdrawals = 0;
+  (items || []).forEach((item) => {
+    const amount = Number(item.profit ?? item.amount ?? 0);
+    if (item.category === 'DEPOSIT') deposits += Math.abs(amount);
+    else if (item.category === 'WITHDRAWAL') withdrawals += Math.abs(amount);
+  });
+  return {
+    deposits: round2(deposits),
+    withdrawals: round2(withdrawals),
+    netFunding: round2(deposits - withdrawals)
   };
 }

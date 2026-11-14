@@ -1088,6 +1088,23 @@ main.app-main {
   color: #f6d38e;
 }
 
+/* Cash flow badges (ticket 013-03). A deposit/withdrawal is a funding event, not
+   a win or a loss, so the red "losing trade" palette is deliberately unused. */
+.tag.deposit {
+  background: #1b4035;
+  color: #8cebc7;
+}
+
+.tag.withdrawal {
+  background: #3a3428;
+  color: #e3cf9e;
+}
+
+.tag.neutral {
+  background: #263137;
+  color: #b6c4cc;
+}
+
 /* Rows & Lists */
 .row {
   display: flex;

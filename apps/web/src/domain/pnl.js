@@ -61,6 +61,10 @@ export function summarizeAccountPnl(bridgeStatus, metrics) {
  *
  * `available` is false when the endpoint has not answered (or predates the
  * fields), so the caller renders a dash instead of a fabricated 0.00%.
+ *
+ * Contract: drawdown is trade-only (SPEC-007 D3). Cash flow is deliberately not
+ * an input here — a withdrawal lowers the balance but not the trading risk, and
+ * folding it in would make a losing account look healthier than it is.
  */
 export function drawdownView(riskStatus) {
   const risk = riskStatus ?? {};

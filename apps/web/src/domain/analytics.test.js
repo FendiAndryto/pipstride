@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeJournalStats, computeTotals, profitFactor, winRate } from './analytics';
+import { calculateCashFlow, computeJournalStats, computeTotals, profitFactor, winRate } from './analytics';
 
 // Ticket 008-01 — locks the deliberate mirror of services/api/app/domain/metrics.py
 // (Fase 005). Expected values are frozen literals so the test proves parity
@@ -146,5 +146,32 @@ describe('computeJournalStats', () => {
 
     expect(ea.trades).toBe(1);
     expect(manual.trades).toBe(2);
+  });
+});
+
+describe('calculateCashFlow', () => {
+  // Ticket 013-03 — mirrors compute_cash_flow in the backend. Direction is
+  // reported unsigned; only net funding carries the sign.
+  it('sums each direction separately and nets them', () => {
+    const totals = calculateCashFlow([
+      { category: 'DEPOSIT', profit: 1000 },
+      { category: 'WITHDRAWAL', profit: -300 },
+      { category: 'DEPOSIT', profit: 200 }
+    ]);
+
+    expect(totals).toEqual({ deposits: 1200, withdrawals: 300, netFunding: 900 });
+  });
+
+  it('normalises a negative deposit amount instead of subtracting it', () => {
+    expect(calculateCashFlow([{ category: 'DEPOSIT', profit: -50 }])).toEqual({
+      deposits: 50,
+      withdrawals: 0,
+      netFunding: 50
+    });
+  });
+
+  it('returns zeroed totals for an empty or missing stream', () => {
+    expect(calculateCashFlow([])).toEqual({ deposits: 0, withdrawals: 0, netFunding: 0 });
+    expect(calculateCashFlow(undefined)).toEqual({ deposits: 0, withdrawals: 0, netFunding: 0 });
   });
 });

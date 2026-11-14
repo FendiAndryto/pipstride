@@ -175,6 +175,19 @@ export const api = {
     return res.json();
   },
 
+  /**
+   * Dashboard -> monitor control channel (ticket 13-04). The service has no
+   * chart, so a watchlist click has to be pushed to the sensor; the next
+   * heartbeat response carries the candles for this symbol.
+   */
+  async setActiveMarketSymbol(symbol) {
+    return authJson(
+      '/api/v1/bridge/active-symbol',
+      { method: 'PUT', payload: { symbol } },
+      'Active symbol update failed'
+    );
+  },
+
   async getTradeHistory(limit = 1000) {
     const res = await authRequest(`${API_BASE}/api/v1/bridge/history?limit=${limit}`, { method: 'GET' });
     if (res.status === 409) {

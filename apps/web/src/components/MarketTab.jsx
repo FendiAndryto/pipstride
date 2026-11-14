@@ -99,22 +99,30 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
 
   const isPositive = activeQuote.daily_change_pct >= 0;
 
-  // Why each timeframe does or does not have candles right now. An old EA build
-  // sends only `candles` + `candles_m5`, and the EA only streams the symbol open
-  // on the MT5 chart — two different causes that need two different messages.
-  // Neither may borrow another timeframe's numbers (ticket 09-03).
+  // Why each timeframe does or does not have candles right now. The service is
+  // chartless and streams whatever the dashboard selects, so a mismatch is no
+  // longer an error: it only means the next heartbeat has not arrived yet.
+  // `not_streamed` stays for an older build that never sent that timeframe.
   const tfAvailability = useMemo(() => {
     const metrics = bridgeStatus?.metrics || {};
-    const isChartSym = isSameInstrument(activeSymbol, metrics.chart_symbol);
+    const isStreamedSymbol = isSameInstrument(activeSymbol, metrics.chart_symbol);
     const map = {};
     TIMEFRAMES.forEach(({ id, field }) => {
       const raw = metrics[field];
-      if (!isChartSym) map[id] = 'symbol_mismatch';
+      if (!isStreamedSymbol) map[id] = 'waiting_for_symbol';
       else if (!Array.isArray(raw) || raw.length === 0) map[id] = 'not_streamed';
       else map[id] = 'ok';
     });
     return map;
   }, [bridgeStatus, activeSymbol]);
+
+  // Picking a symbol is also a control action: it tells the monitor which
+  // instrument to stream. Fire-and-forget — a failed PUT must not break the
+  // price panel, and the `waiting_for_symbol` state already covers the gap.
+  const selectSymbol = (symbol) => {
+    setSelectedSymbol(symbol);
+    api.setActiveMarketSymbol(symbol).catch(() => {});
+  };
 
   // Market-structure read over the newest `bars` candles (M5, M15, H1, H4).
   // The domain helper normalises the wire order — the EA sends oldest-first,
@@ -179,7 +187,7 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
                 <div
                   key={item.symbol}
                   className="row"
-                  onClick={() => setSelectedSymbol(item.symbol)}
+                  onClick={() => selectSymbol(item.symbol)}
                   style={{
                     cursor: 'pointer',
                     background: isSelected ? '#152b2b' : 'transparent',
@@ -297,8 +305,8 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
               const state = tfAvailability[tf];
               const hasTf = state === 'ok';
               const isActive = activeTf === tf;
-              const hint = state === 'symbol_mismatch'
-                ? t('market_tf_needs_chart_symbol', { tf, symbol: activeSymbol })
+              const hint = state === 'waiting_for_symbol'
+                ? t('market_tf_waiting_symbol', { symbol: activeSymbol })
                 : t('market_tf_needs_new_ea', { tf });
               return (
                 <button
@@ -408,8 +416,8 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
               {t('market_no_candles_title', { tf: tfMetrics.tf, symbol: activeQuote.symbol })}
             </div>
             <div style={{ fontSize: '11px', marginTop: '4px', maxWidth: '380px', margin: '4px auto 0', lineHeight: 1.5 }}>
-              {tfAvailability[activeTf] === 'symbol_mismatch'
-                ? t('market_no_candles_body', { symbol: activeQuote.symbol })
+              {tfAvailability[activeTf] === 'waiting_for_symbol'
+                ? t('market_tf_waiting_symbol', { symbol: activeQuote.symbol })
                 : t('market_tf_unavailable_body', { tf: activeTf })}
             </div>
           </div>

@@ -185,6 +185,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         totalTrades={data.totalTrades}
         winningTrades={data.winningTrades}
         losingTrades={data.losingTrades}
+        cashFlow={data.cashFlowStats}
         periodLabel={periodLabel}
         currency={currency}
       />
@@ -242,8 +243,8 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
       </div>
 
       <TradeTable
-        filteredTrades={data.filteredTrades}
-        paginatedTrades={data.paginatedTrades}
+        filteredRows={data.filteredRows}
+        paginatedRows={data.paginatedRows}
         currentPage={data.currentPage}
         totalPages={data.totalPages}
         pageSize={data.pageSize}

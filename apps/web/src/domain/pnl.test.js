@@ -110,6 +110,18 @@ describe('drawdownView', () => {
     expect(view.overallAlert).toBe(false);
   });
 
+  it('ignores cash flow completely (trade-only drawdown, SPEC-007 D3)', () => {
+    // A withdrawal lowers the balance but not the trading risk; the view must be
+    // byte-identical whether or not the caller leaks cash fields onto riskStatus.
+    const withCash = drawdownView({
+      ...full,
+      cash_flow: [{ category: 'WITHDRAWAL', profit: -5000, time: 1767225000 }],
+      total_withdrawals: 5000
+    });
+
+    expect(withCash).toEqual(drawdownView(full));
+  });
+
   it('is unavailable when riskStatus is null, so the UI shows a dash', () => {
     const view = drawdownView(null);
 

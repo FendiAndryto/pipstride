@@ -6,8 +6,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { formatSignedMoney } from '../../domain/format';
 
 export default function TradeTable({
-  filteredTrades,
-  paginatedTrades,
+  filteredRows,
+  paginatedRows,
   currentPage,
   totalPages,
   pageSize,
@@ -25,7 +25,7 @@ export default function TradeTable({
           <BookOpen size={16} style={{ color: 'var(--g)' }} />
           <h3>{t('journal_history_title')}</h3>
         </div>
-        <span className="tiny">{t('journal_records', { count: filteredTrades.length })}</span>
+        <span className="tiny">{t('journal_records', { count: filteredRows.length })}</span>
       </div>
 
       <div style={{ overflowX: 'auto', maxHeight: '440px', overflowY: 'auto' }}>
@@ -43,31 +43,50 @@ export default function TradeTable({
             </tr>
           </thead>
           <tbody>
-            {paginatedTrades.map((trade) => {
-              const isEa = trade.magic > 0;
-              const closeDateStr = trade.close_time
-                ? new Date(trade.close_time * 1000).toLocaleString(locale, {
+            {paginatedRows.map((row) => {
+              const isCash = row.kind === 'CASH';
+              const isEa = (row.magic || 0) > 0;
+              const isWithdrawal = row.category === 'WITHDRAWAL';
+              const closeDateStr = row.close_time
+                ? new Date(row.close_time * 1000).toLocaleString(locale, {
                   month: 'short',
                   day: 'numeric',
                   hour: '2-digit',
                   minute: '2-digit'
                 })
                 : '—';
-              const digits = trade.symbol.includes('JPY') ? 3 : trade.symbol.includes('XAU') ? 2 : 5;
+              // A balance deal has no symbol, so it has no price precision either.
+              const digits = !row.symbol ? 0 : row.symbol.includes('JPY') ? 3 : row.symbol.includes('XAU') ? 2 : 5;
 
               return (
-                <tr key={trade.ticket} style={{ borderBottom: '1px solid #1c2b33' }}>
+                <tr key={`${isCash ? 'cash' : 'trade'}-${row.ticket}`} style={{ borderBottom: '1px solid #1c2b33' }}>
                   <td style={{ padding: '12px 8px', color: 'var(--muted)', fontSize: '11px', fontFamily: 'monospace' }}>
-                    #{trade.ticket}
+                    #{row.ticket}
                   </td>
-                  <td style={{ padding: '12px 8px', fontWeight: 800 }}>{trade.symbol}</td>
-                  <td style={{ padding: '12px 8px' }}>
-                    <span className={`tag ${trade.type === 'SELL' ? 'red' : ''}`}>{trade.type}</span>
+                  <td style={{ padding: '12px 8px', fontWeight: 800 }}>
+                    {isCash ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}>—</span> : row.symbol}
                   </td>
-                  <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>{trade.volume.toFixed(2)}</td>
-                  <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>{trade.close_price.toFixed(digits)}</td>
                   <td style={{ padding: '12px 8px' }}>
-                    <span className={`tag ${isEa ? 'blue' : ''}`}>{isEa ? 'EA' : 'Manual'}</span>
+                    {isCash ? (
+                      <span className={`tag ${isWithdrawal ? 'withdrawal' : 'deposit'}`}>
+                        {t(isWithdrawal ? 'journal_badge_withdrawal' : 'journal_badge_deposit')}
+                      </span>
+                    ) : (
+                      <span className={`tag ${row.type === 'SELL' ? 'red' : ''}`}>{row.type}</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>
+                    {isCash ? <span style={{ color: 'var(--muted)' }}>—</span> : row.volume.toFixed(2)}
+                  </td>
+                  <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>
+                    {isCash ? <span style={{ color: 'var(--muted)' }}>—</span> : row.close_price.toFixed(digits)}
+                  </td>
+                  <td style={{ padding: '12px 8px' }}>
+                    {isCash ? (
+                      <span className="tag neutral">{t('journal_source_cash')}</span>
+                    ) : (
+                      <span className={`tag ${isEa ? 'blue' : ''}`}>{isEa ? 'EA' : 'Manual'}</span>
+                    )}
                   </td>
                   <td style={{ padding: '12px 8px', color: 'var(--muted)', fontSize: '11px' }}>{closeDateStr}</td>
                   <td
@@ -75,15 +94,17 @@ export default function TradeTable({
                       padding: '12px 8px',
                       textAlign: 'right',
                       fontWeight: 800,
-                      color: trade.profit >= 0 ? 'var(--g)' : 'var(--red)'
+                      // Cash never borrows the profit/loss palette: a withdrawal
+                      // is a cash movement, not a losing trade.
+                      color: isCash ? 'var(--muted)' : row.profit >= 0 ? 'var(--g)' : 'var(--red)'
                     }}
                   >
-                    {formatSignedMoney(trade.profit, currency)}
+                    {formatSignedMoney(row.profit, currency)}
                   </td>
                 </tr>
               );
             })}
-            {filteredTrades.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ padding: '36px 8px', textAlign: 'center', color: 'var(--muted)' }}>
                   <Layers size={28} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
@@ -120,7 +141,7 @@ export default function TradeTable({
           }}
         >
           <span>
-            {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredTrades.length)} / {filteredTrades.length}
+            {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredRows.length)} / {filteredRows.length}
           </span>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button

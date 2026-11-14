@@ -7,8 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../services/api';
-import { computeJournalStats } from '../../domain/analytics';
+import { calculateCashFlow, computeJournalStats } from '../../domain/analytics';
 import { buildDayBuckets } from './dayBuckets';
+import { inMonth, joinJournalRows } from './journalRows';
 
 const PAGE_SIZE = 20;
 const HISTORY_LIMIT = 2000;
@@ -135,6 +136,9 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
   const { selectedMonthIndex, selectedYear, selectedMonth } = month;
   const monthLocale = month.locale;
   const trades = useMemo(() => historyData?.trades || [], [historyData]);
+  // Cash flow is its own array from `/bridge/history`. It is never merged into
+  // `trades`; the two streams only meet at render time (see `filteredRows`).
+  const cashFlow = useMemo(() => historyData?.cash_flow || [], [historyData]);
 
   const tradedSymbols = useMemo(() => {
     const counts = {};
@@ -200,6 +204,23 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
   const losingTrades = totals?.losses
     ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.losing_trades ?? 0) : 0));
 
+  // Cash flow totals come from the backend for every range except MONTH (which
+  // the backend does not serve); the local sum is the same pure rule.
+  const monthCashFlow = useMemo(
+    () => cashFlow.filter((item) => inMonth(item.time, selectedMonthIndex, selectedYear)),
+    [cashFlow, selectedMonthIndex, selectedYear]
+  );
+  const cashFlowStats = useMemo(() => {
+    if (period === 'MONTH') return calculateCashFlow(monthCashFlow);
+    const server = activeStats?.cash_flow;
+    if (!server) return calculateCashFlow(cashFlow);
+    return {
+      deposits: server.deposits ?? 0,
+      withdrawals: server.withdrawals ?? 0,
+      netFunding: server.net_funding ?? (server.deposits ?? 0) - (server.withdrawals ?? 0)
+    };
+  }, [period, activeStats, cashFlow, monthCashFlow]);
+
   const filteredTrades = useMemo(() => {
     const needle = search.toLowerCase();
     return trades.filter((trade) => {
@@ -221,6 +242,21 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
     });
   }, [trades, filter, selectedSymbol, search, period, selectedMonthIndex, selectedYear]);
 
+  // Table rows are a render-only union: trades plus the cash rows the active
+  // filter/symbol/month/search allows. `filteredTrades` stays trade-only
+  // because the CSV export consumes it.
+  const filteredRows = useMemo(
+    () => joinJournalRows(filteredTrades, cashFlow, {
+      filter,
+      selectedSymbol,
+      search,
+      period,
+      selectedMonthIndex,
+      selectedYear
+    }),
+    [filteredTrades, cashFlow, filter, selectedSymbol, search, period, selectedMonthIndex, selectedYear]
+  );
+
   // Reset to the first page whenever the filter identity changes.
   const filterKey = `${filter}|${selectedSymbol}|${search}|${period}|${selectedMonth}`;
   const [prevFilterKey, setPrevFilterKey] = useState('');
@@ -229,12 +265,12 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
     setPage(1);
   }
 
-  const totalPages = Math.ceil(filteredTrades.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE) || 1;
   const currentPage = Math.min(page, totalPages);
-  const paginatedTrades = useMemo(() => {
+  const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredTrades.slice(start, start + PAGE_SIZE);
-  }, [filteredTrades, currentPage]);
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [filteredRows, currentPage]);
 
   const dayBuckets = useMemo(
     () => buildDayBuckets(trades, {
@@ -260,9 +296,12 @@ export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, has
     search,
     setSearch,
     trades,
+    cashFlow,
+    cashFlowStats,
     tradedSymbols,
     filteredTrades,
-    paginatedTrades,
+    filteredRows,
+    paginatedRows,
     totalPages,
     currentPage,
     pageSize: PAGE_SIZE,
