@@ -90,6 +90,25 @@ def test_status_reports_live_metrics_after_heartbeat(client, account):
     assert data["positions"][0]["symbol"] == "EURUSD"
 
 
+def test_status_reports_offline_after_timeout(client, account, monkeypatch):
+    created = create_connection(client, account)
+    send_heartbeat(client, created["token"], heartbeat_payload(222222))
+
+    # Fresh heartbeat -> connected
+    res = client.get("/api/v1/bridge/status", headers=account["headers"])
+    assert res.status_code == 200
+    assert res.json()["is_connected"] is True
+
+    # When timeout threshold is exceeded (simulated via 0s threshold) -> disconnected
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "HEARTBEAT_TIMEOUT_SECONDS", 0)
+    res_stale = client.get("/api/v1/bridge/status", headers=account["headers"])
+    assert res_stale.status_code == 200
+    assert res_stale.json()["is_connected"] is False
+    assert res_stale.json()["metrics"] is None
+
+
 def test_trade_sync_updates_cached_status_count(client, account):
     created = create_connection(client, account)
     send_heartbeat(

@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     
     MT5_MAGIC_NUMBER: int = 778899
     BRIDGE_POLL_INTERVAL_MS: int = 500
-    HEARTBEAT_TIMEOUT_SECONDS: int = 10
+    HEARTBEAT_TIMEOUT_SECONDS: int = 25
 
     # Onboarding package. PUBLIC_BASE_URL should be the public API/dashboard
     # origin (e.g. https://pipstride.app). Empty means "derive from the request",
