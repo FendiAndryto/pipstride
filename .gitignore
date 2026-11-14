@@ -56,6 +56,8 @@ frontend/dist/
 
 # MT5 Binaries & Wine
 *.ex5
+# The distributed service binary is shipped from the web app, so it must be tracked.
+!apps/web/public/PipstrideMonitor.ex5
 *.log
 terminal_data/
 wine_prefix/

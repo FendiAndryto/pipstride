@@ -3,36 +3,35 @@
 //|                                  Copyright 2026, Pipstride       |
 //|                                  https://pipstride.com           |
 //+------------------------------------------------------------------+
+#property service
 #property copyright "Pipstride"
 #property link      "https://pipstride.com"
-#property version   "1.00"
-#property description "Pipstride Pure Read-Only MT5 Telemetry & Account Analytics Monitor v1.00 (Zero Trade Execution - 100% Safe)"
+#property version   "2.00"
+#property description "Pipstride Pure Read-Only MT5 Telemetry Background Service (Zero Trade Execution - Tamper Proof)"
 
-//--- Host Environment Enum
-enum ENUM_HOST_ENV
-{
-   HOST_ENV_AUTO  = 0, // Auto Detect (Local vs VPS)
-   HOST_ENV_LOCAL = 1, // Local PC / Laptop
-   HOST_ENV_VPS   = 2  // VPS / Cloud Server
-};
+//--- Compile-time configuration
+// A Service is configured from the Navigator, not from a chart, so every
+// technical value is baked in at compile time. The dashboard only ever asks
+// the user for the bridge token.
+const string InpBackendUrl        = "https://app-pipstride.homever.my.id";      // Backend API URL
+const int    InpHeartbeatInterval = 5;                                          // Heartbeat interval in seconds
+const int    InpHistoryDays       = 90;                                         // History lookback days (0 = all)
+const bool   InpVerboseLog        = false;                                      // Print detailed logs
 
-//--- Inputs
-input group "--- Pipstride Telemetry Settings ---"
-input string        InpBackendUrl        = "https://app-pipstride.homever.my.id";      // Backend API URL
-input string        InpBridgeToken       = "";                                        // Pipstride Connection Token (from Web Dashboard)
-input ENUM_HOST_ENV InpHostEnv           = HOST_ENV_AUTO;                             // Host Environment (Auto/Local/VPS)
-input string        InpMonitoredSymbols  = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD";      // Watchlist symbols (comma-separated)
-input int           InpHistoryDays       = 90;                                        // History lookback days (0 = All History)
-input int           InpHeartbeatInterval = 5;                                         // Heartbeat interval in seconds (5 recommended)
-input bool          InpVerboseLog        = false;                                     // Print detailed logs to Experts tab
+// The watchlist is no longer a compile-time list: the dashboard owns it and
+// pushes it through the heartbeat response (ticket 13-04). Until the first
+// response arrives the service falls back to one resolved symbol.
+#define MAX_CONTROL_SYMBOLS 32
+
+//--- The only user-facing input
+input string InpBridgeToken = "";                       // Pipstride Connection Token (from Web Dashboard)
 
 //--- Global Variables
 datetime g_last_heartbeat = 0;
 int      g_consecutive_errors = 0;
-string   g_status_msg = "Initializing...";
 
-// Cached heavy payload parts: rebuilt only when fresh, otherwise reused so
-// OnTimer stays cheap. Trade history is event-driven (OnTradeTransaction).
+// Cached heavy payload parts: rebuilt only when fresh, otherwise reused so the
+// service loop stays cheap. Trade history is polled per tick.
 string   g_cached_candles_m15 = "[]";
 string   g_cached_candles_m5 = "[]";
 string   g_cached_candles_h1 = "[]";
@@ -46,6 +45,23 @@ datetime g_last_sync_attempt = 0;
 datetime g_last_full_sync = 0;
 string   g_bridge_token = "";
 string   g_backend_url = "";
+
+// A Service has no chart, so _Symbol is meaningless here. One real broker
+// symbol is resolved at startup and used for the default candle feed.
+string   g_default_symbol = "";
+
+// Dashboard control state (ticket 13-04). Both values arrive inside the
+// heartbeat response and are applied before the next payload is built.
+string   g_active_symbol = "";   // base symbol the dashboard asked for
+string   g_active_broker = "";   // resolved broker name for g_active_symbol
+string   g_watchlist[MAX_CONTROL_SYMBOLS];
+int      g_watchlist_count = 0;
+
+// Polling replacement for OnTradeTransaction, which is never delivered to a
+// service. See PollDealChanges().
+ulong    g_last_deal_ticket = 0;
+int      g_last_deal_count = -1;
+datetime g_last_deal_poll = 0;
 
 // Watchlist and D1 quote caches. FindBrokerSymbol scans every symbol in the
 // terminal and CopyRates has real terminal overhead, so neither belongs on a
@@ -71,10 +87,18 @@ D1BarCache g_d1_cache[MAX_WATCH_SYMBOLS];
 // Forward Declarations
 void SendHeartbeat();
 bool SendTradeSync(bool silent);
-void UpdateChartHUD(string status_text);
 string FindBrokerSymbol(string baseSym);
 void GetDealPositionOpenDetails(ulong posId, double &openPrice, long &openTime);
 void InvalidateDerivedCaches();
+void EnsureWatchlistCache();
+void PollDealChanges();
+void RunPendingTradeSync();
+void ResetCandleCache();
+void ResolveDefaultSymbol();
+void ApplyServerControl(const string response);
+string ActiveBrokerSymbol();
+bool JsonStringValue(const string json, const string key, string &out);
+int JsonStringArray(const string json, const string key, string &out[]);
 
 //+------------------------------------------------------------------+
 //| Strip clipboard artifacts from the pasted bridge token.          |
@@ -135,36 +159,62 @@ string SanitizeBackendUrl(string raw)
 }
 
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| Service entry point. Runs in the terminal's service thread and    |
+//| owns everything OnTimer() used to do. There is no chart, no       |
+//| EventSetTimer, and no trade transaction event.                    |
 //+------------------------------------------------------------------+
-int OnInit()
+void OnStart()
 {
-   Print(">>> [PipstrideMonitor] Initializing Pure Read-Only MT5 Telemetry Monitor v1.00...");
-   Print(">>> [PipstrideMonitor] NOTICE: This EA is 100% READ-ONLY. It possesses ZERO order execution capability.");
+   if(!InitService())
+   {
+      Print(">>> [PipstrideMonitor] Service stopped: initialization failed.");
+      return;
+   }
 
-   // Globals survive a reinit without a full reload (input edits, chart
-   // changes), so caches derived from the settings must be rebuilt here or an
-   // edited InpMonitoredSymbols would never take effect.
-   InvalidateDerivedCaches();
+   while(!IsStopped())
+   {
+      PollDealChanges();
+      RunPendingTradeSync();
+      SendHeartbeat();
+      Sleep(MathMax(1, InpHeartbeatInterval) * 1000);
+   }
 
-   // Clipboard-pasted tokens and URLs often keep trailing newlines/spaces or
-   // http:// schemes. Clean them once and use the sanitized values everywhere.
+   CleanupService();
+}
+
+//+------------------------------------------------------------------+
+//| One-time setup (the old OnInit body).                             |
+//+------------------------------------------------------------------+
+bool InitService()
+{
+   Print(">>> [PipstrideMonitor] Starting Pure Read-Only MT5 Telemetry Service v2.00...");
+   Print(">>> [PipstrideMonitor] NOTICE: This service is 100% READ-ONLY. It possesses ZERO order execution capability.");
+
+   // Clipboard-pasted tokens often keep trailing newlines/spaces, which break
+   // the header line and degrade the POST into a GET.
    g_bridge_token = SanitizeBridgeToken(InpBridgeToken);
    g_backend_url  = SanitizeBackendUrl(InpBackendUrl);
 
+   if(StringLen(g_bridge_token) == 0)
+   {
+      Print(">>> [PipstrideMonitor] ERROR: InpBridgeToken is empty. Open Pipstride -> Connections, copy the token into the service inputs, then restart it.");
+      return false;
+   }
+
+   // Globals survive a restart, so caches derived from settings or from a
+   // previous account must never be reused.
+   InvalidateDerivedCaches();
+   ResolveDefaultSymbol();
+   EnsureWatchlistCache();
+   ResetCandleCache();
+
    Print(">>> [PipstrideMonitor] Target Backend: ", g_backend_url);
+   Print(">>> [PipstrideMonitor] Default Symbol: ", (g_default_symbol == "" ? "(unresolved)" : g_default_symbol));
 
-   // Set timer for periodic telemetry heartbeat
-   EventSetTimer(MathMax(1, InpHeartbeatInterval));
-
-   g_status_msg = "Started - Connecting to Backend...";
-   UpdateChartHUD(g_status_msg);
-
-   // Send initial heartbeat immediately
    SendHeartbeat();
 
-   // Seed full trade history once at startup; afterwards only deal events (and
-   // a 30-minute safety net) trigger a sync.
+   // Seed full trade history once at startup; afterwards only deal polling
+   // (and the 30-minute safety net) trigger a sync.
    g_last_sync_attempt = TimeCurrent();
    if(SendTradeSync(false))
    {
@@ -176,33 +226,86 @@ int OnInit()
       g_trades_dirty = true;
    }
 
-   return(INIT_SUCCEEDED);
+   // Baseline the deal counter so the very first poll does not look like a
+   // burst of new deals.
+   HistorySelect(TimeCurrent() - 86400, TimeCurrent());
+   g_last_deal_count = HistoryDealsTotal();
+   g_last_deal_ticket = (g_last_deal_count > 0 ? HistoryDealGetTicket(g_last_deal_count - 1) : 0);
+   g_last_deal_poll = TimeCurrent();
+
+   Print(">>> [PipstrideMonitor] Service started. Heartbeat interval: ", InpHeartbeatInterval, "s.");
+   return true;
 }
 
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| Service shutdown.                                                 |
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason)
+void CleanupService()
 {
-   EventKillTimer();
-   Comment("");
-   Print(">>> [PipstrideMonitor] Deinitialized. Reason code: ", reason);
+   Print(">>> [PipstrideMonitor] Service stopped.");
 }
 
 //+------------------------------------------------------------------+
-//| Timer event function (pure telemetry heartbeat dispatch)         |
+//| Resolve one real broker symbol. A service has no chart symbol, so |
+//| FindBrokerSymbol() and the candle feed need a concrete default.   |
 //+------------------------------------------------------------------+
-void OnTimer()
+void ResolveDefaultSymbol()
+{
+   g_default_symbol = "";
+   if(SymbolsTotal(false) > 0)
+      g_default_symbol = SymbolName(0, false);
+}
+
+//+------------------------------------------------------------------+
+//| Drop the cached candle payload so the next heartbeat rebuilds it. |
+//+------------------------------------------------------------------+
+void ResetCandleCache()
+{
+   g_candles_built_at = 0;
+}
+
+//+------------------------------------------------------------------+
+//| Polling replacement for OnTradeTransaction.                       |
+//|                                                                   |
+//| MQL5 Services never receive trade transaction events, so the old   |
+//| event-driven sync would silently die and the journal would only    |
+//| refresh on the 30-minute safety net. Diffing the deal count and    |
+//| newest ticket over the last 24h is far cheaper than replaying the  |
+//| whole InpHistoryDays window, and caps sync latency at roughly one  |
+//| heartbeat interval.                                                |
+//+------------------------------------------------------------------+
+void PollDealChanges()
+{
+   datetime now = TimeCurrent();
+   if(g_last_deal_poll != 0 && (now - g_last_deal_poll) < 1) return;
+   g_last_deal_poll = now;
+
+   HistorySelect(TimeCurrent() - 86400, now);
+   int total = HistoryDealsTotal();
+   ulong newest = (total > 0 ? HistoryDealGetTicket(total - 1) : 0);
+
+   if(total != g_last_deal_count || newest != g_last_deal_ticket)
+   {
+      g_last_deal_count = total;
+      g_last_deal_ticket = newest;
+      g_trades_dirty = true;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Trade-sync dispatch, moved verbatim out of OnTimer().             |
+//+------------------------------------------------------------------+
+void RunPendingTradeSync()
 {
    datetime now = TimeCurrent();
 
-   // Full replay safety net: heals a journal reset, a missed DEAL_ADD while
-   // the terminal was offline, and any dropped batch. Cheap (one request per
+   // Full replay safety net: heals a journal reset, a missed deal while the
+   // terminal was offline, and any dropped batch. Cheap (one request per
    // 30 min) and bounded by the 100-deal window.
    bool periodic = (now - g_last_full_sync) >= 1800;
 
-   // Event-driven sync. After a failure, back off to one attempt per 30s so a
-   // dead backend cannot turn every tick into a 3-second blocking request.
+   // After a failure, back off to one attempt per 30s so a dead backend
+   // cannot turn every tick into a 3-second blocking request.
    if((g_trades_dirty || periodic) && (now - g_last_sync_attempt) >= 30)
    {
       g_last_sync_attempt = now;
@@ -212,25 +315,6 @@ void OnTimer()
          g_trades_dirty = false;
          g_last_full_sync = now;
       }
-   }
-
-   SendHeartbeat();
-}
-
-//+------------------------------------------------------------------+
-//| Trade transaction event: only mark trade history dirty            |
-//+------------------------------------------------------------------+
-void OnTradeTransaction(
-   const MqlTradeTransaction &trans,
-   const MqlTradeRequest &request,
-   const MqlTradeResult &result
-)
-{
-   // DEAL_ADD signals a new deal (balance, in, or out). Full trade detail is
-   // fetched lazily in the next timer tick, so this handler never blocks.
-   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
-   {
-      g_trades_dirty = true;
    }
 }
 
@@ -293,7 +377,9 @@ string FindBrokerSymbol(string baseSym)
       }
    }
 
-   return _Symbol;
+   // No chart to fall back to in a service: hand back the resolved default
+   // symbol and let callers skip an empty result.
+   return g_default_symbol;
 }
 
 //+------------------------------------------------------------------+
@@ -302,6 +388,7 @@ string FindBrokerSymbol(string baseSym)
 void InvalidateDerivedCaches()
 {
    g_watch_count = -1;                       // forces EnsureWatchlistCache to re-resolve
+   g_active_broker = "";                     // re-resolve the streamed symbol too
    for(int i = 0; i < MAX_WATCH_SYMBOLS; i++)
       g_d1_cache[i].valid = false;           // stale symbol data must not survive a re-init
 }
@@ -309,28 +396,174 @@ void InvalidateDerivedCaches()
 //+------------------------------------------------------------------+
 //| Resolve the watchlist once. FindBrokerSymbol walks every symbol  |
 //| in the terminal, which is far too expensive for a timer tick.    |
+//|                                                                  |
+//| Source of truth is the dashboard (heartbeat response). Before     |
+//| the first response arrives the list is just the default symbol,   |
+//| which is all a chartless service can resolve on its own.          |
 //+------------------------------------------------------------------+
 void EnsureWatchlistCache()
 {
    if(g_watch_count >= 0) return;
 
-   string symbols[];
-   int total = StringSplit(InpMonitoredSymbols, ',', symbols);
    int count = 0;
-
-   for(int i = 0; i < total && count < MAX_WATCH_SYMBOLS; i++)
+   if(g_watchlist_count > 0)
    {
-      string baseSym = symbols[i];
-      StringTrimLeft(baseSym);
-      StringTrimRight(baseSym);
-      if(baseSym == "") continue;
+      for(int i = 0; i < g_watchlist_count && count < MAX_WATCH_SYMBOLS; i++)
+      {
+         string baseSym = g_watchlist[i];
+         StringTrimLeft(baseSym);
+         StringTrimRight(baseSym);
+         if(baseSym == "") continue;
 
-      g_watch_base[count] = baseSym;
-      g_watch_broker[count] = FindBrokerSymbol(baseSym);
-      SymbolSelect(g_watch_broker[count], true);
-      count++;
+         string brokerSym = FindBrokerSymbol(baseSym);
+         if(brokerSym == "") continue;
+
+         g_watch_base[count] = baseSym;
+         g_watch_broker[count] = brokerSym;
+         SymbolSelect(g_watch_broker[count], true);
+         count++;
+      }
+   }
+   else if(g_default_symbol != "")
+   {
+      g_watch_base[0] = g_default_symbol;
+      g_watch_broker[0] = g_default_symbol;
+      SymbolSelect(g_watch_broker[0], true);
+      count = 1;
    }
    g_watch_count = count;
+}
+
+//+------------------------------------------------------------------+
+//| Minimal JSON readers. MQL5 ships no JSON parser and the heartbeat |
+//| response is a flat object plus one string array, so a targeted    |
+//| extractor is enough and stays allocation-free on the hot path.    |
+//+------------------------------------------------------------------+
+bool JsonStringValue(const string json, const string key, string &out)
+{
+   string needle = "\"" + key + "\"";
+   int pos = StringFind(json, needle);
+   if(pos < 0) return false;
+
+   int colon = StringFind(json, ":", pos + StringLen(needle));
+   if(colon < 0) return false;
+
+   int cursor = colon + 1;
+   int len = StringLen(json);
+   while(cursor < len)
+   {
+      ushort ch = StringGetCharacter(json, cursor);
+      // 32 space, 9 tab, 13 CR, 10 LF
+      if(ch != 32 && ch != 9 && ch != 13 && ch != 10) break;
+      cursor++;
+   }
+   // null / number / bool: the field is present but not a string
+   if(cursor >= len || StringGetCharacter(json, cursor) != 34) return false;
+
+   int quoteClose = StringFind(json, "\"", cursor + 1);
+   if(quoteClose < 0) return false;
+
+   out = StringSubstr(json, cursor + 1, quoteClose - cursor - 1);
+   return true;
+}
+
+int JsonStringArray(const string json, const string key, string &out[])
+{
+   ArrayResize(out, 0);
+
+   string needle = "\"" + key + "\"";
+   int pos = StringFind(json, needle);
+   if(pos < 0) return 0;
+
+   int open = StringFind(json, "[", pos + StringLen(needle));
+   if(open < 0) return 0;
+   int close = StringFind(json, "]", open + 1);
+   if(close < 0) return 0;
+
+   string body = StringSubstr(json, open + 1, close - open - 1);
+   int count = 0;
+   int cursor = 0;
+   while(count < MAX_CONTROL_SYMBOLS)
+   {
+      int quoteOpen = StringFind(body, "\"", cursor);
+      if(quoteOpen < 0) break;
+      int quoteClose = StringFind(body, "\"", quoteOpen + 1);
+      if(quoteClose < 0) break;
+
+      string value = StringSubstr(body, quoteOpen + 1, quoteClose - quoteOpen - 1);
+      if(value != "")
+      {
+         ArrayResize(out, count + 1);
+         out[count] = value;
+         count++;
+      }
+      cursor = quoteClose + 1;
+   }
+   return count;
+}
+
+//+------------------------------------------------------------------+
+//| Apply dashboard control state from the heartbeat response.        |
+//| A symbol change drops the candle cache immediately; waiting the   |
+//| usual 30 s window would make the web UI look frozen.              |
+//+------------------------------------------------------------------+
+void ApplyServerControl(const string response)
+{
+   if(StringLen(response) == 0) return;
+
+   string active = "";
+   if(JsonStringValue(response, "active_market_symbol", active))
+   {
+      StringTrimLeft(active);
+      StringTrimRight(active);
+      StringToUpper(active);
+      if(active != "" && active != g_active_symbol)
+      {
+         g_active_symbol = active;
+         g_active_broker = "";                // resolve on the next payload
+         ResetCandleCache();                  // rebuild now, not in 30 s
+      }
+   }
+
+   string list[];
+   int count = JsonStringArray(response, "watchlist", list);
+   if(count <= 0) return;                      // empty/unparsable: keep the old list
+
+   bool changed = (count != g_watchlist_count);
+   for(int i = 0; i < count && !changed; i++)
+   {
+      if(StringCompare(list[i], g_watchlist[i], false) != 0) changed = true;
+   }
+   if(!changed) return;
+
+   g_watchlist_count = 0;
+   for(int i = 0; i < count && i < MAX_CONTROL_SYMBOLS; i++)
+   {
+      string sym = list[i];
+      StringTrimLeft(sym);
+      StringTrimRight(sym);
+      if(sym == "") continue;
+      g_watchlist[g_watchlist_count] = sym;
+      g_watchlist_count++;
+   }
+   InvalidateDerivedCaches();                  // quote list and D1 caches are stale
+}
+
+//+------------------------------------------------------------------+
+//| Broker name of the symbol the dashboard streamed.                 |
+//| Cached because FindBrokerSymbol scans every symbol in the         |
+//| terminal and this runs on every heartbeat.                        |
+//+------------------------------------------------------------------+
+string ActiveBrokerSymbol()
+{
+   if(g_active_broker != "") return g_active_broker;
+
+   string base = (g_active_symbol == "" ? g_default_symbol : g_active_symbol);
+   if(base == "") return "";
+
+   g_active_broker = FindBrokerSymbol(base);
+   if(g_active_broker == "") g_active_broker = g_default_symbol;
+   return g_active_broker;
 }
 
 //+------------------------------------------------------------------+
@@ -427,8 +660,12 @@ string BuildClosedTradesJson()
       long entryType = HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
       if(entryType != DEAL_ENTRY_OUT) continue;
 
-      string dealSymbol = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
+      // Only position deals belong in closed_trades. A balance/credit deal
+      // carries no position and must never reach the trade table (13-02).
       long dealType = HistoryDealGetInteger(dealTicket, DEAL_TYPE);
+      if(dealType != DEAL_TYPE_BUY && dealType != DEAL_TYPE_SELL) continue;
+
+      string dealSymbol = HistoryDealGetString(dealTicket, DEAL_SYMBOL);
       double dealVol = HistoryDealGetDouble(dealTicket, DEAL_VOLUME);
       double dealPrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
       double dealProfit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT) + 
@@ -463,6 +700,98 @@ string BuildClosedTradesJson()
       );
       count++;
    }
+   json += "]";
+   return json;
+}
+
+//+------------------------------------------------------------------+
+//| Append one balance deal to the JSON array being built.           |
+//+------------------------------------------------------------------+
+void AppendCashFlowRecord(string &json, const int count, const ulong dealTicket,
+                          const double amount, const long dealTime)
+{
+   if(count > 0) json += ",";
+   json += StringFormat(
+      "{\"ticket\":%I64u,\"category\":\"%s\",\"profit\":%.2f,\"time\":%I64d}",
+      dealTicket,
+      (amount >= 0.0 ? "DEPOSIT" : "WITHDRAWAL"),
+      amount,
+      dealTime
+   );
+}
+
+//+------------------------------------------------------------------+
+//| Build JSON array of balance deals: deposits and withdrawals.     |
+//| A balance deal has no symbol, no volume and no prices, and no     |
+//| position id. Sending it on its own stream keeps it out of every   |
+//| trade aggregate (win rate, volume, source) by construction.       |
+//+------------------------------------------------------------------+
+string BuildCashFlowJson()
+{
+   datetime fromTime = (InpHistoryDays > 0 ? (TimeCurrent() - InpHistoryDays * 86400) : 0);
+
+   // The server anchors the equity curve on the account's very first deposit,
+   // and that deposit may be far older than the reporting window. Balance deals
+   // are sparse, so one full scan is cheap and keeps the baseline exact.
+   ulong baselineTicket = 0;
+   double baselineAmount = 0.0;
+   long baselineTime = 0;
+   if(fromTime > 0)
+   {
+      HistorySelect(0, TimeCurrent());
+      int allDeals = HistoryDealsTotal();
+      for(int i = 0; i < allDeals; i++)
+      {
+         ulong t = HistoryDealGetTicket(i);
+         if(t <= 0) continue;
+         if(HistoryDealGetInteger(t, DEAL_TYPE) != DEAL_TYPE_BALANCE) continue;
+
+         double p = HistoryDealGetDouble(t, DEAL_PROFIT)
+                  + HistoryDealGetDouble(t, DEAL_SWAP)
+                  + HistoryDealGetDouble(t, DEAL_COMMISSION);
+         if(p <= 0.0) continue;
+
+         baselineTicket = t;
+         baselineAmount = p;
+         baselineTime = HistoryDealGetInteger(t, DEAL_TIME);
+         break;
+      }
+   }
+
+   HistorySelect(fromTime, TimeCurrent());
+   int totalDeals = HistoryDealsTotal();
+
+   string json = "[";
+   int count = 0;
+   int maxRecords = 200;
+
+   for(int i = totalDeals - 1; i >= 0 && count < maxRecords; i--)
+   {
+      ulong dealTicket = HistoryDealGetTicket(i);
+      if(dealTicket <= 0) continue;
+
+      // TODO(013+): DEAL_TYPE_CREDIT is deliberately out of scope for Fase 013.
+      // It is a cash movement too, but it is not a deposit or a withdrawal and
+      // the dashboard has no category for it yet.
+      if(HistoryDealGetInteger(dealTicket, DEAL_TYPE) != DEAL_TYPE_BALANCE) continue;
+
+      double amount = HistoryDealGetDouble(dealTicket, DEAL_PROFIT)
+                    + HistoryDealGetDouble(dealTicket, DEAL_SWAP)
+                    + HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+      long dealTime = HistoryDealGetInteger(dealTicket, DEAL_TIME);
+
+      AppendCashFlowRecord(json, count, dealTicket, amount, dealTime);
+      count++;
+   }
+
+   // An opening deposit older than the window must still reach the server, or
+   // the baseline becomes a later top-up and the curve starts too low.
+   if(baselineTicket > 0 && baselineTime < fromTime)
+   {
+      AppendCashFlowRecord(json, count, baselineTicket, baselineAmount, baselineTime);
+      count++;
+   }
+
    json += "]";
    return json;
 }
@@ -527,13 +856,16 @@ string BuildMarketQuotesJson()
 
 //+------------------------------------------------------------------+
 //| Build JSON array of recent candles for specified timeframe       |
+//| The symbol is explicit: a service cannot read a chart's _Symbol. |
 //| bars: 35 for the M5/M15 chart, 24 for H1/H4 structure (egress).   |
 //+------------------------------------------------------------------+
-string BuildCandlesJson(ENUM_TIMEFRAMES tf = PERIOD_M15, int bars = 35)
+string BuildCandlesJson(string symbol, ENUM_TIMEFRAMES tf, int bars = 35)
 {
+   if(symbol == "") return "[]";
+
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
-   int copied = CopyRates(_Symbol, tf, 0, bars, rates);
+   int copied = CopyRates(symbol, tf, 0, bars, rates);
    if(copied <= 0) return "[]";
 
    string json = "[";
@@ -683,14 +1015,17 @@ string BuildHeartbeatJson()
    // Rebuild candles at most once per 30s; the chart shows the freshest bar
    // from market quotes anyway. Trade history is sent only on deal events
    // via SendTradeSync(), never on every heartbeat.
+   // The streamed symbol comes from the dashboard, not from a chart: a Service
+   // has no _Symbol, and ApplyServerControl() resets this cache on a change.
+   string candleSymbol = ActiveBrokerSymbol();
    if(g_candles_built_at == 0 || (TimeCurrent() - g_candles_built_at) >= 30)
    {
-      g_cached_candles_m15 = BuildCandlesJson(PERIOD_M15, 35);
-      g_cached_candles_m5 = BuildCandlesJson(PERIOD_M5, 35);
+      g_cached_candles_m15 = BuildCandlesJson(candleSymbol, PERIOD_M15, 35);
+      g_cached_candles_m5 = BuildCandlesJson(candleSymbol, PERIOD_M5, 35);
       // H1/H4 feed the market-structure panel. 24 bars is the minimum the
       // structure read needs, and keeps the heartbeat payload small.
-      g_cached_candles_h1 = BuildCandlesJson(PERIOD_H1, 24);
-      g_cached_candles_h4 = BuildCandlesJson(PERIOD_H4, 24);
+      g_cached_candles_h1 = BuildCandlesJson(candleSymbol, PERIOD_H1, 24);
+      g_cached_candles_h4 = BuildCandlesJson(candleSymbol, PERIOD_H4, 24);
       g_candles_built_at = TimeCurrent();
    }
    string candlesM15Json = g_cached_candles_m15;
@@ -698,16 +1033,10 @@ string BuildHeartbeatJson()
    string candlesH1Json = g_cached_candles_h1;
    string candlesH4Json = g_cached_candles_h4;
 
-   string host_type = "local";
-   if(InpHostEnv == HOST_ENV_VPS)
-      host_type = "vps";
-   else if(InpHostEnv == HOST_ENV_LOCAL)
-      host_type = "local";
-   else
-   {
-      bool isMqlVps = (bool)TerminalInfoInteger(TERMINAL_VPS);
-      host_type = (isMqlVps ? "vps" : "local");
-   }
+   // Host environment is no longer an input: a service cannot be configured
+   // from a chart, so detect the MT5 VPS flag and nothing else.
+   bool isMqlVps = (bool)TerminalInfoInteger(TERMINAL_VPS);
+   string host_type = (isMqlVps ? "vps" : "local");
 
    string json = "{"
       + StringFormat("\"account_number\":%I64d,", login)
@@ -729,7 +1058,7 @@ string BuildHeartbeatJson()
       + "\"candles_m5\":" + candlesM5Json + ","
       + "\"candles_h1\":" + candlesH1Json + ","
       + "\"candles_h4\":" + candlesH4Json + ","
-      + "\"chart_symbol\":\"" + EscapeJsonString(_Symbol) + "\","
+      + "\"chart_symbol\":\"" + EscapeJsonString(candleSymbol) + "\","
       + "\"bridge_token\":\"" + EscapeJsonString(g_bridge_token) + "\","
       + "\"host_type\":\"" + host_type + "\","
       + StringFormat("\"timestamp\":%I64d", timestamp)
@@ -755,12 +1084,14 @@ bool SendTradeSync(bool silent)
    }
 
    string closedTradesJson = BuildClosedTradesJson();
-   // Avoid the network round-trip when nothing changed (empty payload).
-   if(closedTradesJson == "[]") return true;
+   string cashFlowJson = BuildCashFlowJson();
+   // Avoid the network round-trip when nothing changed (both streams empty).
+   if(closedTradesJson == "[]" && cashFlowJson == "[]") return true;
 
    string body = "{"
       + StringFormat("\"account_number\":%I64d,", (long)AccountInfoInteger(ACCOUNT_LOGIN))
-      + "\"closed_trades\":" + closedTradesJson
+      + "\"closed_trades\":" + closedTradesJson + ","
+      + "\"cash_flow\":" + cashFlowJson
       + "}";
 
    string endpoint = g_backend_url + "/api/v1/bridge/sync-trades";
@@ -800,12 +1131,10 @@ void SendHeartbeat()
    if(StringLen(g_bridge_token) == 0)
    {
       g_consecutive_errors++;
-      g_status_msg = "Token kosong / whitespace - Set InpBridgeToken dari Pipstride";
       if(g_consecutive_errors % 5 == 1)
       {
-         Print(">>> [PipstrideMonitor] ERROR: InpBridgeToken is empty. Open Pipstride -> Connections, copy the token into the EA inputs.");
+         Print(">>> [PipstrideMonitor] ERROR: InpBridgeToken is empty. Open Pipstride -> Connections, copy the token into the service inputs.");
       }
-      UpdateChartHUD(g_status_msg);
       return;
    }
 
@@ -840,7 +1169,6 @@ void SendHeartbeat()
    {
       g_last_heartbeat = TimeLocal();
       g_consecutive_errors = 0;
-      g_status_msg = "Connected (Read-Only OK - 200)";
 
       string responseStr = CharArrayToString(resultData, 0, WHOLE_ARRAY, CP_UTF8);
       // Server wiped the journal (reset) or has no rows: replay history.
@@ -849,29 +1177,28 @@ void SendHeartbeat()
          g_trades_dirty = true;
       }
 
+      // Dashboard control channel: symbol to stream + quote watchlist.
+      ApplyServerControl(responseStr);
+
       if(InpVerboseLog)
       {
          Print(">>> [PipstrideMonitor] Telemetry OK: ", responseStr);
       }
-      UpdateChartHUD(g_status_msg);
       return;
    }
 
    if(res == 401)
    {
       g_consecutive_errors++;
-      g_status_msg = "Unauthorized (Invalid/Missing Connection Token)";
       if(g_consecutive_errors % 5 == 1)
       {
          Print(">>> [PipstrideMonitor] ERROR 401: Unauthorized! Set valid 'InpBridgeToken' from Pipstride Web.");
       }
-      UpdateChartHUD(g_status_msg);
       return;
    }
 
    int err = GetLastError();
    g_consecutive_errors++;
-   g_status_msg = StringFormat("Connection Failed (HTTP %d, Err %d)", res, err);
    if(g_consecutive_errors % 10 == 1)
    {
       if(err == 4014)
@@ -883,30 +1210,5 @@ void SendHeartbeat()
          Print(">>> [PipstrideMonitor] Telemetry failed. HTTP: ", res, ", WebRequest Err: ", err);
       }
    }
-   UpdateChartHUD(g_status_msg);
-}
-
-//+------------------------------------------------------------------+
-//| Update onscreen HUD commentary                                   |
-//+------------------------------------------------------------------+
-void UpdateChartHUD(string status_text)
-{
-   string host_desc = (InpHostEnv == HOST_ENV_VPS ? "VPS / Cloud" : (InpHostEnv == HOST_ENV_LOCAL ? "Local PC" : "Auto (" + ((bool)TerminalInfoInteger(TERMINAL_VPS) ? "VPS" : "Local") + ")"));
-   string hud = "========================================\n"
-              + "  PIPSTRIDE MONITOR - 100% READ-ONLY   \n"
-              + "========================================\n"
-              + "Backend URL    : " + g_backend_url + "\n"
-              + "Host Env       : " + host_desc + "\n"
-              + "Monitor Status : " + status_text + "\n"
-              + "Execution Mode : READ-ONLY (No Orders Executed)\n"
-              + "Last Telemetry : " + (g_last_heartbeat > 0 ? TimeToString(g_last_heartbeat, TIME_DATE|TIME_SECONDS) : "None") + "\n"
-              + "Server Name    : " + AccountInfoString(ACCOUNT_SERVER) + "\n"
-              + "Account Login  : " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + " (" + AccountInfoString(ACCOUNT_CURRENCY) + ")\n"
-              + "Balance        : " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + "\n"
-              + "Equity         : " + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + "\n"
-              + "Floating PnL   : " + DoubleToString(AccountInfoDouble(ACCOUNT_PROFIT), 2) + "\n"
-              + "Open Positions : " + IntegerToString(PositionsTotal()) + "\n"
-              + "========================================";
-   Comment(hud);
 }
 //+------------------------------------------------------------------+

@@ -23,7 +23,7 @@ import RichText from './RichText';
 import { useConnectionManager } from '../features/connections/useConnections';
 import ConfirmInline from './ConfirmInline';
 
-const EA_SHA256 = '07aeb16c81dd52a6dbde996ac54a9ae24aea99ff835dbfba92475c16525ff0db';
+const EA_SHA256 = '262dd4963a2e8f6092743493c6e2f26f49405da0102da763f69b7dd23fbe0e3d';
 
 export default function Mt5ConnectModal({
   isOpen,
@@ -461,8 +461,8 @@ export default function Mt5ConnectModal({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
               <a
-                href="/PipstrideMonitor.mq5"
-                download="PipstrideMonitor.mq5"
+                href="/PipstrideMonitor.ex5"
+                download="PipstrideMonitor.ex5"
                 className="btn"
                 style={{
                   display: 'flex',
@@ -476,7 +476,7 @@ export default function Mt5ConnectModal({
                   color: '#080f14',
                   fontWeight: 700
                 }}
-                id="btn-download-monitor-mq5"
+                id="btn-download-monitor-ex5"
                 title={t('modal_download_ea_tip')}
               >
                 <Download size={14} />
