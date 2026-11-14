@@ -181,6 +181,33 @@ class Trade(Base):
     )
 
 
+class CashFlowDeal(Base):
+    """A deposit or withdrawal reported by the MT5 monitor.
+
+    Kept in its own table on purpose: a balance deal has no symbol, no volume and
+    no position id, so storing it in ``trades`` would contaminate count/volume/
+    source aggregates and require a filter in every formula.
+    """
+
+    __tablename__ = "cash_flow_deals"
+
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
+    connection_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("mt5_connections.id", ondelete="CASCADE"), nullable=False
+    )
+    ticket: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # DEPOSIT or WITHDRAWAL; the sign lives in ``amount``.
+    category: Mapped[str] = mapped_column(String(12), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("connection_id", "ticket", name="uq_cash_flow_connection_ticket"),
+        Index("ix_cash_flow_connection_time", "connection_id", "occurred_at"),
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

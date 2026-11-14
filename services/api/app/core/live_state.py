@@ -12,7 +12,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from app.core.config import settings
 
@@ -22,9 +22,15 @@ KEY_PREFIX = "pipstride:live:"
 RESYNC_PREFIX = "pipstride:resync:"
 TRADE_COUNT_PREFIX = "pipstride:tradecount:"
 BROKER_OFFSET_PREFIX = "pipstride:brokeroffset:"
+ACTIVE_SYMBOL_PREFIX = "pipstride:active-symbol:"
+WATCHLIST_PREFIX = "pipstride:watchlist:"
 TTL_SECONDS = 120
 RESYNC_TTL_SECONDS = 3600
 TRADE_COUNT_TTL_SECONDS = 3600
+# Dashboard control state (active market symbol + watchlist). It must outlive a
+# terminal that is closed overnight, unlike the 120s live payload. A TTL still
+# exists so abandoned connections cannot accumulate Redis keys forever.
+CONTROL_TTL_SECONDS = 30 * 24 * 3600
 
 
 class _MemoryBackend:
@@ -210,3 +216,69 @@ def load_broker_offset(connection_id: str) -> Optional[int]:
 
 def clear_broker_offset(connection_id: str) -> None:
     _backend.delete(f"{BROKER_OFFSET_PREFIX}{connection_id}")
+
+
+def default_watchlist() -> List[str]:
+    """Compile-time watchlist seed, used until the dashboard pushes a list.
+
+    ``MT5_MONITORED_SYMBOLS`` is the same comma-separated default the sensor used
+    to ship as an input; keeping it server-side means the EA no longer carries a
+    second copy of the list.
+    """
+    raw = settings.MT5_MONITORED_SYMBOLS or ""
+    return [part.strip().upper() for part in raw.split(",") if part.strip()]
+
+
+def save_active_symbol(connection_id: str, symbol: str) -> None:
+    """Persist the market symbol the dashboard wants candles for."""
+    _backend.set(
+        f"{ACTIVE_SYMBOL_PREFIX}{connection_id}",
+        (symbol or "").strip().upper(),
+        CONTROL_TTL_SECONDS,
+    )
+
+
+def load_active_symbol(connection_id: str) -> Optional[str]:
+    raw = _backend.get(f"{ACTIVE_SYMBOL_PREFIX}{connection_id}")
+    if not raw:
+        return None
+    return raw
+
+
+def clear_active_symbol(connection_id: str) -> None:
+    _backend.delete(f"{ACTIVE_SYMBOL_PREFIX}{connection_id}")
+
+
+def save_watchlist(connection_id: str, symbols: List[str]) -> None:
+    """Persist the quote list the monitor should stream.
+
+    Capped here as well as in the router: the sensor allocates a fixed array and
+    a runaway client must not be able to push unbounded values through Redis.
+    """
+    cleaned = [str(item).strip().upper() for item in symbols if str(item).strip()]
+    _backend.set(
+        f"{WATCHLIST_PREFIX}{connection_id}",
+        json.dumps(cleaned[:32]),
+        CONTROL_TTL_SECONDS,
+    )
+
+
+def load_watchlist(connection_id: str) -> List[str]:
+    """Dashboard watchlist, falling back to the configured default seed."""
+    raw = _backend.get(f"{WATCHLIST_PREFIX}{connection_id}")
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            cleaned = [
+                str(item).strip().upper() for item in parsed if str(item).strip()
+            ]
+            if cleaned:
+                return cleaned
+    return default_watchlist()
+
+
+def clear_watchlist(connection_id: str) -> None:
+    _backend.delete(f"{WATCHLIST_PREFIX}{connection_id}")

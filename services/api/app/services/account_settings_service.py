@@ -39,6 +39,21 @@ class AccountSettingsService:
                 return float(payload.balance)
         return None
 
+    def get_sensor_initial_deposit(self, connection: Mt5Connection) -> Optional[float]:
+        """The first balance deal the monitor reported, and nothing else.
+
+        ``get_effective_initial_deposit`` falls back to the live balance, which
+        already contains every deposit and withdrawal — that value must never be
+        treated as a cash event baseline (SPEC-007, ticket 13-02).
+        """
+        live = live_state.load_live_payload(connection.id)
+        if not live:
+            return None
+        payload = HeartbeatPayload(**live["payload"])
+        if payload.initial_deposit and payload.initial_deposit > 0:
+            return float(payload.initial_deposit)
+        return None
+
     def set_initial_deposit_override(
         self, db: Session, connection: Mt5Connection, amount: Optional[float]
     ) -> Optional[float]:

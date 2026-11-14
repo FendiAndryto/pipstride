@@ -23,9 +23,12 @@ def test_create_connection_returns_importable_preset(client, account):
 
     content = preset["content"]
     assert f"InpBridgeToken={created['token']}" in content
-    assert f"InpBackendUrl={preset['backend_url']}" in content
-    assert "InpMonitoredSymbols=" in content
-    assert "InpHeartbeatInterval=" in content
+    # Fase 013: the service hardcodes everything except the token.
+    assert "InpBackendUrl" not in content
+    assert "InpMonitoredSymbols" not in content
+    assert "InpHeartbeatInterval" not in content
+    assert "InpHistoryDays" not in content
+    assert "InpVerboseLog" not in content
 
 
 def test_rotate_returns_preset_with_new_token(client, account):

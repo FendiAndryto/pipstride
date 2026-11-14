@@ -1,4 +1,5 @@
-from typing import Optional, List, Any
+from typing import Any, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -47,8 +48,31 @@ class ClosedTradeItem(BaseModel):
     magic: int = Field(0, description="Magic number (0=Manual, >0=EA)")
 
 
+class CashFlowItem(BaseModel):
+    """One balance deal: money in or out of the account, not a position.
+
+    Deliberately carries no symbol, volume, or prices. Those fields are
+    meaningless for a balance deal and would only invite the renderer to treat
+    a withdrawal as a closed trade.
+    """
+
+    ticket: int = Field(..., description="MT5 balance deal ticket")
+    category: Literal["DEPOSIT", "WITHDRAWAL"] = Field(
+        ..., description="Cash movement direction"
+    )
+    profit: float = Field(..., description="Signed amount (negative = withdrawal)")
+    time: int = Field(0, description="Unix timestamp of the balance deal")
+
+
 class TradeHistoryResponse(BaseModel):
     trades: List[ClosedTradeItem] = Field(default_factory=list, description="List of closed deals")
+    cash_flow: List[CashFlowItem] = Field(
+        default_factory=list,
+        description="Deposits and withdrawals, never mixed into trades",
+    )
+    total_deposits: float = Field(0.0, description="Sum of deposits in the stored window")
+    total_withdrawals: float = Field(0.0, description="Sum of withdrawals as a positive number")
+    net_funding: float = Field(0.0, description="Deposits minus withdrawals")
     net_pnl: float = Field(0.0, description="Total realized net profit/loss")
     win_rate: float = Field(0.0, description="Win rate percentage (0-100%)")
     profit_factor: Optional[float] = Field(None, description="Gross profit divided by gross loss")
@@ -96,11 +120,18 @@ class HeartbeatPayload(BaseModel):
     positions: List[PositionItem] = Field(default_factory=list, max_length=200, description="Active open positions list")
     market_quotes: List[MarketQuoteItem] = Field(default_factory=list, max_length=100, description="Live quotes for monitored symbols")
     closed_trades: List[ClosedTradeItem] = Field(default_factory=list, max_length=2000, description="Recent closed trades from MT5 history")
+    cash_flow: List[CashFlowItem] = Field(
+        default_factory=list,
+        max_length=500,
+        description="Balance deals (deposits/withdrawals); never mixed into closed_trades",
+    )
     candles: List[Any] = Field(default_factory=list, max_length=500, description="Recent M15 candles for trend bias")
     candles_m5: List[Any] = Field(default_factory=list, max_length=500, description="Recent M5 candles for scalping trigger")
     candles_h1: List[Any] = Field(default_factory=list, max_length=500, description="Recent H1 candles for market structure (spec 003)")
     candles_h4: List[Any] = Field(default_factory=list, max_length=500, description="Recent H4 candles for market structure (spec 003)")
-    chart_symbol: Optional[str] = Field(None, description="Current symbol on active MT5 chart")
+    chart_symbol: Optional[str] = Field(
+        None, description="Symbol the monitor is streaming candles for (broker name)"
+    )
     bridge_token: Optional[str] = Field(None, description="Pipstride User Bridge Token")
     host_type: Optional[str] = Field("local", description="Terminal host environment: local or vps")
     timestamp: int = Field(..., description="Unix timestamp sent from terminal")
@@ -118,6 +149,38 @@ class HeartbeatResponse(BaseModel):
     # True when the server has no trade rows for this connection (e.g. after a
     # journal reset) and the EA should replay its full history via /sync-trades.
     resync_trades: bool = False
+    # Dashboard control state (ticket 13-04). The service has no chart, so the
+    # symbol to stream comes from here instead of an MT5 input.
+    active_market_symbol: Optional[str] = Field(
+        None, description="Base symbol the dashboard wants candles for, if set"
+    )
+    watchlist: List[str] = Field(
+        default_factory=list, description="Symbols the monitor should quote"
+    )
+
+
+class ActiveSymbolRequest(BaseModel):
+    """Symbol the dashboard wants the monitor to stream.
+
+    The pattern mirrors ``_SAFE_SYMBOL`` in ``services/mt5_package.py`` so a
+    broker suffix (``XAUUSD.l``), indices (``US500#``) and FX pairs all pass
+    while anything that could break a JSON/MQL5 string literal is rejected with
+    a 422 before it reaches Redis.
+    """
+
+    symbol: str = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        pattern=r"^[A-Za-z0-9._#-]+$",
+        description="Broker-visible symbol, normalised to upper case",
+    )
+
+
+class ActiveSymbolResponse(BaseModel):
+    status: str = "ok"
+    active_market_symbol: str
+    watchlist: List[str] = Field(default_factory=list)
 
 
 class InitialDepositRequest(BaseModel):
@@ -134,6 +197,7 @@ class SyncTradesRequest(BaseModel):
 
     account_number: Optional[int] = Field(None, description="MT5 account login, must match the bound account")
     closed_trades: List[ClosedTradeItem] = Field(default_factory=list, max_length=2000)
+    cash_flow: List[CashFlowItem] = Field(default_factory=list, max_length=500)
 
 
 

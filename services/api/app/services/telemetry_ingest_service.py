@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -21,17 +21,25 @@ from app.db.base import session_scope
 from app.db.models import Mt5Connection
 from app.domain.errors import ConnectionBindingError
 from app.domain.time import as_utc
-from app.infrastructure.db.repositories import telemetry_repository
-from app.models.bridge import ClosedTradeItem, HeartbeatPayload, HeartbeatResponse
+from app.infrastructure.db.repositories import (
+    cash_flow_repository,
+    telemetry_repository,
+)
+from app.models.bridge import (
+    CashFlowItem,
+    ClosedTradeItem,
+    HeartbeatPayload,
+    HeartbeatResponse,
+)
 from app.services.connection_service import connection_service
 
 SNAPSHOT_MIN_INTERVAL_SECONDS = settings.SNAPSHOT_MIN_INTERVAL_SECONDS
 
 # Fields the EA repeats on every poll but that the dashboard never reads from
-# /status. Closed trades are served by /bridge/history and persisted in SQL,
-# so echoing 100+ rows back on every poll is pure egress. Candles stay: the
-# market chart reads them from the live payload.
-HEAVY_PAYLOAD_KEYS = ("closed_trades",)
+# /status. Closed trades and cash flow are served by dedicated endpoints and
+# persisted in SQL, so echoing them back on every poll is pure egress. Candles
+# stay: the market chart reads them from the live payload.
+HEAVY_PAYLOAD_KEYS = ("closed_trades", "cash_flow")
 
 # Cap the number of closed trades replayed per ingest call. The EA already
 # sends at most ~100 recent deals; anything larger is a client bug.
@@ -49,6 +57,18 @@ def _dedupe_trades(items: Iterable[ClosedTradeItem]) -> List[ClosedTradeItem]:
     """
     seen: set = set()
     unique: List[ClosedTradeItem] = []
+    for item in items:
+        if item.ticket in seen:
+            continue
+        seen.add(item.ticket)
+        unique.append(item)
+    return unique[:MAX_INGEST_TRADES]
+
+
+def _dedupe_cash_flow(items: Iterable[CashFlowItem]) -> List[CashFlowItem]:
+    """One row per balance-deal ticket, same reasoning as ``_dedupe_trades``."""
+    seen: set = set()
+    unique: List[CashFlowItem] = []
     for item in items:
         if item.ticket in seen:
             continue
@@ -98,6 +118,7 @@ class TelemetryIngestService:
 
         snapshot_added = self._persist_snapshot(db, connection, payload)
         trades_added = self._persist_trades(db, connection, payload)
+        cash_flow_added = self._persist_cash_flow(db, connection, payload)
 
         # Build a lean live payload: strip heavy keys that the dashboard reads
         # through dedicated endpoints.
@@ -119,17 +140,27 @@ class TelemetryIngestService:
         # bind, audit row) that the local flags do not track. The transaction
         # is owned by session_scope, never by this service.
         try:
-            if changed or snapshot_added or trades_added or db.new or db.dirty:
+            if (
+                changed
+                or snapshot_added
+                or trades_added
+                or cash_flow_added
+                or db.new
+                or db.dirty
+            ):
                 with session_scope(db):
                     pass
             else:
                 db.rollback()
         except IntegrityError:
-            # A concurrent worker inserted the same trade ticket between our
-            # dedupe SELECT and this commit. The live payload is already in
-            # Redis, so drop the durable batch and let the next tick retry.
+            # A concurrent worker inserted the same trade or balance-deal ticket
+            # between our dedupe SELECT and this commit. The live payload is
+            # already in Redis, so drop the durable batch and let the next tick
+            # retry.
             live_state.clear_trade_count(connection.id)
-            logger.warning("Heartbeat commit hit a duplicate trade ticket; deferred")
+            logger.warning(
+                "Heartbeat commit hit a duplicate ticket (trade or cash flow); deferred"
+            )
 
         # Refresh the cached count only when a batch actually inserted rows.
         # An idle heartbeat must not pay for COUNT(*).
@@ -140,6 +171,11 @@ class TelemetryIngestService:
             status="ok",
             server_time=int(time.time()),
             resync_trades=live_state.consume_trade_resync(connection.id),
+            # Control channel for a chartless service (ticket 13-04): the symbol
+            # to stream and the quote list come from the dashboard, not from an
+            # MT5 input. Both default to safe values so an old EA keeps working.
+            active_market_symbol=live_state.load_active_symbol(connection.id),
+            watchlist=live_state.load_watchlist(connection.id),
         )
 
     def _persist_snapshot(self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload) -> bool:
@@ -170,23 +206,51 @@ class TelemetryIngestService:
         telemetry_repository.insert_trades(db, connection.id, new_items)
         return True
 
+    def _persist_cash_flow(
+        self, db: Session, connection: Mt5Connection, payload: HeartbeatPayload
+    ) -> bool:
+        incoming = _dedupe_cash_flow(payload.cash_flow or [])
+        if not incoming:
+            return False
+
+        existing = cash_flow_repository.existing_cash_flow_tickets(
+            db,
+            connection.id,
+            [item.ticket for item in incoming],
+            settings.TRADE_SYNC_CHUNK_SIZE,
+        )
+        new_items = [item for item in incoming if item.ticket not in existing]
+        if not new_items:
+            return False
+        cash_flow_repository.insert_cash_flow(db, connection.id, new_items)
+        return True
+
     # ------------------------------------------------------- trade sync path
     def sync_trades(
         self,
         db: Session,
         connection: Mt5Connection,
         closed_trades: List[ClosedTradeItem],
+        cash_flow: Optional[List[CashFlowItem]] = None,
     ) -> dict:
         """Dedicated trade-sync endpoint handler (no heartbeat attached).
 
         The dashboard reads trades from ``trades``; the live payload no longer
         carries them. Idempotent: existing tickets are ignored, and a race with
         another worker is retried once instead of failing the whole batch.
+        Cash flow rides on the same request but lands in its own table.
         """
+        cash_flow_inserted = self._sync_cash_flow(db, connection, cash_flow or [])
+
         incoming = _dedupe_trades(closed_trades or [])
         received = len(incoming)
         if not received:
-            return {"status": "ok", "received": 0, "inserted": 0}
+            return {
+                "status": "ok",
+                "received": 0,
+                "inserted": 0,
+                "cash_flow_inserted": cash_flow_inserted,
+            }
 
         for attempt in range(2):
             existing = telemetry_repository.existing_tickets(
@@ -197,19 +261,64 @@ class TelemetryIngestService:
             )
             new_items = [item for item in incoming if item.ticket not in existing]
             if not new_items:
-                return {"status": "ok", "received": received, "inserted": 0}
+                return {
+                    "status": "ok",
+                    "received": received,
+                    "inserted": 0,
+                    "cash_flow_inserted": cash_flow_inserted,
+                }
             try:
                 with session_scope(db):
                     telemetry_repository.insert_trades(db, connection.id, new_items)
                 self.refresh_trade_count_cache(db, connection)
-                return {"status": "ok", "received": received, "inserted": len(new_items)}
+                return {
+                    "status": "ok",
+                    "received": received,
+                    "inserted": len(new_items),
+                    "cash_flow_inserted": cash_flow_inserted,
+                }
             except IntegrityError:
                 # Lost a race against a concurrent insert for the same ticket.
                 # Re-dedupe against committed rows and retry once.
                 live_state.clear_trade_count(connection.id)
                 if attempt == 1:
                     raise
-        return {"status": "ok", "received": received, "inserted": 0}
+        return {
+            "status": "ok",
+            "received": received,
+            "inserted": 0,
+            "cash_flow_inserted": cash_flow_inserted,
+        }
+
+    def _sync_cash_flow(
+        self,
+        db: Session,
+        connection: Mt5Connection,
+        items: List[CashFlowItem],
+    ) -> int:
+        """Insert new balance deals, tolerating a duplicate-ticket race."""
+        incoming = _dedupe_cash_flow(items)
+        if not incoming:
+            return 0
+        for attempt in range(2):
+            existing = cash_flow_repository.existing_cash_flow_tickets(
+                db,
+                connection.id,
+                [item.ticket for item in incoming],
+                settings.TRADE_SYNC_CHUNK_SIZE,
+            )
+            new_items = [item for item in incoming if item.ticket not in existing]
+            if not new_items:
+                return 0
+            try:
+                with session_scope(db):
+                    cash_flow_repository.insert_cash_flow(db, connection.id, new_items)
+                return len(new_items)
+            except IntegrityError:
+                if attempt == 1:
+                    logger.warning("Cash flow insert lost a race; deferred")
+                    return 0
+        return 0
 
     # ------------------------------------------------------- trade count cache
     def refresh_trade_count_cache(self, db: Session, connection: Mt5Connection) -> int:
@@ -227,6 +336,7 @@ class TelemetryIngestService:
     def reset_journal(self, db: Session, connection: Mt5Connection) -> dict:
         with session_scope(db):
             telemetry_repository.delete_trades_and_snapshots(db, connection.id)
+            cash_flow_repository.delete_for_connection(db, connection.id)
         # Clear first: if the SET below fails, the cleared entry forces the
         # next status poll to re-count; a lone SET failure would otherwise
         # leave the pre-reset cached count visible for up to an hour.

@@ -1,8 +1,10 @@
 """Build a ready-to-import MetaTrader 5 preset file for a connection.
 
-The dashboard hands the trader a ``.set`` file next to the EA download, so the
-terminal inputs are pre-filled: backend URL, the connection token (which is only
-known at creation/rotation time), the watchlist, and the heartbeat cadence.
+The dashboard hands the trader a ``.set`` file next to the service download, so
+the terminal inputs are pre-filled. Since Fase 013 the sensor is an MQL5 Service
+with a single input, so the preset carries the connection token and nothing
+else: the backend URL, heartbeat cadence, history window, and watchlist are
+compiled into the binary.
 
 The token inside the file is a secret. It is written only to the response that
 created it, never persisted in plaintext by the API.
@@ -16,7 +18,7 @@ from datetime import datetime, timezone
 
 from app.core.config import settings
 
-EA_FILENAME = "PipstrideMonitor.mq5"
+EA_FILENAME = "PipstrideMonitor.ex5"
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 _SAFE_SYMBOL = re.compile(r"^[A-Za-z0-9._#-]{1,32}$")
@@ -64,7 +66,6 @@ def build_preset(
         raise ValueError("Refusing to build a preset with a malformed token")
 
     backend_url = resolve_backend_url(request_base_url)
-    symbols = sanitize_symbols(settings.MT5_MONITORED_SYMBOLS) or "XAUUSD,EURUSD"
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     content = "\n".join(
@@ -74,13 +75,9 @@ def build_preset(
             f"; Generated: {generated_at}",
             ";",
             "; This file contains a secret connection token. Do not share it.",
-            "; Import it in MT5 via the EA Inputs tab -> Load, then click OK.",
-            f"InpBackendUrl={backend_url}",
+            "; Load it from the MT5 Service Inputs tab:",
+            "; Navigator > Services > right-click PipstrideMonitor > Add Service > Inputs > Load.",
             f"InpBridgeToken={token}",
-            f"InpMonitoredSymbols={symbols}",
-            f"InpHistoryDays={int(settings.MT5_HISTORY_DAYS)}",
-            f"InpHeartbeatInterval={max(1, int(settings.MT5_HEARTBEAT_INTERVAL_SECONDS))}",
-            "InpVerboseLog=false",
             "",
         ]
     )

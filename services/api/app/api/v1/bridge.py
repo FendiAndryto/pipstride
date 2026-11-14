@@ -4,6 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
+from app.core import live_state
 from app.core.config import settings
 from app.core.deps import get_active_connection
 from app.core.rate_limit import consume, get_client_ip
@@ -11,6 +12,8 @@ from app.core.tokens import hash_token
 from app.db.base import get_db
 from app.db.models import Mt5Connection, User
 from app.models.bridge import (
+    ActiveSymbolRequest,
+    ActiveSymbolResponse,
     BridgeStatusResponse,
     EquityCurveResponse,
     HeartbeatPayload,
@@ -184,7 +187,9 @@ def sync_trades(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Sync payload belongs to a different MT5 account.",
             )
-    return telemetry_ingest_service.sync_trades(db, connection, payload.closed_trades)
+    return telemetry_ingest_service.sync_trades(
+        db, connection, payload.closed_trades, payload.cash_flow
+    )
 
 
 @router.get(
@@ -207,6 +212,32 @@ def get_positions(connection: Mt5Connection = Depends(get_active_connection)):
 @router.get("/market", response_model=List[MarketQuoteItem])
 def get_market_quotes(connection: Mt5Connection = Depends(get_active_connection)):
     return bridge_status_service.get_market_quotes(connection)
+
+
+@router.put(
+    "/active-symbol",
+    response_model=ActiveSymbolResponse,
+    summary="Select the market symbol the MT5 monitor should stream",
+)
+def set_active_symbol(
+    req: ActiveSymbolRequest,
+    connection: Mt5Connection = Depends(get_active_connection),
+):
+    """Dashboard -> monitor control channel.
+
+    A JWT route on purpose: the sensor's ``X-Bridge-Token`` paths are write-only
+    telemetry, while this is a user action. The symbol is also appended to the
+    watchlist, because the UI can only click a quote that is already in it.
+    """
+    symbol = req.symbol.strip().upper()
+    watchlist = live_state.load_watchlist(connection.id)
+    if symbol not in watchlist:
+        # Prepend: the pick is what the user is watching right now, so it must
+        # survive the 32-symbol cap instead of being trimmed off the end.
+        watchlist = [symbol, *watchlist][:32]
+        live_state.save_watchlist(connection.id, watchlist)
+    live_state.save_active_symbol(connection.id, symbol)
+    return ActiveSymbolResponse(active_market_symbol=symbol, watchlist=watchlist)
 
 
 @router.get("/history", response_model=TradeHistoryResponse)

@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from app.core.deps import get_active_connection
 from app.db.base import get_db
 from app.db.models import Mt5Connection
-from app.domain.metrics import RANGE_DAYS, compute_stats
-from app.infrastructure.db.repositories import trade_repository
+from app.domain.metrics import RANGE_DAYS, compute_cash_flow, compute_stats
+from app.infrastructure.db.repositories import cash_flow_repository, trade_repository
 from app.models.journal import JournalStatsResponse
 
 router = APIRouter(prefix="/journal", tags=["Journal"])
@@ -39,6 +39,10 @@ def journal_stats(
         source=source,
     )
     stats = compute_stats(rows)
+    # Cash flow is a separate stream: it is never blended into ``stats``.
+    cash_flow = compute_cash_flow(
+        cash_flow_repository.list_cash_flow(db, connection.id, since=since, limit=5000)
+    )
 
     return JournalStatsResponse(
         range=period,
@@ -47,5 +51,6 @@ def journal_stats(
         end=int(time.time()),
         account_number=connection.account_number,
         server=connection.broker_server,
+        cash_flow=cash_flow,
         **stats,
     )

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core import live_state
 from app.core.config import settings
 from app.db.models import Mt5Connection, Trade
-from app.domain.metrics import profit_factor, win_rate
+from app.domain.metrics import compute_cash_flow, profit_factor, win_rate
 from app.domain.time import (
     as_utc,
     broker_day_start_utc,
@@ -24,9 +24,14 @@ from app.domain.time import (
     broker_utc_offset_seconds,
     to_unix,
 )
-from app.infrastructure.db.repositories import telemetry_repository, trade_repository
+from app.infrastructure.db.repositories import (
+    cash_flow_repository,
+    telemetry_repository,
+    trade_repository,
+)
 from app.models.bridge import (
     BridgeStatusResponse,
+    CashFlowItem,
     ClosedTradeItem,
     EquityCurveResponse,
     EquityPointItem,
@@ -173,9 +178,29 @@ class BridgeStatusService:
             for row in rows
         ]
 
+        # Cash flow is returned beside the trades and is never merged into them:
+        # the journal renders the two streams separately.
+        cash_rows = cash_flow_repository.list_cash_flow(
+            db, connection.id, limit=5000, offset=0
+        )
+        cash_flow_items = [
+            CashFlowItem(
+                ticket=row.ticket,
+                category=row.category,
+                profit=row.amount,
+                time=to_unix(row.occurred_at) or 0,
+            )
+            for row in cash_rows
+        ]
+        cash_totals = compute_cash_flow(cash_rows)
+
         net_pnl = round(gross_profit + gross_loss, 2)
         return TradeHistoryResponse(
             trades=trades,
+            cash_flow=cash_flow_items,
+            total_deposits=cash_totals["deposits"],
+            total_withdrawals=cash_totals["withdrawals"],
+            net_funding=cash_totals["net_funding"],
             net_pnl=net_pnl,
             win_rate=win_rate(wins, total),
             profit_factor=profit_factor(gross_profit, gross_loss),
@@ -218,8 +243,28 @@ class BridgeStatusService:
         since = now - timedelta(days=days) if days is not None else None
 
         deposit = account_settings_service.get_effective_initial_deposit(db, connection)
+        overridden = account_settings_service.has_override(db, connection)
         if not deposit or deposit <= 0:
             deposit = 500.0
+
+        # Cash movements are step events in the reconstruction, never trading
+        # results. The sensor's ``initial_deposit`` *is* the account's first
+        # balance deal, so re-applying that row would double the starting
+        # equity. A manual override (or the balance fallback) is not a cash
+        # event, so in those cases every deposit counts.
+        baseline_id = None
+        if not overridden and account_settings_service.get_sensor_initial_deposit(
+            connection
+        ):
+            baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
+            baseline_id = baseline_deal.id if baseline_deal is not None else None
+        cash_events = [
+            (as_utc(occurred_at), amount)
+            for event_id, amount, occurred_at in cash_flow_repository.cash_flow_events(
+                db, connection.id
+            )
+            if event_id != baseline_id
+        ]
 
         # Fetch the selected window from PostgreSQL and aggregate the baseline
         # in SQL. The previous version loaded every trade the account ever made.
@@ -230,6 +275,9 @@ class BridgeStatusService:
                     *trade_filter, Trade.closed_at < since
                 )
             )
+            prior_cash = sum(
+                amount for moment, amount in cash_events if moment and moment < since
+            )
             period_trades = list(
                 db.scalars(
                     select(Trade)
@@ -239,6 +287,7 @@ class BridgeStatusService:
             )
         else:
             prior_pnl = 0.0
+            prior_cash = 0.0
             period_trades = list(
                 db.scalars(
                     select(Trade)
@@ -248,25 +297,53 @@ class BridgeStatusService:
             )
 
         # Baseline equity at the beginning of the selected window
-        period_start_equity = round(deposit + float(prior_pnl or 0.0), 2)
+        period_start_equity = round(
+            deposit + float(prior_pnl or 0.0) + float(prior_cash or 0.0), 2
+        )
         running_equity = period_start_equity
 
         points: List[EquityPointItem] = []
 
         if since:
             period_start_ts = int(since.timestamp())
-        elif period_trades and period_trades[0].closed_at:
-            period_start_ts = int((period_trades[0].closed_at - timedelta(minutes=5)).timestamp())
         else:
-            period_start_ts = int((now - timedelta(days=1)).timestamp())
+            # The ALL range opens at the earliest event of either kind: a
+            # deposit or withdrawal can predate the first closed trade, and a
+            # point drawn before the start would make the curve non-monotonic.
+            moments = [as_utc(t.closed_at) for t in period_trades if t.closed_at]
+            moments += [moment for moment, _ in cash_events if moment]
+            period_start_ts = (
+                int((min(moments) - timedelta(minutes=5)).timestamp())
+                if moments
+                else int((now - timedelta(days=1)).timestamp())
+            )
 
         # Baseline starting point
         points.append(EquityPointItem(timestamp=period_start_ts, equity=period_start_equity, balance=period_start_equity))
 
+        # One merged timeline: trading results and cash movements both move the
+        # balance, and interleaving them is what makes a withdrawal a step down
+        # instead of a fake trading drawdown.
+        events: List[tuple] = []
         for t in period_trades:
-            running_equity = round(running_equity + (t.profit or 0.0), 2)
-            t_time = to_unix(t.closed_at) or period_start_ts
-            points.append(EquityPointItem(timestamp=t_time, equity=running_equity, balance=running_equity))
+            events.append((as_utc(t.closed_at) or since or now, float(t.profit or 0.0)))
+        for moment, amount in cash_events:
+            if moment is None:
+                continue
+            if since is not None and moment < since:
+                continue
+            events.append((moment, amount))
+        events.sort(key=lambda item: item[0])
+
+        for moment, delta in events:
+            running_equity = round(running_equity + delta, 2)
+            points.append(
+                EquityPointItem(
+                    timestamp=to_unix(moment) or period_start_ts,
+                    equity=running_equity,
+                    balance=running_equity,
+                )
+            )
 
         # Append latest live equity point
         live = self._live(connection)

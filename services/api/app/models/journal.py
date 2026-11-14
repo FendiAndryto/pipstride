@@ -43,12 +43,21 @@ class JournalBucket(BaseModel):
     profit_factor: Optional[float] = None
 
 
+class CashFlowSummary(BaseModel):
+    """Deposits and withdrawals reported beside the trading metrics."""
+
+    deposits: float = 0.0
+    withdrawals: float = 0.0
+    net_funding: float = 0.0
+
+
 class JournalStatsResponse(BaseModel):
     range: str = Field(..., description="Requested window: 1M, 3M, 1Y, or ALL")
     source: str = Field(..., description="all, ea, or manual")
     start: Optional[int] = Field(None, description="Window start (unix seconds), null for ALL")
     end: int = Field(..., description="Window end (unix seconds)")
     totals: JournalTotals = Field(default_factory=JournalTotals)
+    cash_flow: CashFlowSummary = Field(default_factory=CashFlowSummary)
     by_symbol: List[JournalBucket] = Field(default_factory=list)
     by_weekday: List[JournalBucket] = Field(default_factory=list)
     by_hour: List[JournalBucket] = Field(default_factory=list)

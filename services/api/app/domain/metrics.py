@@ -171,3 +171,30 @@ def compute_stats(rows: Iterable[Any]) -> dict:
         "by_direction": _bucketize(rows, _direction_key, order=["BUY", "SELL"]),
         "by_source": _bucketize(rows, _source_key, order=["EA", "Manual"]),
     }
+
+
+def compute_cash_flow(deals: Iterable[Any]) -> dict:
+    """Deposits and withdrawals from ``cash_flow_deals`` rows.
+
+    Duck-typed on ``amount`` (signed) and ``category``. This is a separate
+    stream by design: nothing here may ever be added to a trading metric, and
+    no trading metric may read this table. Withdrawals are returned as a
+    positive number because the dashboard labels them "Total Withdrawal".
+    """
+    deposits = 0.0
+    withdrawals = 0.0
+    for deal in deals:
+        amount = float(getattr(deal, "amount", 0.0) or 0.0)
+        category = (getattr(deal, "category", "") or "").strip().upper()
+        if category == "DEPOSIT":
+            deposits += abs(amount)
+        elif category == "WITHDRAWAL":
+            withdrawals += abs(amount)
+
+    deposits = round(deposits, 2)
+    withdrawals = round(withdrawals, 2)
+    return {
+        "deposits": deposits,
+        "withdrawals": withdrawals,
+        "net_funding": round(deposits - withdrawals, 2),
+    }
