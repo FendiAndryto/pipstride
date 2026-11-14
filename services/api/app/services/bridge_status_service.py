@@ -469,6 +469,13 @@ class BridgeStatusService:
         Deliberately *not* derived from the current balance: that anchor is
         circular (it always yields ``floating / balance`` as "daily drawdown"),
         which is exactly the wrong number this ticket removes.
+
+        Every anchored branch is then shifted by the cash that moved *after* the
+        moment the anchor value was true (spec 008). A deposit raises the capital
+        at risk; a withdrawal lowers it. Without that shift a $1,700 withdrawal
+        on a $1,925.39 anchor reported 88.29% daily drawdown while no trade had
+        lost anything. ``current_fallback`` is exempt: its anchor *is* the live
+        equity, so shifting it would reintroduce the circularity.
         """
         now = _now()
         offset = self.broker_offset(connection, metrics)
@@ -484,6 +491,9 @@ class BridgeStatusService:
             "equity": None,
             "source": "current_fallback",
             "broker_offset_seconds": offset,
+            "anchor_moment": boundary,
+            "net_cash_flow": 0.0,
+            "raw_equity": None,
         }
 
         snapshot = telemetry_repository.snapshot_at_or_before(db, connection.id, boundary)
@@ -496,8 +506,9 @@ class BridgeStatusService:
                     balance=round(float(snapshot.balance), 2),
                     equity=round(float(snapshot.equity or snapshot.balance), 2),
                     source="snapshot_exact",
+                    anchor_moment=captured_at,
                 )
-                return anchor
+                return self._apply_cash_flow(db, connection, anchor)
 
             # Roll the stale snapshot forward: equity at the boundary is the
             # snapshot equity plus everything realized in between. The floating
@@ -510,7 +521,7 @@ class BridgeStatusService:
                 equity=round(float(snapshot.equity or snapshot.balance) + drift, 2),
                 source="snapshot_rollforward",
             )
-            return anchor
+            return self._apply_cash_flow(db, connection, anchor)
 
         # The EA was not running across midnight (new install, terminal closed,
         # bridge added mid-day). The first observation of today is the honest
@@ -522,8 +533,9 @@ class BridgeStatusService:
                 balance=round(float(first_today.balance), 2),
                 equity=round(float(first_today.equity or first_today.balance), 2),
                 source="session_start",
+                anchor_moment=as_utc(first_today.captured_at) or boundary,
             )
-            return anchor
+            return self._apply_cash_flow(db, connection, anchor)
 
         if deposit and deposit > 0:
             realized = trade_repository.sum_profit_between(db, connection.id, until=boundary)
@@ -534,7 +546,7 @@ class BridgeStatusService:
                     equity=reconstructed,
                     source="deposit_reconstruction",
                 )
-                return anchor
+                return self._apply_cash_flow(db, connection, anchor)
 
         anchor.update(
             balance=round(current_balance, 2) if current_balance > 0 else None,
@@ -542,6 +554,59 @@ class BridgeStatusService:
             source="current_fallback",
         )
         return anchor
+
+    def _apply_cash_flow(
+        self, db: Session, connection: Mt5Connection, anchor: dict
+    ) -> dict:
+        """Shift a daily anchor by the cash moved since ``anchor_moment``.
+
+        ``net_cash_flow`` lands on the anchor so the route can expose why the
+        anchor differs from the observed value, and ``raw_equity`` keeps the
+        observation itself for the trough segmentation.
+        """
+        moment = anchor.get("anchor_moment") or anchor["at"]
+        summary = cash_flow_repository.sum_cash_flow(db, connection.id, since=moment)
+        net = float(summary["net_funding"] or 0.0)
+
+        anchor["net_cash_flow"] = net
+        anchor["anchor_moment"] = moment
+
+        if anchor["equity"] is not None:
+            raw_equity = round(float(anchor["equity"]), 2)
+            anchor["raw_equity"] = raw_equity
+            # A withdrawal can empty the account; 0.0 is then the honest basis
+            # and the policy reports a clean 0% instead of a divide-by-zero.
+            anchor["equity"] = max(0.0, round(raw_equity + net, 2))
+
+        if anchor["balance"] is not None:
+            anchor["balance"] = max(0.0, round(float(anchor["balance"]) + net, 2))
+
+        return anchor
+
+    def _cash_flow_timeline(
+        self, db: Session, connection: Mt5Connection
+    ) -> List[tuple[datetime, float]]:
+        """Cash movements as ``(occurred_at, amount)``, baseline deal excluded.
+
+        The sensor's ``initial_deposit`` *is* the account's first balance deal, so
+        re-applying that row would double the starting equity. A manual override
+        is not a cash event, so in that case every deposit counts. Same rule as
+        ``get_equity_curve``.
+        """
+        baseline_id = None
+        if not account_settings_service.has_override(
+            db, connection
+        ) and account_settings_service.get_sensor_initial_deposit(connection):
+            baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
+            baseline_id = baseline_deal.id if baseline_deal is not None else None
+
+        return [
+            (as_utc(occurred_at), float(amount or 0.0))
+            for event_id, amount, occurred_at in cash_flow_repository.cash_flow_events(
+                db, connection.id
+            )
+            if event_id != baseline_id and occurred_at is not None
+        ]
 
     def get_overall_drawdown(
         self,
@@ -552,49 +617,117 @@ class BridgeStatusService:
     ) -> dict:
         """Peak-to-trough drawdown over the whole reconstructed history.
 
-        Equity is rebuilt as ``deposit + running profit`` from the stored
-        trades, then the live equity is appended as the newest point. Nothing is
-        extrapolated: an empty history reports the live equity as its own peak.
+        Equity is rebuilt from the stored trades with cash movements interleaved
+        as step events (the same reconciliation ``get_equity_curve`` uses), then
+        the live equity is appended as the newest point. Nothing is extrapolated:
+        an empty history reports the live equity as its own peak.
+
+        Peak, trough and current equity are all evaluated on the **trade-only**
+        basis (equity minus the cash moved so far), so a withdrawal steps the
+        baseline down instead of leaving a permanent peak-to-trough drawdown
+        behind it -- the false overall drawdown of spec 008. Deposits are shifted
+        out the same way: they are capital, not performance.
         """
         base = float(deposit) if deposit and deposit > 0 else 0.0
-        points = trade_repository.profit_points(db, connection.id)
+
+        events: List[tuple[datetime, float, bool]] = [
+            (as_utc(closed_at) or _now(), float(profit or 0.0), False)
+            for profit, closed_at in trade_repository.profit_points(db, connection.id)
+        ]
+        events += [
+            (moment, amount, True)
+            for moment, amount in self._cash_flow_timeline(db, connection)
+        ]
+        events.sort(key=lambda item: item[0])
 
         equity = base
+        cum_cash = 0.0
         peak = base
         peak_at = None
         trough_after_peak = base
 
-        for profit, closed_at in points:
-            equity = round(equity + profit, 2)
-            if equity > peak:
-                peak = equity
-                peak_at = to_unix(closed_at)
-                trough_after_peak = equity
-            elif equity < trough_after_peak:
-                trough_after_peak = equity
+        for moment, delta, is_cash in events:
+            equity = round(equity + delta, 2)
+            if is_cash:
+                cum_cash = round(cum_cash + delta, 2)
+            trade_only = round(equity - cum_cash, 2)
+            if trade_only > peak:
+                peak = trade_only
+                peak_at = to_unix(moment)
+                trough_after_peak = peak
+            elif trade_only < trough_after_peak:
+                trough_after_peak = trade_only
 
+        current = None
         if current_equity is not None:
-            live = float(current_equity)
-            if live > peak:
-                peak = live
+            current = round(float(current_equity) - cum_cash, 2)
+            if current > peak:
+                peak = current
                 peak_at = to_unix(_now())
-                trough_after_peak = live
-            elif live < trough_after_peak:
-                trough_after_peak = live
+                trough_after_peak = current
+            elif current < trough_after_peak:
+                trough_after_peak = current
 
         return {
             "peak_equity": round(peak, 2) if peak > 0 else None,
             "peak_equity_at": peak_at,
             "trough_equity": round(trough_after_peak, 2) if trough_after_peak > 0 else None,
-            "current_equity": round(float(current_equity), 2) if current_equity is not None else None,
+            "current_equity": current,
         }
 
     def get_daily_trough(
-        self, db: Session, connection: Mt5Connection, boundary: datetime
+        self, db: Session, connection: Mt5Connection, anchor: dict
     ) -> Optional[float]:
-        """Lowest equity snapshot since the day boundary (intraday trough)."""
-        value = telemetry_repository.equity_minimum_since(db, connection.id, boundary)
-        return float(value) if value is not None else None
+        """Worst intraday trading drawdown, expressed on the adjusted anchor basis.
+
+        The day is split into segments at every cash movement. Each segment is
+        measured against the capital that actually existed while it ran
+        (``raw_equity`` plus the cash moved before that segment), because the two
+        halves of a withdrawal are not comparable: $1,700 leaving a $1,925.39
+        account leaves $225.39 of capital, and holding $225.39 is not a drawdown.
+
+        The result is a trough value on the final adjusted basis so that
+        ``policies.evaluate_drawdown`` reproduces the worst segment percentage
+        unchanged: ``adjusted * (1 - worst / 100)``. With no cash flow today this
+        is exactly the historical snapshot minimum.
+        """
+        adjusted = anchor.get("equity")
+        raw = anchor.get("raw_equity")
+        moment = anchor.get("anchor_moment") or anchor.get("at")
+        if moment is None:
+            return None
+        if raw is None:
+            raw = adjusted
+        if raw is None:
+            return None
+
+        now = _now()
+        cash = [
+            (moment_at, amount)
+            for moment_at, amount in self._cash_flow_timeline(db, connection)
+            if moment_at >= moment
+        ]
+        cash.sort(key=lambda item: item[0])
+
+        worst: Optional[float] = None
+        capital = float(raw)
+        for index in range(len(cash) + 1):
+            start = moment if index == 0 else cash[index - 1][0]
+            end = cash[index][0] if index < len(cash) else now
+            if start < end:
+                minimum = telemetry_repository.equity_minimum_between(
+                    db, connection.id, start, end
+                )
+                if minimum is not None and capital > 0:
+                    loss = max(0.0, ((capital - float(minimum)) / capital) * 100.0)
+                    worst = loss if worst is None else max(worst, loss)
+            if index < len(cash):
+                # The cash that closes this segment sets the next one's capital.
+                capital = round(capital + cash[index][1], 2)
+
+        if worst is None or adjusted is None or adjusted <= 0:
+            return None
+        return round(float(adjusted) * (1 - worst / 100.0), 2)
 
 
 bridge_status_service = BridgeStatusService()

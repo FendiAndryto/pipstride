@@ -55,21 +55,25 @@ def snapshot_at_or_before(
     )
 
 
-def equity_minimum_since(
-    db: Session, connection_id: str, moment: datetime
+def equity_minimum_between(
+    db: Session, connection_id: str, start: datetime, end: datetime
 ) -> Optional[float]:
-    """Lowest *usable* equity snapshot recorded since ``moment``.
+    """Lowest *usable* equity snapshot in ``[start, end)``.
 
-    A non-positive equity is excluded. The EA keeps heartbeating while the
-    terminal has no account yet (balance 0, equity 0), and counting that zero as
-    a trough reported a fresh connection as a 100% daily drawdown until the
-    broker day rolled over. MT5 stops out long before equity reaches zero, so a
-    zero here always means "no account data", never "the account was wiped".
+    The daily trough is evaluated per cash-flow segment: a withdrawal lowers the
+    capital that could be lost, so the equity minimum before and after it belong
+    to different capital bases and cannot be compared as one number (spec 008).
+    Non-positive equity is excluded: the EA keeps heartbeating while the terminal
+    has no account yet (balance 0, equity 0), and counting that zero as a trough
+    reported a fresh connection as a 100% daily drawdown until the broker day
+    rolled over. MT5 stops out long before equity reaches zero, so a zero here
+    always means "no account data", never "the account was wiped".
     """
     return db.scalar(
         select(func.min(TelemetrySnapshot.equity)).where(
             TelemetrySnapshot.connection_id == connection_id,
-            TelemetrySnapshot.captured_at >= moment,
+            TelemetrySnapshot.captured_at >= start,
+            TelemetrySnapshot.captured_at < end,
             TelemetrySnapshot.equity > 0,
         )
     )

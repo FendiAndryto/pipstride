@@ -30,12 +30,12 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 44 tiket
+- **Total Tiket:** 45 tiket
 - **Selesai (`done`):** 41 tiket (Fase 001–012 + 13-03, 13-05)
-- **Sedang Berjalan (`in_progress`):** 3 tiket (Fase 013: 01, 02, 04)
+- **Sedang Berjalan (`in_progress`):** 4 tiket (Fase 013: 01, 02, 04, 06)
 
 ```
-[======================================================------] 93.2% Selesai (41/44)
+[=====================================================-------] 91.1% Selesai (41/45)
 ```
 
 ---
@@ -193,3 +193,4 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **03-cashflow-journal-ui-and-frontend-parity.md** (`done`): Paritas domain frontend (`analytics.js`/`pnl.js`/`dayBuckets`), baris kas netral `WITHDRAWAL`/`DEPOSIT` di `TradeTable.jsx`, kartu deposit/penarikan, wiring `useJournalData.js`, & i18n (99 tes, 500 → 499 key/bahasa).
 - [ ] **04-dynamic-market-symbols-and-multi-tf.md** (`in_progress`): `PUT /api/v1/bridge/active-symbol` (JWT) + `live_state`, heartbeat response membawa `active_market_symbol`/`watchlist`, candle 4 TF dinamis di Service, eliminasi `Symbol Mismatch` di `MarketTab.jsx`.
 - [x] **05-heartbeat-timeout-jitter-tolerance.md** (`done`): Eliminasi status flapping online/offline dengan melonggarkan default `HEARTBEAT_TIMEOUT_SECONDS` dari 10s menjadi 25s (~4-5× siklus sensor MT5 + network latency WAN) serta expose konfigurasi via env/Ansible.
+- [ ] **06-cash-flow-neutralized-drawdown.md** (`in_progress`): Netralisasi mutasi kas (`DEPOSIT`/`WITHDRAWAL`) dari perhitungan daily anchor, daily trough, dan overall peak-to-trough drawdown di `bridge_status_service.py` untuk mengeliminasi lonjakan drawdown palsu 88.3%.

@@ -33,6 +33,10 @@ class RiskWatchdogStatusResponse(BaseModel):
     daily_realized_pnl: Optional[float] = None
     daily_starting_balance: Optional[float] = None
     daily_starting_equity: Optional[float] = None
+    # Cash-flow transparency (spec 008): the anchor is shifted by the deposits
+    # and withdrawals that landed after it was observed.
+    daily_anchor_adjusted: Optional[float] = None
+    daily_cash_flow: Optional[float] = None
     daily_anchor_at: Optional[int] = None
     daily_anchor_source: Optional[str] = None
     max_daily_drawdown_percent: float = 3.0

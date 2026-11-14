@@ -5,12 +5,14 @@ can never reach a trading aggregate. These tests guard both halves: the stream
 is persisted and reported, and it never changes ``trades`` / ``compute_stats``.
 """
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import func, select
 
 from app.db.base import SessionLocal
-from app.db.models import CashFlowDeal, Trade
+from app.db.models import CashFlowDeal, TelemetrySnapshot, Trade
 from app.domain.metrics import compute_cash_flow
 from tests.conftest import heartbeat_payload
 
@@ -22,6 +24,23 @@ def create_connection(client, account):
         "/api/v1/connections", params={"label": "Cash Flow"}, headers=account["headers"]
     )
     assert res.status_code == 201, res.text
+    return res.json()
+
+
+def send_heartbeat(client, created, **overrides):
+    payload = heartbeat_payload(ACCOUNT, **overrides)
+    res = client.post(
+        "/api/v1/bridge/heartbeat",
+        json=payload,
+        headers={"X-Bridge-Token": created["token"]},
+    )
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def risk(client, account):
+    res = client.get("/api/v1/bridge/risk", headers=account["headers"])
+    assert res.status_code == 200, res.text
     return res.json()
 
 
@@ -247,3 +266,287 @@ def test_reset_journal_clears_cash_flow(client, account):
             )
             == 0
         )
+
+
+# ---------------------------------------------------------------- drawdown
+# Cash movements are capital transfers, not trading results. These tests pin the
+# trade-only risk basis of spec 008: a withdrawal lowers the capital that can be
+# lost instead of fabricating a drawdown, and a deposit cannot hide one.
+
+
+def seed_snapshot(connection_id, *, captured_at, balance, equity):
+    """Direct observation row: the anchor is a time-stamped equity reading."""
+    with SessionLocal() as db:
+        db.add(
+            TelemetrySnapshot(
+                connection_id=connection_id,
+                captured_at=captured_at,
+                balance=balance,
+                equity=equity,
+                margin=0.0,
+                free_margin=balance,
+                margin_level=0.0,
+                floating_pnl=0.0,
+                open_positions=0,
+            )
+        )
+        db.commit()
+
+
+def seed_cash(connection_id, *, ticket, category, amount, occurred_at):
+    with SessionLocal() as db:
+        db.add(
+            CashFlowDeal(
+                connection_id=connection_id,
+                ticket=ticket,
+                category=category,
+                amount=amount,
+                occurred_at=occurred_at,
+            )
+        )
+        db.commit()
+
+
+def test_daily_drawdown_neutral_on_withdrawal(client, account):
+    """A $1,700 withdrawal on a $1,925.39 anchor is 0%, not 88.29%.
+
+    The capital that can be lost simply became $225.39; no trade lost anything.
+    """
+    created = create_connection(client, account)
+    now = datetime.now(timezone.utc)
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=10),
+        balance=1925.39,
+        equity=1925.39,
+    )
+    seed_cash(
+        created["id"],
+        ticket=8101,
+        category="WITHDRAWAL",
+        amount=-1700.0,
+        occurred_at=now - timedelta(minutes=5),
+    )
+    send_heartbeat(
+        client,
+        created,
+        balance=225.39,
+        equity=225.39,
+        initial_deposit=1925.39,
+        floating_pnl=0.0,
+        closed_trades=[],
+        cash_flow=[],
+    )
+
+    data = risk(client, account)
+    assert data["daily_cash_flow"] == pytest.approx(-1700.0, abs=0.01)
+    assert data["daily_anchor_adjusted"] == pytest.approx(225.39, abs=0.01)
+    assert data["daily_starting_equity"] == pytest.approx(225.39, abs=0.01)
+    assert data["daily_drawdown_percent"] == pytest.approx(0.0, abs=0.01)
+    assert data["daily_max_drawdown_percent"] == pytest.approx(0.0, abs=0.01)
+    assert data["is_alert_active"] is False
+
+
+def test_daily_drawdown_on_withdrawal_with_trading_loss(client, account):
+    """The loss after a withdrawal is measured on the remaining capital.
+
+    $1,000 anchor, $200 withdrawn (capital $800), then -$40 floating: 5%.
+    """
+    created = create_connection(client, account)
+    now = datetime.now(timezone.utc)
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=10),
+        balance=1000.0,
+        equity=1000.0,
+    )
+    seed_cash(
+        created["id"],
+        ticket=8201,
+        category="WITHDRAWAL",
+        amount=-200.0,
+        occurred_at=now - timedelta(minutes=5),
+    )
+    send_heartbeat(
+        client,
+        created,
+        balance=800.0,
+        equity=760.0,
+        initial_deposit=1000.0,
+        floating_pnl=-40.0,
+        closed_trades=[],
+        cash_flow=[],
+    )
+
+    data = risk(client, account)
+    assert data["daily_anchor_adjusted"] == pytest.approx(800.0, abs=0.01)
+    assert data["daily_drawdown_percent"] == pytest.approx(5.0, abs=0.01)
+    assert data["daily_max_drawdown_percent"] == pytest.approx(5.0, abs=0.01)
+    assert data["is_alert_active"] is True
+
+
+def test_daily_drawdown_on_deposit_with_trading_loss(client, account):
+    """A deposit raises the capital at risk, so it cannot hide a loss.
+
+    $1,000 anchor, $500 deposited (capital $1,500), then -$150 floating: 10%,
+    not the 0% the pre-spec-008 formula reported.
+    """
+    created = create_connection(client, account)
+    now = datetime.now(timezone.utc)
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=10),
+        balance=1000.0,
+        equity=1000.0,
+    )
+    seed_cash(
+        created["id"],
+        ticket=8301,
+        category="DEPOSIT",
+        amount=500.0,
+        occurred_at=now - timedelta(minutes=5),
+    )
+    send_heartbeat(
+        client,
+        created,
+        balance=1500.0,
+        equity=1350.0,
+        initial_deposit=1000.0,
+        floating_pnl=-150.0,
+        closed_trades=[],
+        cash_flow=[],
+    )
+
+    data = risk(client, account)
+    assert data["daily_cash_flow"] == pytest.approx(500.0, abs=0.01)
+    assert data["daily_anchor_adjusted"] == pytest.approx(1500.0, abs=0.01)
+    assert data["daily_drawdown_percent"] == pytest.approx(10.0, abs=0.01)
+    assert data["is_alert_active"] is True
+
+
+def test_overall_drawdown_neutral_on_withdrawal(client, account):
+    """A withdrawal must not become a permanent peak-to-trough drawdown.
+
+    The reconstructed peak is cash-neutralized, so the live equity still sits on
+    its performance peak instead of 88% below a peak the trader never lost.
+    """
+    created = create_connection(client, account)
+    now = datetime.now(timezone.utc)
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=10),
+        balance=1925.39,
+        equity=1925.39,
+    )
+    seed_cash(
+        created["id"],
+        ticket=8401,
+        category="WITHDRAWAL",
+        amount=-1700.0,
+        occurred_at=now - timedelta(minutes=5),
+    )
+    send_heartbeat(
+        client,
+        created,
+        balance=225.39,
+        equity=225.39,
+        initial_deposit=1925.39,
+        floating_pnl=0.0,
+        closed_trades=[],
+        cash_flow=[],
+    )
+
+    data = risk(client, account)
+    assert data["peak_equity"] == pytest.approx(1925.39, abs=0.01)
+    assert data["overall_drawdown_percent"] == pytest.approx(0.0, abs=0.01)
+    assert data["max_drawdown_percent"] == pytest.approx(0.0, abs=0.01)
+    assert data["is_overall_alert_active"] is False
+
+
+def test_daily_realized_neutral_on_cash_flow(client, account):
+    """``daily_realized_pnl`` is closed trading P&L, never the cash movement."""
+    created = create_connection(client, account)
+    now = datetime.now(timezone.utc)
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=10),
+        balance=1000.0,
+        equity=1000.0,
+    )
+    seed_cash(
+        created["id"],
+        ticket=8502,
+        category="WITHDRAWAL",
+        amount=-300.0,
+        occurred_at=now - timedelta(minutes=5),
+    )
+    send_heartbeat(
+        client,
+        created,
+        balance=750.0,
+        equity=750.0,
+        initial_deposit=1000.0,
+        floating_pnl=0.0,
+        closed_trades=[
+            {
+                "ticket": 8501,
+                "symbol": "EURUSD",
+                "type": "BUY",
+                "volume": 0.10,
+                "open_price": 1.0800,
+                "close_price": 1.0850,
+                "profit": 50.0,
+                "open_time": int((now - timedelta(minutes=8)).timestamp()),
+                "close_time": int((now - timedelta(minutes=4)).timestamp()),
+            }
+        ],
+        cash_flow=[],
+    )
+
+    data = risk(client, account)
+    # balance 750 - adjusted anchor (1000 - 300) = the +50 trade, nothing else.
+    assert data["daily_realized_pnl"] == pytest.approx(50.0, abs=0.01)
+def test_daily_max_drawdown_keeps_the_intraday_trough_after_withdrawal(client, account):
+    """The segment trough survives a recovery, and it uses the post-cash capital.
+
+    $1,000 anchor, $200 withdrawn (capital $800), a -$40 dip to $760, then a
+    recovery to $790. The live reading is 1.25%, but the day's worst is 5% and
+    must stay on the record — otherwise a 3% breach disappears the moment price
+    comes back.
+    """
+    created = create_connection(client, account)
+    now = datetime.now(timezone.utc)
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=10),
+        balance=1000.0,
+        equity=1000.0,
+    )
+    seed_cash(
+        created["id"],
+        ticket=8601,
+        category="WITHDRAWAL",
+        amount=-200.0,
+        occurred_at=now - timedelta(minutes=5),
+    )
+    seed_snapshot(
+        created["id"],
+        captured_at=now - timedelta(minutes=3),
+        balance=800.0,
+        equity=760.0,
+    )
+    send_heartbeat(
+        client,
+        created,
+        balance=800.0,
+        equity=790.0,
+        initial_deposit=1000.0,
+        floating_pnl=-10.0,
+        closed_trades=[],
+        cash_flow=[],
+    )
+
+    data = risk(client, account)
+    assert data["daily_drawdown_percent"] == pytest.approx(1.25, abs=0.01)
+    assert data["daily_max_drawdown_percent"] == pytest.approx(5.0, abs=0.01)
+    assert data["is_alert_active"] is True

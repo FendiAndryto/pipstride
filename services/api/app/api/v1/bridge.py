@@ -301,7 +301,7 @@ def get_risk_watchdog(
 
     anchor = bridge_status_service.get_daily_anchor(db, connection, metrics, deposit)
     boundary = anchor["at"]
-    daily_trough = bridge_status_service.get_daily_trough(db, connection, boundary)
+    daily_trough = bridge_status_service.get_daily_trough(db, connection, anchor)
 
     daily = evaluate_drawdown(
         anchor["equity"],
@@ -346,6 +346,11 @@ def get_risk_watchdog(
         daily_realized_pnl=daily_realized,
         daily_starting_balance=anchor["balance"],
         daily_starting_equity=anchor["equity"],
+        # The anchor is cash-adjusted, so report the adjusted basis and the
+        # movement beside it: 0% drawdown after a withdrawal must be auditable
+        # instead of looking like a fabricated clean bill of health (spec 008).
+        daily_anchor_adjusted=anchor["equity"],
+        daily_cash_flow=anchor["net_cash_flow"],
         daily_anchor_at=to_unix(boundary),
         daily_anchor_source=anchor["source"],
         max_daily_drawdown_percent=settings.MAX_DAILY_DRAWDOWN_PERCENT,
