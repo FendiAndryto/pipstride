@@ -72,5 +72,5 @@ Mengeliminasi status flapping (kedap-kedip *Bridge Offline* dan *Live*) pada Web
 - [x] `services/api/tests/test_connections.py` lulus test offline transition (`test_status_reports_offline_after_timeout`).
 - [x] `pytest` penuh lulus (30 passed di `test_connections.py`).
 - [x] `lint-imports` 6 kept, 0 broken.
-- [ ] Ansible playbook deploy sukses di homeserver (`ok=11, changed=...`).
-- [ ] `docker logs pipstride_api` di homeserver menunjukkan telemetri stabil tanpa status drop.
+- [x] Ansible playbook deploy sukses di homeserver (`ok=11, changed=...`).
+- [x] `docker logs pipstride_api` di homeserver menunjukkan telemetri stabil tanpa status drop (`HEARTBEAT_TIMEOUT_SECONDS=25` aktif).
