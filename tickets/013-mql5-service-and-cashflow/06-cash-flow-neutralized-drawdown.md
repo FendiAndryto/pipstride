@@ -1,6 +1,6 @@
 # Ticket 13-06: Cash-Flow-Neutralized Drawdown Calculation (Trade-Only Risk Watchdog)
 
-**Status:** in_progress  
+**Status:** done  
 **Prasyarat:** 13-02, 13-03  
 **Membuka:** —  
 **Spesifikasi:** [`docs/specs/008-cash-flow-neutralized-drawdown.md`](../../docs/specs/008-cash-flow-neutralized-drawdown.md)
@@ -143,8 +143,8 @@ karena seluruh helper cash flow sudah ada di sana; tidak ada duplikasi fixture d
 - [x] Seluruh test baru memanggil endpoint `GET /api/v1/bridge/risk` (bukan hanya fungsi service), jadi wiring route + schema ikut teruji.
 - [x] `pytest` penuh lulus: **200 passed, 0 failed** (baseline 194 + 6 baru).
 - [x] `lint-imports` **6 kept, 0 broken** (`app.domain` tetap pure tanpa dependency DB/framework).
-- [ ] Deploy Ansible ke homeserver sukses (`changed > 0`, all containers healthy).
-- [ ] Endpoint `/api/v1/bridge/risk` pada akun live melaporkan `daily_drawdown_percent: 0.0` (eliminasi alert merah palsu).
+- [x] Deploy Ansible ke homeserver sukses (`changed=6`, all containers healthy).
+- [x] Endpoint `/api/v1/bridge/risk` pada akun live melaporkan `daily_drawdown_percent: 0.0` (eliminasi alert merah palsu).
 
 ---
 
