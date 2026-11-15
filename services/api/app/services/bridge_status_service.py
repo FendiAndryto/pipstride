@@ -458,13 +458,14 @@ class BridgeStatusService:
             which is the bug this replaces.
 
         ``deposit_reconstruction``
-            No snapshot covers the boundary. The anchor is the deposit baseline
-            plus everything realized up to midnight, i.e. the equity the account
-            opened the day with.
+            No snapshot covers the boundary. The anchor is the capital the
+            account actually held at midnight: net cash funding up to the
+            boundary plus everything realized up to it.
 
         ``current_fallback``
-            No snapshot and no deposit baseline: the anchor is the live equity,
-            so the report is an honest 0% instead of a derived guess.
+            No snapshot and no usable baseline: the anchor is the live equity,
+            so the report is an honest 0% instead of a derived guess. A
+            withdrawn account leaves both anchors unset.
 
         Deliberately *not* derived from the current balance: that anchor is
         circular (it always yields ``floating / balance`` as "daily drawdown"),
@@ -538,8 +539,11 @@ class BridgeStatusService:
             return self._apply_cash_flow(db, connection, anchor)
 
         if deposit and deposit > 0:
-            realized = trade_repository.sum_profit_between(db, connection.id, until=boundary)
-            reconstructed = round(float(deposit) + realized, 2)
+            reconstructed = self._reconstruct_capital(db, connection, deposit, boundary)
+            # A non-positive reconstruction means the capital was withdrawn
+            # before the day started. Forcing a positive anchor then reported a
+            # fabricated 100% daily drawdown (spec 009), so the account falls
+            # through to the unset-anchor fallback instead.
             if reconstructed > 0:
                 anchor.update(
                     balance=reconstructed,
@@ -548,12 +552,62 @@ class BridgeStatusService:
                 )
                 return self._apply_cash_flow(db, connection, anchor)
 
+        # Nothing is at risk on a withdrawn account: both anchors stay unset so
+        # the policy reports 0% instead of measuring against a fabricated basis.
+        fallback_equity = (
+            round(current_equity, 2)
+            if current_equity is not None and current_equity > 0
+            else None
+        )
         anchor.update(
             balance=round(current_balance, 2) if current_balance > 0 else None,
-            equity=round(current_equity, 2) if current_equity else None,
+            equity=fallback_equity,
             source="current_fallback",
         )
         return anchor
+
+    def _reconstruct_capital(
+        self,
+        db: Session,
+        connection: Mt5Connection,
+        deposit: float,
+        boundary: datetime,
+    ) -> float:
+        """Capital the account held at ``boundary``, from cash movements + realized P&L.
+
+        ``deposit + realized`` alone is only true while no cash has moved since
+        the first deposit. On account #452024626 it ignored a -1,700.00
+        withdrawal, reconstructed a 1,694.30 anchor for an account holding 0.00
+        and reported a 100% daily drawdown on a day with no trades (spec 009).
+
+        The sensor's ``initial_deposit`` *is* the first balance deal, so net
+        funding already covers it; adding ``deposit`` on top would count the
+        baseline twice. A manual override replaces that baseline, so the first
+        deal is dropped from the totals and the override stands in its place
+        (spec 009 D1).
+        """
+        realized = trade_repository.sum_profit_between(db, connection.id, until=boundary)
+        overridden = account_settings_service.has_override(db, connection)
+        baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
+
+        if baseline_deal is None:
+            # No balance-deal history to reconcile against: the deposit baseline
+            # is the only capital this connection has told us about.
+            return round(float(deposit) + realized, 2)
+
+        summary = cash_flow_repository.sum_cash_flow(
+            db,
+            connection.id,
+            until=boundary,
+            exclude_id=baseline_deal.id if overridden else None,
+        )
+        funding = float(summary["net_funding"] or 0.0)
+
+        if overridden:
+            return round(float(deposit) + funding + realized, 2)
+        # Net funding already includes the sensor baseline, which *is* the first
+        # balance deal; only the movements after it have to be added again.
+        return round(funding + realized, 2)
 
     def _apply_cash_flow(
         self, db: Session, connection: Mt5Connection, anchor: dict

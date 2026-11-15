@@ -61,7 +61,19 @@ def evaluate_drawdown(
     ``lowest_equity`` is the trough observed since the anchor (snapshot
     minimum). Alerts use the worse of the trough and the current reading so a
     breach inside the day is not erased by a later recovery.
+
+    A non-positive reading carries no trading information: MT5 stops out long
+    before equity reaches zero, so it means "no account data yet" or "the
+    capital was withdrawn", never a wiped account (spec 003/009). Measured
+    against a positive anchor it reported a false 100% breach -- LIMIT BREACHED
+    -- on every broker-day rollover of a fully withdrawn account, so it is
+    ignored here.
     """
+    if current_equity is not None and current_equity <= 0:
+        current_equity = None
+    if lowest_equity is not None and lowest_equity <= 0:
+        lowest_equity = None
+
     current = _percent_from(anchor_equity, current_equity)
 
     trough = current_equity

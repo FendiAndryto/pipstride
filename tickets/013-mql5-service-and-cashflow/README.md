@@ -22,6 +22,7 @@ Prasyarat: Fase 009 (Live Metrics Correctness), Fase 011 (Dashboard Polish), & F
 | **04** | `04-dynamic-market-symbols-and-multi-tf.md` | 01 | — | `in_progress` |
 | **05** | `05-heartbeat-timeout-jitter-tolerance.md` | — | — | `done` |
 | **06** | `06-cash-flow-neutralized-drawdown.md` | 02, 03 | — | `done` |
+| **07** | `07-fix-deposit-reconstruction-past-cashflows.md` | 06 | — | `done` |
 
 **Jangan paralelkan 02 dan 04.** Keduanya mengedit `mt5-ea/PipstrideMonitor.mq5` dan harus me-rebuild `apps/web/public/PipstrideMonitor.ex5` + checksum di modal. Urutan yang direkomendasikan: `13-01 → 13-02 → 13-03 → 13-04`.
 

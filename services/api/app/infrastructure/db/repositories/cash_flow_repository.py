@@ -87,13 +87,21 @@ def sum_cash_flow(
     *,
     since: Optional[datetime] = None,
     until: Optional[datetime] = None,
+    exclude_id: Optional[int] = None,
 ) -> dict:
-    """Deposits and withdrawals in a window, withdrawals reported as positive."""
+    """Deposits and withdrawals in a window, withdrawals reported as positive.
+
+    ``exclude_id`` drops one balance deal from the totals. A manual deposit
+    override replaces the first deposit, so that deal must not inflate the
+    reconstructed capital a second time (spec 009).
+    """
     conditions = [CashFlowDeal.connection_id == connection_id]
     if since is not None:
         conditions.append(CashFlowDeal.occurred_at >= since)
     if until is not None:
         conditions.append(CashFlowDeal.occurred_at <= until)
+    if exclude_id is not None:
+        conditions.append(CashFlowDeal.id != exclude_id)
 
     row = db.execute(
         select(

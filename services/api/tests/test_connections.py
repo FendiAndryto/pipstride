@@ -3,7 +3,7 @@
 import time
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db.base import SessionLocal
 from app.db.models import Mt5Connection, TelemetrySnapshot
@@ -24,6 +24,25 @@ def send_heartbeat(client, token, payload):
         json=payload,
         headers={"X-Bridge-Token": token},
     )
+
+
+def drop_snapshots(account_number):
+    """Remove telemetry snapshots so the anchor has to be reconstructed.
+
+    A snapshot inside today's window would win as the ``session_start`` anchor.
+    The reconstruction branch is the case where the EA was not running across
+    the broker boundary (weekend, terminal off, account reconnected).
+    """
+    with SessionLocal() as db:
+        connection = db.scalar(
+            select(Mt5Connection).where(Mt5Connection.account_number == account_number)
+        )
+        db.execute(
+            delete(TelemetrySnapshot).where(
+                TelemetrySnapshot.connection_id == connection.id
+            )
+        )
+        db.commit()
 
 
 def test_create_connection_returns_token_once(client, account):
@@ -533,6 +552,173 @@ def test_stale_snapshot_is_rolled_forward_to_the_day_boundary(client, account):
     # and only the -100 of today counts as the day's realized result.
     assert data["daily_starting_balance"] == 10_500.0
     assert data["daily_realized_pnl"] == -100.0
+
+
+
+def test_deposit_reconstruction_accounts_for_prior_withdrawals(client, account):
+    """A withdrawn account reports 0%, not a fabricated 100% breach (spec 009).
+
+    Production report (account #452024626): a -1,700.00 withdrawal before the
+    broker boundary was invisible to ``deposit_reconstruction``, so the anchor
+    came out 1,694.30 for an account holding 0.00 and the rollover reported a
+    100% daily drawdown on a day with no trade at all.
+    """
+    created = create_connection(client, account)
+    now = int(time.time())
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888005,
+            balance=0.0,
+            equity=0.0,
+            initial_deposit=1_103.0,
+            floating_pnl=0.0,
+            open_positions=0,
+            positions=[],
+            closed_trades=[
+                {
+                    "ticket": 7301,
+                    "symbol": "XAUUSD",
+                    "type": "BUY",
+                    "volume": 0.01,
+                    "open_price": 2_400.0,
+                    "close_price": 2_410.0,
+                    "profit": 591.30,
+                    "open_time": now - 3 * 86400 - 600,
+                    "close_time": now - 3 * 86400,
+                }
+            ],
+            cash_flow=[
+                {
+                    "ticket": 7302,
+                    "category": "DEPOSIT",
+                    "profit": 1_103.0,
+                    "time": now - 4 * 86400,
+                },
+                {
+                    "ticket": 7303,
+                    "category": "WITHDRAWAL",
+                    "profit": -1_700.0,
+                    "time": now - 2 * 86400,
+                },
+            ],
+        ),
+    )
+    drop_snapshots(888005)
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+
+    # 1,103 funded + 591.30 realized - 1,700 withdrawn = -5.70: nothing is at
+    # risk, so both anchors stay unset instead of inventing a positive basis.
+    assert data["daily_anchor_source"] == "current_fallback"
+    assert data["daily_starting_balance"] is None
+    assert data["daily_starting_equity"] is None
+    assert data["daily_drawdown_percent"] == 0.0
+    assert data["daily_max_drawdown_percent"] == 0.0
+    assert data["is_alert_active"] is False
+
+
+def test_deposit_reconstruction_with_partial_withdrawal(client, account):
+    """The anchor is net funding + realized, not deposit + realized.
+
+    1,000 funded, 400 withdrawn before the boundary, 100 realized: the day opens
+    at 700, not at the 1,100 the old formula reported.
+    """
+    created = create_connection(client, account)
+    now = int(time.time())
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888006,
+            balance=700.0,
+            equity=700.0,
+            initial_deposit=1_000.0,
+            floating_pnl=0.0,
+            open_positions=0,
+            positions=[],
+            closed_trades=[
+                {
+                    "ticket": 7401,
+                    "symbol": "EURUSD",
+                    "type": "BUY",
+                    "volume": 0.10,
+                    "open_price": 1.0800,
+                    "close_price": 1.0900,
+                    "profit": 100.0,
+                    "open_time": now - 3 * 86400 - 600,
+                    "close_time": now - 3 * 86400,
+                }
+            ],
+            cash_flow=[
+                {
+                    "ticket": 7402,
+                    "category": "DEPOSIT",
+                    "profit": 1_000.0,
+                    "time": now - 4 * 86400,
+                },
+                {
+                    "ticket": 7403,
+                    "category": "WITHDRAWAL",
+                    "profit": -400.0,
+                    "time": now - 2 * 86400,
+                },
+            ],
+        ),
+    )
+    drop_snapshots(888006)
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+
+    assert data["daily_anchor_source"] == "deposit_reconstruction"
+    assert data["daily_starting_balance"] == 700.0
+    assert data["daily_starting_equity"] == 700.0
+    assert data["daily_realized_pnl"] == 0.0
+    assert data["daily_drawdown_percent"] == 0.0
+    assert data["is_alert_active"] is False
+
+
+def test_deposit_reconstruction_without_cash_flow_history(client, account):
+    """With no balance deals the deposit baseline is still the only known capital."""
+    created = create_connection(client, account)
+    now = int(time.time())
+
+    send_heartbeat(
+        client,
+        created["token"],
+        heartbeat_payload(
+            888007,
+            balance=10_500.0,
+            equity=10_500.0,
+            initial_deposit=10_000.0,
+            floating_pnl=0.0,
+            open_positions=0,
+            positions=[],
+            closed_trades=[
+                {
+                    "ticket": 7501,
+                    "symbol": "EURUSD",
+                    "type": "BUY",
+                    "volume": 0.10,
+                    "open_price": 1.0800,
+                    "close_price": 1.0900,
+                    "profit": 500.0,
+                    "open_time": now - 2 * 86400 - 600,
+                    "close_time": now - 2 * 86400,
+                }
+            ],
+        ),
+    )
+    drop_snapshots(888007)
+
+    data = client.get("/api/v1/bridge/risk", headers=account["headers"]).json()
+
+    assert data["daily_anchor_source"] == "deposit_reconstruction"
+    assert data["daily_starting_equity"] == 10_500.0
+    assert data["daily_drawdown_percent"] == 0.0
 
 
 def test_overall_drawdown_is_reported_as_peak_to_trough(client, account):

@@ -49,6 +49,32 @@ def test_daily_drawdown_ignores_a_missing_anchor():
     assert result.reason_code is None
 
 
+def test_daily_drawdown_of_an_account_without_anchor_or_equity_is_zero():
+    """A withdrawn account has no basis to measure: 0%, never 100% (spec 009)."""
+    result = evaluate_drawdown(None, 0.0, 0.0, 3.0)
+
+    assert result.current_pct == 0.0
+    assert result.max_pct == 0.0
+    assert result.drawdown_pct == 0.0
+    assert result.is_alert_active is False
+    assert result.reason_code is None
+
+
+def test_daily_drawdown_ignores_a_zero_equity_reading():
+    """Zero equity means "no account data" or "withdrawn", not a wiped account.
+
+    MT5 stops out long before equity reaches zero, so measuring a live 0.00
+    against a positive anchor reported LIMIT BREACHED on every broker-day
+    rollover of an emptied account (spec 009).
+    """
+    result = evaluate_drawdown(1_694.30, 0.0, None, 3.0)
+
+    assert result.current_pct == 0.0
+    assert result.max_pct == 0.0
+    assert result.is_alert_active is False
+    assert result.reason_code is None
+
+
 def test_daily_drawdown_never_goes_negative_when_equity_is_above_anchor():
     """A profitable day is 0% drawdown, not a negative percentage."""
     result = evaluate_drawdown(10_000.0, 10_500.0, None, 3.0)
