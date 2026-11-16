@@ -162,9 +162,9 @@ export default function DrawdownCard({ bridgeStatus, riskStatus }) {
         <span>
           {t('journal_drawdown_vs_deposit', {
             amount:
-              bridgeStatus?.initial_deposit === null || bridgeStatus?.initial_deposit === undefined
-                ? '—'
-                : formatCurrency(bridgeStatus.initial_deposit, currency)
+              bridgeStatus?.net_capital !== null && bridgeStatus?.net_capital !== undefined
+                ? formatCurrency(bridgeStatus.net_capital, currency)
+                : (bridgeStatus?.initial_deposit ? formatCurrency(bridgeStatus.initial_deposit, currency) : '—')
           })}
         </span>
         <span>{t('journal_drawdown_passive')}</span>

@@ -187,6 +187,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         losingTrades={data.losingTrades}
         cashFlow={data.cashFlowStats}
         periodLabel={periodLabel}
+        period={period}
         currency={currency}
       />
 

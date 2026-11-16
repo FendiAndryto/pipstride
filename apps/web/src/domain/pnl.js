@@ -25,28 +25,36 @@ const usedFraction = (value, limit) => {
 
 /**
  * All-time performance of the active account.
- * bridgeStatus fields settle the ground truth; balance/equity deltas are the
- * fallback when the endpoint has not reported them yet.
+ * Backend fields settle the ground truth; only floating PnL and percentages
+ * are derived locally when the bridge has not reported them yet.
  */
 export function summarizeAccountPnl(bridgeStatus, metrics) {
   const status = bridgeStatus ?? {};
   const live = metrics ?? {};
   const balance = live.balance ?? 0;
   const equity = live.equity ?? 0;
+  const floatingPnl = live.floating_pnl ?? (equity - balance);
+
   const initialDeposit = status.initial_deposit ?? live.initial_deposit ?? balance;
-  const settledDelta = balance - initialDeposit;
-  const allTimeDelta = equity - initialDeposit;
+  const netCapital = provided(status.net_capital) ? status.net_capital : initialDeposit;
+
+  const settledPnl = provided(status.settled_pnl) ? status.settled_pnl : 0;
+  const allTimePnl = provided(status.all_time_pnl) ? status.all_time_pnl : settledPnl + floatingPnl;
+
+  const baseCapital = netCapital > 0 ? netCapital : initialDeposit;
+
   return {
     initialDeposit,
+    netCapital,
     isDepositOverridden: status.is_deposit_overridden ?? false,
-    settledPnl: provided(status.settled_pnl) ? status.settled_pnl : settledDelta,
+    settledPnl,
     settledPnlPercent: provided(status.settled_pnl_percent)
       ? status.settled_pnl_percent
-      : percentOfBase(settledDelta, initialDeposit),
-    allTimePnl: provided(status.all_time_pnl) ? status.all_time_pnl : allTimeDelta,
+      : percentOfBase(settledPnl, baseCapital),
+    allTimePnl,
     allTimePnlPercent: provided(status.all_time_pnl_percent)
       ? status.all_time_pnl_percent
-      : percentOfBase(allTimeDelta, initialDeposit)
+      : percentOfBase(allTimePnl, baseCapital)
   };
 }
 

@@ -66,7 +66,7 @@ export default function HomeTab({
   const currentAccountNumber = metrics.account_number || null;
   const prevAccountNumberRef = useRef(currentAccountNumber);
 
-  // Initial Balance Benchmark & All-Time Performance Calculations
+  // Net capital benchmark & all-time performance calculations
   const {
     initialDeposit,
     isDepositOverridden,
@@ -75,6 +75,11 @@ export default function HomeTab({
     allTimePnl,
     allTimePnlPercent
   } = summarizeAccountPnl(bridgeStatus, metrics);
+
+  // Funding view of the same value the domain helper derives (net_capital ??
+  // initial_deposit). Kept as a plain expression here so the equity-curve memo
+  // keeps its existing dependency shape.
+  const netCapital = bridgeStatus?.net_capital ?? initialDeposit;
 
   // 100% Automatic Sync: Immediately clear old account curve and history when MT5 account switches
   useEffect(() => {
@@ -325,16 +330,16 @@ export default function HomeTab({
           <div className="metric">{formatCurrency(balance, currency)}</div>
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
             <div style={{ color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>{t('home_initial_balance')}</span>
+              <span>{t('home_net_capital')}</span>
               <span style={{ fontWeight: 600, color: '#e6f1f2' }}>
-                {formatCurrency(initialDeposit, currency)}
+                {formatCurrency(netCapital, currency)}
                 <small style={{ marginLeft: '4px', fontSize: '9px', color: isDepositOverridden ? 'var(--amber)' : 'var(--muted)' }}>
                   {isDepositOverridden ? t('home_manual') : t('home_from_mt5')}
                 </small>
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-              <span style={{ color: 'var(--muted)' }}>{t('home_all_time_pl')}</span>
+              <span style={{ color: 'var(--muted)' }}>{t('home_realized_trading_pl')}</span>
               <span style={{ color: settledPnl >= 0 ? 'var(--g)' : 'var(--red)' }}>
                 {settledPnl >= 0 ? '+' : ''}{formatCurrency(settledPnl, currency)} ({settledPnlPercent >= 0 ? '+' : ''}{settledPnlPercent.toFixed(1)}%)
               </span>
@@ -353,7 +358,7 @@ export default function HomeTab({
           <div className="metric">{formatCurrency(equity, currency)}</div>
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-              <span style={{ color: 'var(--muted)' }}>{t('home_realized_vs_initial')}</span>
+              <span style={{ color: 'var(--muted)' }}>{t('home_total_result')}</span>
               <span style={{ color: allTimePnl >= 0 ? 'var(--g)' : 'var(--red)' }}>
                 {allTimePnl >= 0 ? '+' : ''}{formatCurrency(allTimePnl, currency)} ({allTimePnlPercent >= 0 ? '+' : ''}{allTimePnlPercent.toFixed(1)}%)
               </span>

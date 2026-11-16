@@ -18,6 +18,7 @@ export default function KpiCards({
   losingTrades,
   cashFlow,
   periodLabel,
+  period = 'ALL',
   currency = 'USD'
 }) {
   const { t } = useLanguage();
@@ -52,23 +53,27 @@ export default function KpiCards({
 
       {/* Cash flow: a separate grid, never merged into the trading metrics above. */}
       {cashFlow && (
-        <div className="grid-cards-responsive-2col three-cols-desktop">
-          <div className="card" id="journal-kpi-total-deposits">
-            <div className="metric" style={{ color: 'var(--g)' }}>{formatCurrency(cashFlow.deposits, currency)}</div>
-            <div className="label">{t('journal_stat_total_deposits')}</div>
-            <div className="tiny" style={tinyStyle}>{periodLabel}</div>
+        <>
+          <div className="grid-cards-responsive-2col three-cols-desktop">
+            <div className="card" id="journal-kpi-total-deposits">
+              <div className="metric" style={{ color: 'var(--g)' }}>{formatCurrency(cashFlow.deposits, currency)}</div>
+              <div className="label">{t('journal_stat_total_deposits_period', { period: periodLabel })}</div>
+            </div>
+            <div className="card" id="journal-kpi-total-withdrawals">
+              <div className="metric" style={{ color: 'var(--muted)' }}>{formatCurrency(cashFlow.withdrawals, currency)}</div>
+              <div className="label">{t('journal_stat_total_withdrawals_period', { period: periodLabel })}</div>
+            </div>
+            <div className="card" id="journal-kpi-net-funding">
+              <div className={`metric ${cashFlow.netFunding >= 0 ? 'positive' : 'negative'}`}>{formatSignedMoney(cashFlow.netFunding, currency)}</div>
+              <div className="label">{t('journal_stat_net_funding_period', { period: periodLabel })}</div>
+            </div>
           </div>
-          <div className="card" id="journal-kpi-total-withdrawals">
-            <div className="metric" style={{ color: 'var(--muted)' }}>{formatCurrency(cashFlow.withdrawals, currency)}</div>
-            <div className="label">{t('journal_stat_total_withdrawals')}</div>
-            <div className="tiny" style={tinyStyle}>{periodLabel}</div>
-          </div>
-          <div className="card" id="journal-kpi-net-funding">
-            <div className={`metric ${cashFlow.netFunding >= 0 ? 'positive' : 'negative'}`}>{formatSignedMoney(cashFlow.netFunding, currency)}</div>
-            <div className="label">{t('journal_stat_net_funding')}</div>
-            <div className="tiny" style={tinyStyle}>{periodLabel}</div>
-          </div>
-        </div>
+          {period !== 'ALL' && cashFlow.deposits === 0 && cashFlow.withdrawals === 0 && (
+            <div className="tiny" style={{ ...tinyStyle, marginTop: '6px' }}>
+              {t('journal_cashflow_period_hint')}
+            </div>
+          )}
+        </>
       )}
     </>
   );

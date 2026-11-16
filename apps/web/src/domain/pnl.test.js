@@ -29,24 +29,62 @@ describe('summarizeAccountPnl', () => {
     expect(result.allTimePnlPercent).toBe(15);
   });
 
-  it('falls back to balance/equity deltas when the fields are absent', () => {
+  it('returns zero realized PnL when the backend field is absent', () => {
     const result = summarizeAccountPnl({ initial_deposit: 1000 }, metrics);
 
-    expect(result.settledPnl).toBe(100); // balance - deposit
-    expect(result.settledPnlPercent).toBe(10);
-    expect(result.allTimePnl).toBe(150); // equity - deposit
-    expect(result.allTimePnlPercent).toBe(15);
+    // No balance - deposit fallback: only floating PnL can be derived locally.
+    expect(result.settledPnl).toBe(0);
+    expect(result.settledPnlPercent).toBe(0);
+    expect(result.allTimePnl).toBe(50); // equity - balance
+    expect(result.allTimePnlPercent).toBe(5);
   });
 
-  it('falls back to the delta when a field is null, not just undefined', () => {
+  it('treats a null field as absent without falling back to a delta', () => {
     // `provided()` must treat null as absent — this is the 0365743 regression.
     const result = summarizeAccountPnl(
       { initial_deposit: 1000, settled_pnl: null, all_time_pnl_percent: null },
       metrics
     );
 
-    expect(result.settledPnl).toBe(100);
-    expect(result.allTimePnlPercent).toBe(15);
+    expect(result.settledPnl).toBe(0);
+    expect(result.allTimePnl).toBe(50);
+    expect(result.allTimePnlPercent).toBe(5);
+  });
+
+  it('ignores a top-up when realized PnL comes from the backend', () => {
+    const result = summarizeAccountPnl(
+      { initial_deposit: 1000, net_capital: 1500, settled_pnl: 0, settled_pnl_percent: 0 },
+      { balance: 1500, equity: 1500 }
+    );
+
+    expect(result.netCapital).toBe(1500);
+    expect(result.settledPnl).toBe(0);
+    expect(result.settledPnlPercent).toBe(0);
+  });
+
+  it('keeps realized PnL positive after a partial withdrawal', () => {
+    const result = summarizeAccountPnl(
+      { initial_deposit: 1000, net_capital: 600, settled_pnl: 200 },
+      { balance: 800, equity: 800 }
+    );
+
+    expect(result.settledPnl).toBe(200);
+    expect(result.settledPnlPercent).toBeCloseTo(33.33, 2);
+  });
+
+  it('does not derive realized PnL from balance - net capital', () => {
+    const result = summarizeAccountPnl({ net_capital: 600 }, { balance: 800, equity: 800 });
+
+    expect(result.settledPnl).toBe(0);
+  });
+
+  it('falls back to the initial deposit as the percentage base when net capital is zero', () => {
+    const result = summarizeAccountPnl(
+      { initial_deposit: 1000, net_capital: 0, settled_pnl: 100 },
+      { balance: 1100, equity: 1100 }
+    );
+
+    expect(result.settledPnlPercent).toBe(10);
   });
 
   it('does not throw when bridgeStatus and metrics are null', () => {
