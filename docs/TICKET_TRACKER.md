@@ -30,13 +30,13 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 46 tiket
-- **Selesai (`done`):** 43 tiket (Fase 001–012 + 13-03, 13-05, 13-06, 13-07)
+- **Total Tiket:** 50 tiket
+- **Selesai (`done`):** 47 tiket (Fase 001–012 + 13-03, 13-05, 13-06, 13-07)
 - **Sedang Berjalan (`in_progress`):** 3 tiket (Fase 013: 01, 02, 04)
 - **Belum Dikerjakan (`todo`):** 0 tiket
 
 ```
-[========================================================----] 93.5% Selesai (43/46)
+[========================================================----] 94.0% Selesai (47/50)
 ```
 
 ---
@@ -197,3 +197,13 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 - [x] **05-heartbeat-timeout-jitter-tolerance.md** (`done`): Eliminasi status flapping online/offline dengan melonggarkan default `HEARTBEAT_TIMEOUT_SECONDS` dari 10s menjadi 25s (~4-5× siklus sensor MT5 + network latency WAN) serta expose konfigurasi via env/Ansible.
 - [x] **06-cash-flow-neutralized-drawdown.md** (`done`): Netralisasi mutasi kas (`DEPOSIT`/`WITHDRAWAL`) dari perhitungan daily anchor, daily trough, dan overall peak-to-trough drawdown di `bridge_status_service.py` untuk mengeliminasi lonjakan drawdown palsu 88.3%.
 - [x] **07-fix-deposit-reconstruction-past-cashflows.md** (`done`): `deposit_reconstruction` memakai net funding ≤ boundary + realized (bukan `deposit + realized`), rekonstruksi ≤ 0 jatuh ke anchor `None`, dan `evaluate_drawdown` mengabaikan ekuitas ≤ 0 sehingga akun yang ditarik habis dilaporkan `0.0%` (SPEC-009; 205 `pytest` passed, `lint-imports` 6/0).
+
+#### Fase 014: Dashboard Realized PnL, Net Capital Baseline, & Cash Flow Transparency (SELESAI)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/010-dashboard-realized-pnl-and-capital-baseline.md`.
+> Mengeliminasi formula selisih kasar `balance - deposit` pada Dashboard, menghitung `settled_pnl` murni dari akumulasi closed trades (`trade_repository.sum_profit_between`), menampilkan modal bersih riil (Net Invested Capital) pada kartu Saldo, serta memperjelas cakupan periode pada kartu arus kas Journal.
+> **Catatan Implementasi (2026-11-16):** keempat tiket selesai, gate fase ditutup (gate Fase 013 diterima sebagai risiko data parsial, dimitigasi guard baseline 14-01). `settled_pnl` kini murni dari akumulasi closed trades, `net_capital` dikirim `/api/v1/bridge/status` termasuk payload offline, Dashboard menampilkan **Modal Bersih** + **P/L Riil Trading**, dan kartu arus kas Journal mencantumkan periode aktif. Verifikasi: 209 `pytest` passed, 103 `vitest` passed, `lint-imports` 6/0, `lint:arch` 0 violations, i18n 500 key/bahasa, build sukses.
+- [x] **01-backend-realized-pnl-and-net-capital.md** (`done`): `BridgeStatusService::get_status()` menghitung `settled_pnl` dari `trade_repository` dan `net_capital` dari `cash_flow_repository`, schema update, tes top-up/penarikan.
+- [x] **02-frontend-domain-and-pnl-parity.md** (`done`): Paritas domain `domain/pnl.js` terhadap `net_capital` & pure realized PnL, unit test `pnl.test.js` skenario top-up dan penarikan.
+- [x] **03-dashboard-ui-capital-and-pnl-display.md** (`done`): UI `HomeTab.jsx` menampilkan Modal Bersih dan P/L trading riil, update kamus bahasa `translations.js` (EN/ID), verifikasi `check-i18n.cjs`.
+- [x] **04-journal-cashflow-labeling-and-clarity.md** (`done`): Penegasan label periode aktif pada kartu kas di `KpiCards.jsx` dan penyelarasan baseline deposit pada `DrawdownCard.jsx`.
+

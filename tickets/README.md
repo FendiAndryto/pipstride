@@ -29,8 +29,9 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **011** | `011-dashboard-polish-and-consistency/` | Dynamic currency, minus ganda fix, sinkronisasi equity & rebranding header | 006, 008 | open billing / produksi |
 | **012** | `012-public-registration-closure/` | Tutup registrasi publik (UI & API), non-destructive toggle & Discord admin onboarding | 010, 011 | operasional private beta |
 | **013** | `013-mql5-service-and-cashflow/` | MQL5 background service (.ex5), isolasi cashflow withdrawal/deposit, & dynamic market | 009, 011, 012 | stabilitas telemetri & akurasi jurnal |
+| **014** | `014-dashboard-pnl-and-capital-baseline/` | Realized P/L trading murni, baseline modal bersih (net capital), & transparansi kas | 013 | akurasi finansial dashboard & journal |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012 → 013`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012 → 013 → 014`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -165,3 +166,13 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **05-heartbeat-timeout-jitter-tolerance.md** (`done`): Naikkan heartbeat timeout dari 15s ke 25s untuk toleransi jitter jaringan.
 - [x] **06-cash-flow-neutralized-drawdown.md** (`done`): Netralisasi drawdown terhadap mutasi kas harian (`SPEC-008`).
 - [x] **07-fix-deposit-reconstruction-past-cashflows.md** (`done`): `deposit_reconstruction` memakai net funding ≤ boundary + realized (bukan `deposit + realized`), rekonstruksi ≤ 0 jatuh ke anchor `None`, dan `evaluate_drawdown` mengabaikan ekuitas ≤ 0 sehingga akun yang ditarik habis dilaporkan `0.0%` (SPEC-009; 205 `pytest` passed, `lint-imports` 6/0).
+
+### Fase 014: Dashboard Realized PnL, Net Capital, & Cash Flow Transparency (Selesai)
+> **Catatan Fase:** Didefinisikan dalam `docs/specs/010-dashboard-realized-pnl-and-capital-baseline.md`.
+> Memperbaiki kalkulasi `settled_pnl` pada Dashboard agar murni bersumber dari akumulasi hasil closed trades, menampilkan modal bersih riil (Net Invested Capital) pada kartu Saldo menggantikan patokan setoran pertama, serta memperjelas cakupan periode pada kartu arus kas Journal.
+> **Catatan Implementasi (2026-11-16):** keempat tiket selesai, gate fase ditutup (gate Fase 013 diterima sebagai risiko data parsial, dimitigasi guard baseline 14-01). `settled_pnl` kini murni dari akumulasi closed trades, `net_capital` dikirim `/api/v1/bridge/status` termasuk payload offline, Dashboard menampilkan **Modal Bersih** + **P/L Riil Trading**, dan kartu arus kas Journal mencantumkan periode aktif. Verifikasi: 209 `pytest` passed, 103 `vitest` passed, `lint-imports` 6/0, `lint:arch` 0 violations, i18n 500 key/bahasa, build sukses.
+- [x] **01-backend-realized-pnl-and-net-capital.md** (`done`): `BridgeStatusService::get_status()` menghitung `settled_pnl` dari `trade_repository` dan `net_capital` dari `cash_flow_repository`, schema update, tes top-up/penarikan.
+- [x] **02-frontend-domain-and-pnl-parity.md** (`done`): Paritas domain `domain/pnl.js` terhadap `net_capital` & pure realized PnL, unit test `pnl.test.js` skenario top-up dan penarikan.
+- [x] **03-dashboard-ui-capital-and-pnl-display.md** (`done`): UI `HomeTab.jsx` menampilkan Modal Bersih dan P/L trading riil, update kamus bahasa `translations.js` (EN/ID), verifikasi `check-i18n.cjs`.
+- [x] **04-journal-cashflow-labeling-and-clarity.md** (`done`): Penegasan label periode aktif pada kartu kas di `KpiCards.jsx` dan penyelarasan baseline deposit pada `DrawdownCard.jsx`.
+
