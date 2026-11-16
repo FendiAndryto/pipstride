@@ -103,8 +103,9 @@ def test_status_reports_live_metrics_after_heartbeat(client, account):
     assert data["is_connected"] is True
     assert data["metrics"]["balance"] == 10_500.0
     assert data["initial_deposit"] == 10_000.0
-    assert data["settled_pnl"] == 500.0
-    assert data["settled_pnl_percent"] == 5.0
+    assert data["net_capital"] == 10_000.0
+    assert data["settled_pnl"] == 30.0
+    assert data["settled_pnl_percent"] == 0.3
     assert data["closed_trades_count"] == 2
     assert data["positions"][0]["symbol"] == "EURUSD"
 
@@ -126,6 +127,8 @@ def test_status_reports_offline_after_timeout(client, account, monkeypatch):
     assert res_stale.status_code == 200
     assert res_stale.json()["is_connected"] is False
     assert res_stale.json()["metrics"] is None
+    # Net capital is funding, not liveness: the offline payload keeps it.
+    assert res_stale.json()["net_capital"] == 10_000.0
 
 
 def test_trade_sync_updates_cached_status_count(client, account):
@@ -204,7 +207,12 @@ def test_initial_deposit_override_wins_over_mt5(client, account):
     data = res.json()
     assert data["initial_deposit"] == 5_000.0
     assert data["is_overridden"] is True
-    assert data["settled_pnl"] == 5_500.0
+    # Realized PnL is trade-only (50 - 20), independent of the override baseline.
+    assert data["settled_pnl"] == 30.0
+
+    status = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert status["net_capital"] == 5_000.0
+    assert status["settled_pnl_percent"] == 0.6
 
     reset = client.post(
         "/api/v1/bridge/initial-deposit",
@@ -895,3 +903,121 @@ def test_journal_reset_clears_trades(client, account):
     res = client.post("/api/v1/bridge/history/reset", headers=account["headers"])
     assert res.status_code == 200
     assert client.get("/api/v1/bridge/history", headers=account["headers"]).json()["total_trades"] == 0
+
+def cash_flow_deal(ticket, amount, occurred_at):
+    return {
+        "ticket": ticket,
+        "category": "DEPOSIT" if amount >= 0 else "WITHDRAWAL",
+        "profit": amount,
+        "time": occurred_at,
+    }
+
+
+def test_status_top_up_does_not_add_realized_pnl(client, account):
+    created = create_connection(client, account, label="Top Up")
+    payload = heartbeat_payload(
+        333001,
+        balance=1500.0,
+        equity=1500.0,
+        initial_deposit=1000.0,
+        floating_pnl=0.0,
+        open_positions=0,
+        positions=[],
+        closed_trades=[],
+        cash_flow=[
+            cash_flow_deal(880001, 1000.0, 1_699_400_000),
+            cash_flow_deal(880002, 500.0, 1_699_700_000),
+        ],
+    )
+    assert send_heartbeat(client, created["token"], payload).status_code == 200
+
+    data = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert data["net_capital"] == 1500.0
+    assert data["settled_pnl"] == 0.0
+    assert data["settled_pnl_percent"] == 0.0
+
+
+def test_status_keeps_realized_pnl_after_withdrawal(client, account):
+    created = create_connection(client, account, label="Withdrawal")
+    trade = {
+        "ticket": 880101,
+        "symbol": "EURUSD",
+        "type": "BUY",
+        "volume": 0.10,
+        "open_price": 1.0800,
+        "close_price": 1.0820,
+        "profit": 200.0,
+        "open_time": 1_699_000_000,
+        "close_time": 1_699_500_000,
+    }
+    payload = heartbeat_payload(
+        333002,
+        balance=800.0,
+        equity=800.0,
+        initial_deposit=1000.0,
+        floating_pnl=0.0,
+        open_positions=0,
+        positions=[],
+        closed_trades=[trade],
+        cash_flow=[
+            cash_flow_deal(880103, 1000.0, 1_699_400_000),
+            cash_flow_deal(880104, -400.0, 1_699_800_000),
+        ],
+    )
+    assert send_heartbeat(client, created["token"], payload).status_code == 200
+
+    data = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert data["net_capital"] == 600.0
+    assert data["settled_pnl"] == 200.0
+    assert data["settled_pnl_percent"] == 33.33
+
+
+def test_status_counts_unmatched_earliest_deposit_as_extra_funding(client, account):
+    created = create_connection(client, account, label="Missing Baseline")
+    payload = heartbeat_payload(
+        333003,
+        balance=1500.0,
+        equity=1500.0,
+        initial_deposit=1000.0,
+        floating_pnl=0.0,
+        open_positions=0,
+        positions=[],
+        closed_trades=[],
+        # The sensor baseline (1000) is not in the DB; only the later top-up is.
+        cash_flow=[cash_flow_deal(880205, 500.0, 1_699_700_000)],
+    )
+    assert send_heartbeat(client, created["token"], payload).status_code == 200
+
+    data = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert data["net_capital"] == 1500.0
+    assert data["settled_pnl"] == 0.0
+
+
+def test_status_override_counts_later_cash_flow(client, account):
+    created = create_connection(client, account, label="Override Funding")
+    payload = heartbeat_payload(
+        333004,
+        balance=1500.0,
+        equity=1500.0,
+        initial_deposit=1000.0,
+        floating_pnl=0.0,
+        open_positions=0,
+        positions=[],
+        closed_trades=[],
+        cash_flow=[
+            cash_flow_deal(880306, 1000.0, 1_699_400_000),
+            cash_flow_deal(880307, 500.0, 1_699_700_000),
+        ],
+    )
+    assert send_heartbeat(client, created["token"], payload).status_code == 200
+
+    override = client.post(
+        "/api/v1/bridge/initial-deposit",
+        json={"initial_deposit": 5000.0},
+        headers=account["headers"],
+    )
+    assert override.status_code == 200, override.text
+
+    data = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert data["net_capital"] == 5500.0
+    assert data["settled_pnl"] == 0.0

@@ -65,6 +65,35 @@ class BridgeStatusService:
         deposit = account_settings_service.get_effective_initial_deposit(db, connection)
         overridden = account_settings_service.has_override(db, connection)
 
+        # Net capital is funding, not performance. The sensor's initial_deposit
+        # *is* the first positive balance deal, so that row is excluded from the
+        # cash-flow delta to avoid counting the baseline twice. A row whose
+        # amount does not match the sensor baseline is a later movement (the
+        # baseline itself has not been ingested yet) and must be kept.
+        realized_pnl = round(
+            float(trade_repository.sum_profit_between(db, connection.id) or 0.0), 2
+        )
+        sensor_deposit = account_settings_service.get_sensor_initial_deposit(connection)
+        cash_totals = cash_flow_repository.sum_cash_flow(db, connection.id)
+        baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
+        baseline_id = None
+        if sensor_deposit and baseline_deal is not None:
+            if abs(float(baseline_deal.amount or 0.0) - float(sensor_deposit)) < 0.01:
+                baseline_id = baseline_deal.id
+
+        if sensor_deposit:
+            adjusted_cash = cash_flow_repository.sum_cash_flow(
+                db, connection.id, exclude_id=baseline_id
+            )
+            net_capital = round(
+                float(deposit or 0.0) + float(adjusted_cash.get("net_funding") or 0.0), 2
+            )
+        elif cash_totals["deposits"]:
+            # No sensor baseline to anchor on: the cash rows are the only source.
+            net_capital = round(float(cash_totals["net_funding"]), 2)
+        else:
+            net_capital = round(float(deposit or 0.0), 2)
+
         if not fresh:
             return BridgeStatusResponse(
                 is_connected=False,
@@ -73,6 +102,7 @@ class BridgeStatusService:
                 seconds_since_last_heartbeat=None,
                 metrics=None,
                 initial_deposit=deposit,
+                net_capital=net_capital,
                 is_deposit_overridden=overridden,
                 settled_pnl=0.0,
                 settled_pnl_percent=0.0,
@@ -86,12 +116,15 @@ class BridgeStatusService:
         payload = HeartbeatPayload(**live["payload"])
         payload.bridge_token = None
 
-        balance = payload.balance
-        equity = payload.equity
-        settled_pnl = round(balance - deposit, 2) if deposit else 0.0
-        settled_pnl_pct = round((settled_pnl / deposit) * 100.0, 2) if deposit else 0.0
-        all_time_pnl = round(equity - deposit, 2) if deposit else 0.0
-        all_time_pnl_pct = round((all_time_pnl / deposit) * 100.0, 2) if deposit else 0.0
+        settled_pnl = realized_pnl
+        all_time_pnl = round(realized_pnl + float(payload.floating_pnl or 0.0), 2)
+        base_capital = net_capital if (net_capital and net_capital > 0) else float(deposit or 0.0)
+        settled_pnl_pct = (
+            round((settled_pnl / base_capital) * 100.0, 2) if base_capital > 0 else 0.0
+        )
+        all_time_pnl_pct = (
+            round((all_time_pnl / base_capital) * 100.0, 2) if base_capital > 0 else 0.0
+        )
 
         return BridgeStatusResponse(
             is_connected=True,
@@ -100,6 +133,7 @@ class BridgeStatusService:
             seconds_since_last_heartbeat=round(time.time() - float(live.get("captured_at", 0)), 2),
             metrics=payload,
             initial_deposit=deposit,
+            net_capital=net_capital,
             is_deposit_overridden=overridden,
             settled_pnl=settled_pnl,
             settled_pnl_percent=settled_pnl_pct,

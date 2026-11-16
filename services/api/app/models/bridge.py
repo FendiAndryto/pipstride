@@ -220,6 +220,10 @@ class BridgeStatusResponse(BaseModel):
     seconds_since_last_heartbeat: Optional[float] = None
     metrics: Optional[HeartbeatPayload] = None
     initial_deposit: Optional[float] = None
+    net_capital: Optional[float] = Field(
+        None,
+        description="Cumulative net capital funding (effective deposit + deposits minus withdrawals after baseline)",
+    )
     is_deposit_overridden: bool = False
     settled_pnl: Optional[float] = None
     settled_pnl_percent: Optional[float] = None
