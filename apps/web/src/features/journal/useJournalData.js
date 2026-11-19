@@ -1,323 +1,190 @@
-// Journal data + derived state (ticket 006-04). Collapses the five fetch
-// effects into one hook: single history/stats polling with visibility and
-// in-flight guards, plus the filter/search/month derivations the table needs.
-//
-// Analytics math is NOT here: MONTH stats come from domain/analytics.js and
-// every other range from the backend via api.getJournalStats.
-
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
-import { calculateCashFlow, computeJournalStats } from '../../domain/analytics';
-import { buildDayBuckets } from './dayBuckets';
-import { inMonth, joinJournalRows } from './journalRows';
+import { journalWindow } from './journalPeriod';
+import { joinJournalRows, loadJournalTradePages } from './journalRows';
 
 const PAGE_SIZE = 20;
-const HISTORY_LIMIT = 2000;
+const EXPORT_PAGE_SIZE = 1000;
+const ROWS_REFRESH_MS = 20000;
+const STATS_REFRESH_MS = 80000;
+const EMPTY_CASH_FLOW = { deposits: 0, withdrawals: 0, netFunding: 0 };
 
-const sourceOf = (trade) => ((trade.magic || 0) > 0 ? 'EA' : 'Manual');
-const matchesSymbol = (trade, symbol) =>
-  symbol === 'ALL' || (trade.symbol || '').toUpperCase() === symbol.toUpperCase();
+const rollingMinute = () => Math.floor(Date.now() / 60000) * 60;
 
-export function useJournalData({ activeTab, closedTradesCount, bridgeStatus, hasConnection, period, month }) {
-  const [historyData, setHistoryData] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [statsError, setStatsError] = useState(false);
-  const [historyError, setHistoryError] = useState(false);
-  const [windowNowSec, setWindowNowSec] = useState(null);
-  const [page, setPage] = useState(1);
-  // Filter/search/symbol state lives here (ticket 006-04 item 3) so the
-  // component stays presentational and the account-switch reset is local.
+// Keying the result keeps the previous period invisible while the next request
+// is loading. Cleanup prevents a late response from publishing after a change.
+function useJournalQuery(key, request, enabled, refreshMs, revision) {
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let disposed = false;
+    let inFlight = false;
+
+    const refresh = async () => {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        const value = await request();
+        if (!disposed) setResult({ key, value, error: false });
+      } catch {
+        if (!disposed) setResult((previous) => ({
+          key,
+          value: previous?.key === key ? previous.value : null,
+          error: true
+        }));
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void refresh();
+    const timer = setInterval(refresh, refreshMs);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [key, request, enabled, refreshMs, revision]);
+
+  const current = enabled && result?.key === key ? result : null;
+  return {
+    value: current?.value ?? null,
+    error: current?.error ?? false,
+    loading: enabled && !current
+  };
+}
+
+export function useJournalData({
+  activeTab, closedTradesCount, bridgeStatus, hasConnection, connectionId, period, month, calendarMonth
+}) {
   const [filter, setFilter] = useState('All');
   const [selectedSymbol, setSelectedSymbol] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [nowSec, setNowSec] = useState(rollingMinute);
+  const [pageSelection, setPageSelection] = useState(null);
+  const enabled = (!activeTab || activeTab === 'journal') && Boolean(hasConnection && connectionId);
+  const rolling = period !== 'ALL' && period !== 'MONTH';
 
-  const activeAccountNumber = bridgeStatus?.metrics?.account_number || null;
-  const isConnected = bridgeStatus?.is_connected ?? false;
-  const canFetch = Boolean(hasConnection || isConnected);
-  const prevAccountRef = useRef(activeAccountNumber);
-  const historyInFlightRef = useRef(false);
-  const statsInFlightRef = useRef(false);
-  const ticksRef = useRef(0);
-
-  const fetchHistory = useCallback(async () => {
-    if (!hasConnection && !isConnected) return;
-    if (document.hidden || historyInFlightRef.current) return;
-    historyInFlightRef.current = true;
-    // Stamp "now" even when the request fails: buildDayBuckets needs a reference
-    // timestamp for the 1M/3M/1Y windows, and 0 would drop every trade.
-    setWindowNowSec(Math.floor(Date.now() / 1000));
-    try {
-      const data = await api.getTradeHistory(HISTORY_LIMIT);
-      // Never show another MT5 account's history.
-      if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
-        setHistoryData(data);
-        setHistoryError(false);
-      }
-    } catch {
-      setHistoryError(true);
-    } finally {
-      historyInFlightRef.current = false;
-    }
-  }, [hasConnection, isConnected, activeAccountNumber]);
-
-  const statsSource = filter === 'EA' ? 'ea' : filter === 'Manual' ? 'manual' : 'all';
-
-  const fetchStats = useCallback(async () => {
-    if (period === 'MONTH' || (!hasConnection && !isConnected)) return;
-    if (document.hidden || statsInFlightRef.current) return;
-    statsInFlightRef.current = true;
-    try {
-      const data = await api.getJournalStats(period, statsSource, selectedSymbol);
-      // Same guard as history: never show stats from another MT5 account.
-      if (!activeAccountNumber || !data?.account_number || data.account_number === activeAccountNumber) {
-        setStats(data);
-        setStatsError(false);
-      }
-    } catch {
-      setStatsError(true);
-    } finally {
-      statsInFlightRef.current = false;
-    }
-  }, [period, statsSource, selectedSymbol, hasConnection, isConnected, activeAccountNumber]);
-
-  // Keep the latest fetchers reachable from the interval without re-keying it.
-  const fetchHistoryRef = useRef(fetchHistory);
-  const fetchStatsRef = useRef(fetchStats);
   useEffect(() => {
-    fetchHistoryRef.current = fetchHistory;
-    fetchStatsRef.current = fetchStats;
-  }, [fetchHistory, fetchStats]);
-
-  // Switching MT5 account wipes everything that belonged to the previous one.
-  useEffect(() => {
-    if (activeAccountNumber && prevAccountRef.current && prevAccountRef.current !== activeAccountNumber) {
-      setHistoryData(null);
-      setStats(null);
-      setStatsError(false);
-      setHistoryError(false);
-      setSelectedSymbol('ALL');
-      setPage(1);
-    }
-    prevAccountRef.current = activeAccountNumber;
-  }, [activeAccountNumber]);
-
-  // Refetch immediately whenever the query identity changes (tab, account, period,
-  // filter, symbol, closed-trade count). This replaces the two original reactive
-  // effects, which refetched on exactly these keys.
-  // The kickoff is deferred by a tick so the effect body never calls setState
-  // synchronously during commit; it still runs before paint.
-  useEffect(() => {
-    if (activeTab && activeTab !== 'journal') return undefined;
-    if (!canFetch) return undefined;
-    const kickoff = setTimeout(() => {
-      void fetchHistory();
-      void fetchStats();
-    }, 0);
-    return () => clearTimeout(kickoff);
-  }, [activeTab, canFetch, closedTradesCount, activeAccountNumber, period, statsSource, selectedSymbol, fetchHistory, fetchStats]);
-
-  // Background polling while the journal tab is actually visible. Keyed only on
-  // the tab, so a re-key above does NOT restart the interval and the 80s stats
-  // cadence survives. `ticks` lives in a ref for the same reason.
-  useEffect(() => {
-    if (activeTab !== 'journal') return undefined;
-    if (!canFetch) return undefined;
-
-    const timer = setInterval(() => {
-      ticksRef.current += 1;
-      void fetchHistoryRef.current();
-      if (ticksRef.current % 4 === 0) void fetchStatsRef.current();
-    }, 20000);
-
-    return () => clearInterval(timer);
-  }, [activeTab, canFetch]);
-
-  // ------------------------------------------------------------------ derived
-  const { selectedMonthIndex, selectedYear, selectedMonth } = month;
-  const monthLocale = month.locale;
-  const trades = useMemo(() => historyData?.trades || [], [historyData]);
-  // Cash flow is its own array from `/bridge/history`. It is never merged into
-  // `trades`; the two streams only meet at render time (see `filteredRows`).
-  const cashFlow = useMemo(() => historyData?.cash_flow || [], [historyData]);
-
-  const tradedSymbols = useMemo(() => {
-    const counts = {};
-    trades.forEach((trade) => {
-      if (!trade.symbol) return;
-      const symbol = trade.symbol.toUpperCase();
-      counts[symbol] = (counts[symbol] || 0) + 1;
-    });
-    return Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-  }, [trades]);
-
-  const symbolTrades = useMemo(
-    () => (selectedSymbol === 'ALL' ? trades : trades.filter((trade) => matchesSymbol(trade, selectedSymbol))),
-    [trades, selectedSymbol]
-  );
-
-  const symbolFallbackPnl = useMemo(() => {
-    if (selectedSymbol === 'ALL') return historyData?.net_pnl ?? 0;
-    return symbolTrades.reduce((acc, trade) => acc + (trade.profit || 0), 0);
-  }, [selectedSymbol, symbolTrades, historyData]);
-
-  const dailyPnlMap = useMemo(() => {
-    const map = {};
-    trades.forEach((trade) => {
-      if (!trade.close_time || !matchesSymbol(trade, selectedSymbol)) return;
-      const date = new Date(trade.close_time * 1000);
-      if (date.getMonth() === selectedMonthIndex && date.getFullYear() === selectedYear) {
-        const day = date.getDate();
-        map[day] = (map[day] || 0) + trade.profit;
-      }
-    });
-    return map;
-  }, [trades, selectedSymbol, selectedMonthIndex, selectedYear]);
-
-  const monthTrades = useMemo(() => {
-    return trades.filter((trade) => {
-      if (!trade.close_time) return false;
-      const date = new Date(trade.close_time * 1000);
-      const inMonth = date.getMonth() === selectedMonthIndex && date.getFullYear() === selectedYear;
-      if (!inMonth) return false;
-      const matchesFilter = filter === 'All' || sourceOf(trade) === filter;
-      return matchesFilter && matchesSymbol(trade, selectedSymbol);
-    });
-  }, [trades, selectedMonthIndex, selectedYear, filter, selectedSymbol]);
-
-  const monthStats = useMemo(() => {
-    if (period !== 'MONTH') return null;
-    return computeJournalStats(monthTrades);
-  }, [period, monthTrades]);
-
-  const activeStats = period === 'MONTH' ? (monthStats || stats) : stats;
-  const totals = activeStats?.totals;
-  const netPnl = totals?.net_profit ?? (period === 'MONTH' ? 0 : symbolFallbackPnl);
-  const winRate = totals?.win_rate
-    ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.win_rate ?? 0) : 0));
-  const profitFactor = totals
-    ? totals.profit_factor
-    : (period === 'MONTH' ? null : (selectedSymbol === 'ALL' ? historyData?.profit_factor : null));
-  const totalTrades = totals?.trades
-    ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.total_trades ?? 0) : symbolTrades.length));
-  const winningTrades = totals?.wins
-    ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.winning_trades ?? 0) : 0));
-  const losingTrades = totals?.losses
-    ?? (period === 'MONTH' ? 0 : (selectedSymbol === 'ALL' ? (historyData?.losing_trades ?? 0) : 0));
-
-  // Cash flow totals come from the backend for every range except MONTH (which
-  // the backend does not serve); the local sum is the same pure rule.
-  const monthCashFlow = useMemo(
-    () => cashFlow.filter((item) => inMonth(item.time, selectedMonthIndex, selectedYear)),
-    [cashFlow, selectedMonthIndex, selectedYear]
-  );
-  const cashFlowStats = useMemo(() => {
-    if (period === 'MONTH') return calculateCashFlow(monthCashFlow);
-    const server = activeStats?.cash_flow;
-    if (!server) return calculateCashFlow(cashFlow);
-    return {
-      deposits: server.deposits ?? 0,
-      withdrawals: server.withdrawals ?? 0,
-      netFunding: server.net_funding ?? (server.deposits ?? 0) - (server.withdrawals ?? 0)
+    if (!enabled || !rolling) return undefined;
+    const updateClock = () => {
+      if (!document.hidden) setNowSec(rollingMinute());
     };
-  }, [period, activeStats, cashFlow, monthCashFlow]);
+    updateClock();
+    const timer = setInterval(updateClock, ROWS_REFRESH_MS);
+    document.addEventListener('visibilitychange', updateClock);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', updateClock);
+    };
+  }, [enabled, rolling]);
 
-  const filteredTrades = useMemo(() => {
-    const needle = search.toLowerCase();
-    return trades.filter((trade) => {
-      const source = sourceOf(trade);
-      const matchesFilter = filter === 'All' || source === filter;
-      if (!matchesFilter || !matchesSymbol(trade, selectedSymbol)) return false;
-      const matchesSearch =
-        (trade.symbol || '').toLowerCase().includes(needle) ||
-        source.toLowerCase().includes(needle) ||
-        String(trade.ticket).includes(search);
-      if (!matchesSearch) return false;
+  const source = { All: 'all', Manual: 'manual', EA: 'ea' }[filter];
+  const year = period === 'MONTH' ? month.selectedYear : null;
+  const monthIndex = period === 'MONTH' ? month.selectedMonthIndex : null;
+  const reference = rolling ? nowSec : null;
+  const globalQuery = useMemo(() => ({
+    ...journalWindow(period, year, monthIndex, reference),
+    range: period,
+    source,
+    symbol: selectedSymbol,
+    connectionId
+  }), [period, year, monthIndex, reference, source, selectedSymbol, connectionId]);
 
-      if (period === 'MONTH') {
-        if (!trade.close_time) return false;
-        const date = new Date(trade.close_time * 1000);
-        return date.getMonth() === selectedMonthIndex && date.getFullYear() === selectedYear;
-      }
-      return true;
+  const statsKey = JSON.stringify([connectionId, period, year, monthIndex, source, selectedSymbol]);
+  const normalizedSearch = search.trim();
+  const filterKey = JSON.stringify([statsKey, normalizedSearch]);
+  const page = pageSelection?.key === filterKey ? pageSelection.page : 1;
+  const setPage = useCallback((nextPage) => {
+    setPageSelection({ key: filterKey, page: nextPage });
+  }, [filterKey]);
+
+  const rowsRequest = useCallback(async () => {
+    const data = await api.getJournalRows({
+      ...globalQuery, search: normalizedSearch, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE
     });
-  }, [trades, filter, selectedSymbol, search, period, selectedMonthIndex, selectedYear]);
+    return { data, page };
+  }, [globalQuery, normalizedSearch, page]);
+  const statsRequest = useCallback(() => api.getJournalStats(globalQuery), [globalQuery]);
+  const { selectedYear: calendarYear, selectedMonthIndex: calendarIndex } = calendarMonth;
+  const calendarKey = JSON.stringify([connectionId, calendarYear, calendarIndex, source, selectedSymbol]);
+  const calendarRequest = useCallback(() => api.getJournalStats({
+    ...journalWindow('MONTH', calendarYear, calendarIndex),
+    range: 'MONTH',
+    source,
+    symbol: selectedSymbol,
+    includeDaily: true,
+    connectionId
+  }), [calendarYear, calendarIndex, source, selectedSymbol, connectionId]);
 
-  // Table rows are a render-only union: trades plus the cash rows the active
-  // filter/symbol/month/search allows. `filteredTrades` stays trade-only
-  // because the CSV export consumes it.
-  const filteredRows = useMemo(
-    () => joinJournalRows(filteredTrades, cashFlow, {
-      filter,
-      selectedSymbol,
-      search,
-      period,
-      selectedMonthIndex,
-      selectedYear
-    }),
-    [filteredTrades, cashFlow, filter, selectedSymbol, search, period, selectedMonthIndex, selectedYear]
-  );
+  const history = useJournalQuery(filterKey, rowsRequest, enabled, ROWS_REFRESH_MS, closedTradesCount);
+  const stats = useJournalQuery(statsKey, statsRequest, enabled, STATS_REFRESH_MS, closedTradesCount);
+  const calendar = useJournalQuery(calendarKey, calendarRequest, enabled, STATS_REFRESH_MS, closedTradesCount);
 
-  // Reset to the first page whenever the filter identity changes.
-  const filterKey = `${filter}|${selectedSymbol}|${search}|${period}|${selectedMonth}`;
-  const [prevFilterKey, setPrevFilterKey] = useState('');
-  if (filterKey !== prevFilterKey) {
-    setPrevFilterKey(filterKey);
-    setPage(1);
+  const historyData = history.value?.data;
+  const currentRows = history.value?.page === page ? historyData : null;
+  const totalRows = historyData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const needsValidPage = history.value?.page === page && page > totalPages;
+  if (pageSelection?.key !== filterKey || needsValidPage) {
+    setPageSelection({ key: filterKey, page: needsValidPage ? totalPages : 1 });
   }
 
-  const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE) || 1;
-  const currentPage = Math.min(page, totalPages);
-  const paginatedRows = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredRows.slice(start, start + PAGE_SIZE);
-  }, [filteredRows, currentPage]);
+  const exportTrades = useCallback(() => (
+    loadJournalTradePages((offset) => api.getJournalRows({
+      ...globalQuery,
+      search: normalizedSearch,
+      limit: EXPORT_PAGE_SIZE,
+      offset,
+      tradesOnly: true
+    }))
+  ), [globalQuery, normalizedSearch]);
 
-  const dayBuckets = useMemo(
-    () => buildDayBuckets(trades, {
-      period,
-      filter,
-      selectedSymbol,
-      monthTrades,
-      nowSec: windowNowSec ?? 0,
-      locale: monthLocale
-    }),
-    [period, monthTrades, trades, filter, selectedSymbol, monthLocale, windowNowSec]
+  const { totals, cash_flow: cashFlow } = stats.value ?? {};
+  const symbolRows = historyData?.symbols ?? [];
+  const calendarDailyPnl = Object.fromEntries(
+    Object.entries(calendar.value?.daily_pnl ?? {}).map(([date, pnl]) => [Number(date.slice(-2)), pnl])
   );
 
-  const isHistoryLoading = !historyData && !historyError && canFetch;
-  const isStatsLoading = period === 'MONTH' ? isHistoryLoading : (!stats && !statsError && canFetch);
-
   return {
-    activeAccountNumber,
+    activeAccountNumber: bridgeStatus?.metrics?.account_number ?? null,
     filter,
     setFilter,
     selectedSymbol,
     setSelectedSymbol,
     search,
     setSearch,
-    trades,
-    cashFlow,
-    cashFlowStats,
-    tradedSymbols,
-    filteredTrades,
-    filteredRows,
-    paginatedRows,
+    tradedSymbols: symbolRows.map(({ symbol }) => symbol),
+    symbolCounts: Object.fromEntries(symbolRows.map(({ symbol, count }) => [symbol, count])),
+    symbolTradeCount: symbolRows.reduce((total, { count }) => total + count, 0),
+    totalRows,
+    paginatedRows: joinJournalRows(currentRows?.trades ?? [], currentRows?.cash_flow ?? []),
     totalPages,
-    currentPage,
+    currentPage: page,
     pageSize: PAGE_SIZE,
     setPage,
-    dayBuckets,
-    activeStats,
-    netPnl,
-    winRate,
-    profitFactor,
-    totalTrades,
-    winningTrades,
-    losingTrades,
-    dailyPnlMap,
-    isHistoryLoading,
-    isStatsLoading,
-    fetchHistory,
-    fetchStats
+    canExportTrades: (historyData?.trade_total ?? 0) > 0,
+    exportTrades,
+    activeStats: stats.value,
+    netPnl: totals?.net_profit ?? 0,
+    winRate: totals?.win_rate ?? 0,
+    profitFactor: totals?.profit_factor ?? null,
+    totalTrades: totals?.trades ?? 0,
+    winningTrades: totals?.wins ?? 0,
+    losingTrades: totals?.losses ?? 0,
+    cashFlowStats: cashFlow ? {
+      deposits: cashFlow.deposits,
+      withdrawals: cashFlow.withdrawals,
+      netFunding: cashFlow.net_funding
+    } : EMPTY_CASH_FLOW,
+    calendarDailyPnl,
+    calendarLoading: calendar.loading,
+    calendarError: calendar.error,
+    isHistoryLoading: enabled && !history.error && (history.loading || history.value?.page !== page || needsValidPage),
+    historyError: history.error,
+    isStatsLoading: stats.loading,
+    statsError: stats.error
   };
 }

@@ -6,17 +6,21 @@ import { useLanguage } from '../../context/LanguageContext';
 import { formatSignedMoney } from '../../domain/format';
 
 export default function TradeTable({
-  filteredRows,
+  totalRows,
   paginatedRows,
   currentPage,
   totalPages,
   pageSize,
   onPageChange,
   isHistoryLoading,
+  historyError,
+  hasFilters,
+  periodLabel,
   activeAccountNumber,
   currency = 'USD'
 }) {
   const { t, locale } = useLanguage();
+  const historyReady = !isHistoryLoading && !historyError;
 
   return (
     <div className="card" style={{ marginBottom: '20px' }}>
@@ -25,7 +29,10 @@ export default function TradeTable({
           <BookOpen size={16} style={{ color: 'var(--g)' }} />
           <h3>{t('journal_history_title')}</h3>
         </div>
-        <span className="tiny">{t('journal_records', { count: filteredRows.length })}</span>
+        <span className="tiny">
+          {periodLabel}
+          {historyReady && ` · ${t('journal_records', { count: totalRows })}`}
+        </span>
       </div>
 
       <div style={{ overflowX: 'auto', maxHeight: '440px', overflowY: 'auto' }}>
@@ -43,16 +50,18 @@ export default function TradeTable({
             </tr>
           </thead>
           <tbody>
-            {paginatedRows.map((row) => {
+            {historyReady && paginatedRows.map((row) => {
               const isCash = row.kind === 'CASH';
               const isEa = (row.magic || 0) > 0;
               const isWithdrawal = row.category === 'WITHDRAWAL';
               const closeDateStr = row.close_time
                 ? new Date(row.close_time * 1000).toLocaleString(locale, {
+                  year: 'numeric',
                   month: 'short',
                   day: 'numeric',
                   hour: '2-digit',
-                  minute: '2-digit'
+                  minute: '2-digit',
+                  timeZone: 'UTC'
                 })
                 : '—';
               // A balance deal has no symbol, so it has no price precision either.
@@ -104,22 +113,31 @@ export default function TradeTable({
                 </tr>
               );
             })}
-            {filteredRows.length === 0 && (
+            {(!historyReady || totalRows === 0) && (
               <tr>
                 <td colSpan={8} style={{ padding: '36px 8px', textAlign: 'center', color: 'var(--muted)' }}>
                   <Layers size={28} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
-                  <div style={{ fontWeight: 600, fontSize: '13px', color: '#c9d8dc' }}>
-                    {isHistoryLoading
-                      ? t('journal_loading_history')
-                      : activeAccountNumber
-                        ? t('journal_empty_account', { account: activeAccountNumber })
-                        : t('journal_empty')}
+                  <div
+                    role={historyError ? 'alert' : 'status'}
+                    style={{ fontWeight: 600, fontSize: '13px', color: '#c9d8dc' }}
+                  >
+                    {historyError
+                      ? t('journal_history_error')
+                      : isHistoryLoading
+                        ? t('journal_loading_history')
+                        : hasFilters
+                          ? t('journal_empty_filtered')
+                          : activeAccountNumber
+                            ? t('journal_empty_account', { account: activeAccountNumber })
+                            : t('journal_empty')}
                   </div>
-                  <div style={{ fontSize: '11px', marginTop: '4px' }}>
-                    {activeAccountNumber
-                      ? t('journal_empty_desc_account', { account: activeAccountNumber })
-                      : t('journal_empty_desc')}
-                  </div>
+                  {historyReady && !hasFilters && (
+                    <div style={{ fontSize: '11px', marginTop: '4px' }}>
+                      {activeAccountNumber
+                        ? t('journal_empty_desc_account', { account: activeAccountNumber })
+                        : t('journal_empty_desc')}
+                    </div>
+                  )}
                 </td>
               </tr>
             )}
@@ -127,7 +145,7 @@ export default function TradeTable({
         </table>
       </div>
 
-      {totalPages > 1 && (
+      {historyReady && totalPages > 1 && (
         <div
           style={{
             display: 'flex',
@@ -141,7 +159,7 @@ export default function TradeTable({
           }}
         >
           <span>
-            {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredRows.length)} / {filteredRows.length}
+            {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalRows)} / {totalRows}
           </span>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
@@ -149,7 +167,8 @@ export default function TradeTable({
               className="btn alt"
               style={{ padding: '4px 10px', fontSize: '11px', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer' }}
               disabled={currentPage <= 1}
-              onClick={() => onPageChange((current) => Math.max(1, current - 1))}
+              aria-label={t('journal_prev_page')}
+              onClick={() => onPageChange(currentPage - 1)}
             >
               &larr;
             </button>
@@ -161,7 +180,8 @@ export default function TradeTable({
               className="btn alt"
               style={{ padding: '4px 10px', fontSize: '11px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer' }}
               disabled={currentPage >= totalPages}
-              onClick={() => onPageChange((current) => Math.min(totalPages, current + 1))}
+              aria-label={t('journal_next_page')}
+              onClick={() => onPageChange(currentPage + 1)}
             >
               &rarr;
             </button>

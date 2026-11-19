@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 
 export const currentYearMonth = () => {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 
 export function useMonthStepper(locale) {
@@ -17,14 +17,15 @@ export function useMonthStepper(locale) {
 
   const isCurrentOrFutureMonth = selectedMonth >= todayYearMonth;
 
-  const { selectedYear, selectedMonthIndex, daysInMonth, monthName } = useMemo(() => {
+  const { selectedYear, selectedMonthIndex, daysInMonth, firstWeekday, monthName } = useMemo(() => {
     const parts = (selectedMonth || '').split('-');
     const fallbackYear = parseInt(todayYearMonth.slice(0, 4), 10) || 1970;
     const year = parseInt(parts[0], 10) || fallbackYear;
     const monthIdx = (parseInt(parts[1], 10) || 1) - 1;
-    const days = new Date(year, monthIdx + 1, 0).getDate();
-    const name = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, monthIdx, 1));
-    return { selectedYear: year, selectedMonthIndex: monthIdx, daysInMonth: days, monthName: name };
+    const firstDay = new Date(Date.UTC(year, monthIdx, 1));
+    const days = new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate();
+    const name = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(firstDay);
+    return { selectedYear: year, selectedMonthIndex: monthIdx, daysInMonth: days, firstWeekday: (firstDay.getUTCDay() + 6) % 7, monthName: name };
   }, [selectedMonth, locale, todayYearMonth]);
 
   const shiftMonth = (delta) => {
@@ -79,6 +80,7 @@ export function useMonthStepper(locale) {
     selectedYear,
     selectedMonthIndex,
     daysInMonth,
+    firstWeekday,
     monthName,
     prevMonth,
     nextMonth,

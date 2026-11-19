@@ -207,14 +207,35 @@ export const api = {
 
   /**
    * Aggregated journal analytics for the active connection.
-   * range: 1M | 3M | 1Y | ALL, source: all | ea | manual, symbol: string | null
+   * range: 1M | 3M | 1Y | ALL | MONTH, source: all | ea | manual
    */
-  async getJournalStats(range = '1M', source = 'all', symbol = null) {
-    const params = { range, source };
-    if (symbol && symbol !== 'ALL') params.symbol = symbol;
-    const res = await authRequest(`${API_BASE}/api/v1/journal/stats?${new URLSearchParams(params)}`, { method: 'GET' });
+  async getJournalStats({ range, source, symbol, start, end, includeDaily, connectionId }) {
+    const params = new URLSearchParams({ range, source });
+    if (symbol && symbol !== 'ALL') params.set('symbol', symbol);
+    if (start !== undefined) params.set('start', start);
+    if (end !== undefined) params.set('end', end);
+    if (includeDaily) params.set('include_daily', 'true');
+    const headers = connectionId ? { 'X-Connection-Id': connectionId } : undefined;
+    const res = await authRequest(`${API_BASE}/api/v1/journal/stats?${params}`, { headers });
     if (res.status === 409) return null;
     if (!res.ok) throw new Error('Failed to fetch journal statistics');
+    return res.json();
+  },
+
+  async getJournalRows({ source, symbol, start, end, search, limit, offset, tradesOnly, connectionId }) {
+    const params = new URLSearchParams({ source, limit, offset });
+    if (symbol && symbol !== 'ALL') params.set('symbol', symbol);
+    if (start !== undefined) params.set('start', start);
+    if (end !== undefined) params.set('end', end);
+    if (search) params.set('search', search);
+    if (tradesOnly) {
+      params.set('trades_only', 'true');
+      params.set('include_symbols', 'false');
+    }
+    const headers = connectionId ? { 'X-Connection-Id': connectionId } : undefined;
+    const res = await authRequest(`${API_BASE}/api/v1/journal/rows?${params}`, { headers });
+    if (res.status === 409) return null;
+    if (!res.ok) throw new Error('Failed to fetch journal history');
     return res.json();
   },
 

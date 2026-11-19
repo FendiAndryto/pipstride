@@ -29,11 +29,14 @@ const PERIOD_LABELS = {
   MONTH: 'journal_period_label_month'
 };
 
-export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus, riskStatus, hasConnection = false }) {
+export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus, riskStatus, hasConnection = false, connectionId }) {
   const { t, locale } = useLanguage();
-  const [period, setPeriod] = useState('1M');
+  const [period, setPeriod] = useState('ALL');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
 
   const month = useMonthStepper(locale);
+  const calendarMonth = useMonthStepper(locale);
   // Account currency drives every nominal on this screen (ticket 011-02):
   // Cent accounts quote in USC, so hardcoded "$" would misreport 1,298.80 USC as dollars.
   const currency = bridgeStatus?.metrics?.currency || 'USD';
@@ -42,8 +45,10 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
     closedTradesCount,
     bridgeStatus,
     hasConnection,
+    connectionId,
     period,
-    month: { ...month, locale }
+    month,
+    calendarMonth
   });
   const { filter, setFilter, selectedSymbol, setSelectedSymbol, search, setSearch } = data;
 
@@ -52,10 +57,16 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
     : t(PERIOD_LABELS[period]);
   const periodLabel = selectedSymbol === 'ALL' ? basePeriodLabel : `${selectedSymbol} • ${basePeriodLabel}`;
 
-  const handleExport = () => {
-    const tradesToExport = data.filteredTrades.length > 0 ? data.filteredTrades : data.trades;
-    if (!exportTradesCsv(tradesToExport, { symbol: selectedSymbol })) {
-      alert(t('journal_export_empty'));
+  const handleExport = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const trades = await data.exportTrades();
+      if (!exportTradesCsv(trades, { symbol: selectedSymbol })) setExportError('journal_export_empty');
+    } catch {
+      setExportError('journal_export_error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -67,30 +78,34 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
           <h1>{t('journal_title')}</h1>
           <div className="sub">{t('journal_sub')}</div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button type="button" className="btn" onClick={handleExport} id="journal-export-btn" style={{ padding: '8px 14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={handleExport}
+            disabled={exporting || data.isHistoryLoading || data.historyError || !data.canExportTrades}
+            id="journal-export-btn"
+            style={{ padding: '8px 14px' }}
+          >
             <ArrowUpRight size={14} />
-            <span>{t('journal_export')}</span>
+            <span>{exporting ? t('journal_export_loading') : t('journal_export')}</span>
           </button>
+          {exportError && <span role="alert" className="tiny">{t(exportError)}</span>}
         </div>
       </div>
 
       {/* Period filter + month stepper */}
       <div className="journal-period-bar">
-        <div className="journal-period-segmented" role="tablist" aria-label={t('journal_filter_aria')}>
+        <div className="journal-period-segmented" role="group" aria-label={t('journal_filter_aria')}>
           {PERIODS.map((option) => {
             const isActive = period === option.value;
             return (
               <button
                 key={option.value}
                 type="button"
-                role="tab"
-                aria-selected={isActive}
+                aria-pressed={isActive}
                 className={`journal-period-tab ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  setPeriod(option.value);
-                  if (option.value === 'MONTH') month.setSelectedDate(null);
-                }}
+                onClick={() => setPeriod(option.value)}
                 id={`journal-period-${option.value.toLowerCase()}`}
               >
                 {option.value === 'MONTH' && <Calendar size={12} />}
@@ -106,6 +121,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
               type="button"
               className="journal-stepper-btn"
               onClick={month.prevMonth}
+              aria-label={t('journal_prev_month')}
               title={t('journal_prev_month')}
               id="journal-prev-month-btn"
             >
@@ -132,6 +148,7 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
               className="journal-stepper-btn"
               onClick={month.nextMonth}
               disabled={month.isCurrentOrFutureMonth}
+              aria-label={t('journal_next_month')}
               title={t('journal_next_month')}
               id="journal-next-month-btn"
             >
@@ -143,34 +160,31 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
 
       {/* Symbol chips */}
       {data.tradedSymbols.length > 0 && (
-        <div className="journal-symbol-bar animate-fade-in" role="tablist" aria-label={t('journal_filter_symbol_aria')}>
+        <div className="journal-symbol-bar animate-fade-in" role="group" aria-label={t('journal_filter_symbol_aria')}>
           <div className="journal-symbol-chips">
             <button
               type="button"
-              role="tab"
-              aria-selected={selectedSymbol === 'ALL'}
+              aria-pressed={selectedSymbol === 'ALL'}
               className={`journal-symbol-chip ${selectedSymbol === 'ALL' ? 'active' : ''}`}
               onClick={() => setSelectedSymbol('ALL')}
               id="journal-symbol-all"
             >
               <span>{t('journal_symbol_all')}</span>
-              <span className="journal-symbol-count">{data.trades.length}</span>
+              <span className="journal-symbol-count">{data.symbolTradeCount}</span>
             </button>
             {data.tradedSymbols.map((symbol) => {
-              const count = data.trades.filter((trade) => trade.symbol?.toUpperCase() === symbol).length;
               const isActive = selectedSymbol === symbol;
               return (
                 <button
                   key={symbol}
                   type="button"
-                  role="tab"
-                  aria-selected={isActive}
+                  aria-pressed={isActive}
                   className={`journal-symbol-chip ${isActive ? 'active' : ''}`}
                   onClick={() => setSelectedSymbol(symbol)}
                   id={`journal-symbol-${symbol.toLowerCase()}`}
                 >
                   <span>{symbol}</span>
-                  <span className="journal-symbol-count">{count}</span>
+                  <span className="journal-symbol-count">{data.symbolCounts[symbol]}</span>
                 </button>
               );
             })}
@@ -178,39 +192,13 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
         </div>
       )}
 
-      <KpiCards
-        netPnl={data.netPnl}
-        winRate={data.winRate}
-        profitFactor={data.profitFactor}
-        totalTrades={data.totalTrades}
-        winningTrades={data.winningTrades}
-        losingTrades={data.losingTrades}
-        cashFlow={data.cashFlowStats}
-        periodLabel={periodLabel}
-        period={period}
-        currency={currency}
-      />
-
-      <DrawdownCard bridgeStatus={bridgeStatus} riskStatus={riskStatus} />
-
-      <JournalAnalytics
-        stats={{
-          ...data.activeStats,
-          by_weekday: data.dayBuckets.length > 0 ? data.dayBuckets : (data.activeStats?.by_weekday || [])
-        }}
-        loading={data.isStatsLoading}
-        periodLabel={periodLabel}
-        selectedSymbol={selectedSymbol}
-        onSelectSymbol={setSelectedSymbol}
-        currency={currency}
-      />
-
       {/* Source filter */}
-      <div style={{ display: 'flex', gap: '7px', overflowX: 'auto', padding: '4px 0 12px' }}>
+      <div role="group" aria-label={t('journal_filter_source_aria')} style={{ display: 'flex', gap: '7px', overflowX: 'auto', padding: '4px 0 12px' }}>
         {['All', 'Manual', 'EA'].map((option) => (
           <button
             key={option}
             type="button"
+            aria-pressed={filter === option}
             className={`btn ${filter === option ? '' : 'alt'}`}
             style={{ fontSize: '11px', padding: '7px 14px' }}
             onClick={() => setFilter(option)}
@@ -219,6 +207,38 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
           </button>
         ))}
       </div>
+
+      {data.isStatsLoading || data.statsError ? (
+        <div className="card tiny" role={data.statsError ? 'alert' : 'status'} style={{ marginBottom: '16px' }}>
+          {data.statsError ? t('journal_stats_error') : t('ja_calculating')} · {periodLabel}
+        </div>
+      ) : (
+        <KpiCards
+          netPnl={data.netPnl}
+          winRate={data.winRate}
+          profitFactor={data.profitFactor}
+          totalTrades={data.totalTrades}
+          winningTrades={data.winningTrades}
+          losingTrades={data.losingTrades}
+          cashFlow={data.cashFlowStats}
+          periodLabel={periodLabel}
+          cashFlowPeriodLabel={basePeriodLabel}
+          period={period}
+          currency={currency}
+        />
+      )}
+
+      <DrawdownCard bridgeStatus={bridgeStatus} riskStatus={riskStatus} />
+
+      {!data.isStatsLoading && !data.statsError && (
+        <JournalAnalytics
+          stats={data.activeStats}
+          periodLabel={periodLabel}
+          selectedSymbol={selectedSymbol}
+          onSelectSymbol={setSelectedSymbol}
+          currency={currency}
+        />
+      )}
 
       {/* Search */}
       <div style={{ marginBottom: '14px' }}>
@@ -244,23 +264,25 @@ export default function JournalTab({ activeTab, closedTradesCount, bridgeStatus,
       </div>
 
       <TradeTable
-        filteredRows={data.filteredRows}
+        totalRows={data.totalRows}
         paginatedRows={data.paginatedRows}
         currentPage={data.currentPage}
         totalPages={data.totalPages}
         pageSize={data.pageSize}
         onPageChange={data.setPage}
         isHistoryLoading={data.isHistoryLoading}
+        historyError={data.historyError}
+        hasFilters={period !== 'ALL' || selectedSymbol !== 'ALL' || filter !== 'All' || Boolean(search.trim())}
+        periodLabel={periodLabel}
         activeAccountNumber={data.activeAccountNumber}
         currency={currency}
       />
 
       <MonthCalendar
-        daysInMonth={month.daysInMonth}
-        monthName={month.monthName}
-        dailyPnlMap={data.dailyPnlMap}
-        selectedDate={month.selectedDate}
-        onSelectDate={month.setSelectedDate}
+        month={calendarMonth}
+        dailyPnlMap={data.calendarDailyPnl}
+        loading={data.calendarLoading}
+        error={data.calendarError}
         currency={currency}
       />
     </div>

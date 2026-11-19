@@ -289,7 +289,10 @@ export default function JournalAnalytics({ stats, loading, periodLabel, selected
         <BucketBars
           title={t('ja_by_weekday')}
           subtitle={t('ja_broker_time')}
-          buckets={stats.by_weekday || []}
+          buckets={(stats.by_weekday || []).map((bucket) => ({
+            ...bucket,
+            key: t(`journal_weekday_${bucket.key.toLowerCase()}`)
+          }))}
           icon={BarChart3}
           currency={currency}
         />

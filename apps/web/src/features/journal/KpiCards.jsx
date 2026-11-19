@@ -1,5 +1,4 @@
-// Journal KPI tiles (ticket 006-04). Numbers come from useJournalData, which
-// takes them from the backend stats or domain/analytics for the MONTH window.
+// Journal KPI tiles (ticket 006-04). useJournalData supplies backend stats.
 //
 // The second row is the cash flow stream (ticket 013-03). It is rendered as a
 // separate grid on purpose: deposits and withdrawals are funding events, not
@@ -18,6 +17,7 @@ export default function KpiCards({
   losingTrades,
   cashFlow,
   periodLabel,
+  cashFlowPeriodLabel,
   period = 'ALL',
   currency = 'USD'
 }) {
@@ -54,18 +54,19 @@ export default function KpiCards({
       {/* Cash flow: a separate grid, never merged into the trading metrics above. */}
       {cashFlow && (
         <>
+          <div className="section">{t('journal_cashflow_account_title')}</div>
           <div className="grid-cards-responsive-2col three-cols-desktop">
             <div className="card" id="journal-kpi-total-deposits">
               <div className="metric" style={{ color: 'var(--g)' }}>{formatCurrency(cashFlow.deposits, currency)}</div>
-              <div className="label">{t('journal_stat_total_deposits_period', { period: periodLabel })}</div>
+              <div className="label">{t('journal_stat_total_deposits_period', { period: cashFlowPeriodLabel })}</div>
             </div>
             <div className="card" id="journal-kpi-total-withdrawals">
               <div className="metric" style={{ color: 'var(--muted)' }}>{formatCurrency(cashFlow.withdrawals, currency)}</div>
-              <div className="label">{t('journal_stat_total_withdrawals_period', { period: periodLabel })}</div>
+              <div className="label">{t('journal_stat_total_withdrawals_period', { period: cashFlowPeriodLabel })}</div>
             </div>
             <div className="card" id="journal-kpi-net-funding">
               <div className={`metric ${cashFlow.netFunding >= 0 ? 'positive' : 'negative'}`}>{formatSignedMoney(cashFlow.netFunding, currency)}</div>
-              <div className="label">{t('journal_stat_net_funding_period', { period: periodLabel })}</div>
+              <div className="label">{t('journal_stat_net_funding_period', { period: cashFlowPeriodLabel })}</div>
             </div>
           </div>
           {period !== 'ALL' && (

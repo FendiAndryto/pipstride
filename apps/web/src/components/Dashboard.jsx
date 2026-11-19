@@ -189,6 +189,8 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
         {/* Tab 2: Trading Journal */}
         <div className={`page-container ${activeTab === 'journal' ? 'active' : ''}`} id="tab-journal">
           <JournalTab
+            key={activeConnectionId}
+            connectionId={activeConnectionId}
             activeTab={activeTab}
             closedTradesCount={bridgeStatus?.closed_trades_count}
             bridgeStatus={bridgeStatus}

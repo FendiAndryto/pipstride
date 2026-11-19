@@ -88,6 +88,7 @@ export default function DrawdownCard({ bridgeStatus, riskStatus }) {
     return (
       <div className="card" style={{ marginBottom: '16px' }} id="journal-drawdown-card">
         {heading}
+        <p className="tiny" style={{ margin: '0 0 10px' }}>{t('journal_drawdown_scope')}</p>
         <p className="sub" style={{ fontSize: '11.5px', margin: 0, lineHeight: 1.5 }}>
           {t('journal_drawdown_unavailable')}
         </p>
@@ -122,6 +123,7 @@ export default function DrawdownCard({ bridgeStatus, riskStatus }) {
   return (
     <div className="card" style={{ marginBottom: '16px' }} id="journal-drawdown-card">
       {heading}
+      <p className="tiny" style={{ margin: '0 0 10px' }}>{t('journal_drawdown_scope')}</p>
 
       <div className="grid-cards-responsive-2col" style={{ gap: '18px' }}>
         <Gauge

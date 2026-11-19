@@ -1644,6 +1644,11 @@ main.app-main {
   pointer-events: none;
 }
 
+#journal-export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .journal-symbol-bar {
   display: flex;
   align-items: center;
