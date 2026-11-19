@@ -176,3 +176,10 @@ Sebelum menandai sebuah fase selesai dan lanjut:
 - [x] **03-dashboard-ui-capital-and-pnl-display.md** (`done`): UI `HomeTab.jsx` menampilkan Modal Bersih dan P/L trading riil, update kamus bahasa `translations.js` (EN/ID), verifikasi `check-i18n.cjs`.
 - [x] **04-journal-cashflow-labeling-and-clarity.md** (`done`): Penegasan label periode aktif pada kartu kas di `KpiCards.jsx` dan penyelarasan baseline deposit pada `DrawdownCard.jsx`.
 
+### Fase 015 · Periode dan Histori Journal (Selesai)
+
+Fase ini mengikuti `docs/specs/011-journal-period-and-history.md`.
+
+- [x] **01-journal-query-and-pagination.md** (`done`) menambahkan filter waktu bersama dan pagination server.
+- [x] **02-journal-period-and-calendar-ui.md** (`done`) mengatur default Semua Waktu, CSV sesuai filter, dan bulan kalender independen.
+
