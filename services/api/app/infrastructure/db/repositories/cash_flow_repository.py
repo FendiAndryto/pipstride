@@ -19,6 +19,41 @@ DEPOSIT = "DEPOSIT"
 WITHDRAWAL = "WITHDRAWAL"
 
 
+def journal_scope(
+    connection_id: str, since: Optional[datetime], before: Optional[datetime]
+):
+    conditions = [CashFlowDeal.connection_id == connection_id]
+    if since is not None:
+        conditions.append(CashFlowDeal.occurred_at >= since)
+    if before is not None:
+        conditions.append(CashFlowDeal.occurred_at < before)
+    return conditions
+
+
+def journal_totals(
+    db: Session,
+    connection_id: str,
+    *,
+    since: Optional[datetime] = None,
+    before: Optional[datetime] = None,
+) -> dict:
+    category = func.upper(func.trim(CashFlowDeal.category))
+    amount = func.abs(CashFlowDeal.amount)
+    deposits, withdrawals = db.execute(
+        select(
+            func.sum(case((category == DEPOSIT, amount), else_=0.0)),
+            func.sum(case((category == WITHDRAWAL, amount), else_=0.0)),
+        ).where(*journal_scope(connection_id, since, before))
+    ).one()
+    deposits = round(float(deposits or 0.0), 2)
+    withdrawals = round(float(withdrawals or 0.0), 2)
+    return {
+        "deposits": deposits,
+        "withdrawals": withdrawals,
+        "net_funding": round(deposits - withdrawals, 2),
+    }
+
+
 def _to_dt(timestamp: Optional[int]) -> datetime:
     if not timestamp:
         return datetime.now(timezone.utc)

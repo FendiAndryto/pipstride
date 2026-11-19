@@ -1,8 +1,12 @@
 """Journal analytics: pure aggregation rules plus the HTTP endpoint."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from sqlalchemy import insert
+
+from app.db.base import SessionLocal
+from app.db.models import CashFlowDeal, Trade
 from app.domain.metrics import compute_stats
 from tests.conftest import heartbeat_payload
 
@@ -203,3 +207,143 @@ def test_stats_endpoint_rejects_unknown_range(client, account):
         "/api/v1/journal/stats", params={"range": "10Y"}, headers=account["headers"]
     )
     assert res.status_code == 422
+
+
+def test_journal_rows_filters_and_pages_the_combined_stream(client, account):
+    connection = _seed_trades(client, account)
+    start = 1_699_500_000
+    end = 1_699_700_000
+    with SessionLocal.begin() as db:
+        db.execute(
+            insert(Trade),
+            [
+                {
+                    "connection_id": connection["id"],
+                    "ticket": 8103,
+                    "symbol": "xauusd",
+                    "direction": "SELL",
+                    "opened_at": datetime.fromtimestamp(start + 1, timezone.utc),
+                    "profit": -40.0,
+                },
+                {
+                    "connection_id": connection["id"],
+                    "ticket": 8104,
+                    "symbol": "GBPUSD",
+                    "direction": "BUY",
+                    "opened_at": datetime.fromtimestamp(end, timezone.utc),
+                    "profit": 10.0,
+                },
+            ],
+        )
+        db.execute(
+            insert(CashFlowDeal),
+            [
+                {
+                    "connection_id": connection["id"],
+                    "ticket": ticket,
+                    "category": category,
+                    "amount": amount,
+                    "occurred_at": datetime.fromtimestamp(moment, timezone.utc),
+                }
+                for ticket, category, amount, moment in [
+                    (8102, "DEPOSIT", 100.0, 1_699_600_000),
+                    (8201, "WITHDRAWAL", -50.0, end - 1),
+                    (8202, "DEPOSIT", 1000.0, end),
+                    (8203, "WITHDRAWAL", -25.0, start - 1),
+                ]
+            ],
+        )
+
+    def rows(**params):
+        response = client.get(
+            "/api/v1/journal/rows",
+            params={"start": start, "end": end, **params},
+            headers=account["headers"],
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    first = rows(limit=2)
+    assert [row["ticket"] for row in first["trades"]] == [8102]
+    assert [row["ticket"] for row in first["cash_flow"]] == [8201]
+    assert first["total"] == 5
+    assert first["trade_total"] == 3
+    assert first["symbols"] == [{"symbol": "EURUSD", "count": 2}, {"symbol": "XAUUSD", "count": 1}]
+
+    second = rows(limit=2, offset=2, include_symbols=False)
+    assert [row["ticket"] for row in second["cash_flow"]] == [8102]
+    assert [row["ticket"] for row in second["trades"]] == [8103]
+    assert second["trades"][0]["close_time"] == start + 1
+    assert second["symbols"] == []
+    assert [row["ticket"] for row in rows(limit=2, offset=4)["trades"]] == [8101]
+    assert rows(offset=5)["total"] == 5
+    assert rows(offset=5)["trades"] == []
+    assert rows(offset=5)["cash_flow"] == []
+
+    assert rows(search="sElL")["total"] == 2
+    assert rows(search="%")["total"] == 0
+    assert rows(search="dEpO")["trade_total"] == 0
+    assert rows(search="dEpO")["total"] == 1
+    assert rows(search="8102")["total"] == 2
+    assert rows(source="ea", search="EA")["total"] == 1
+    assert rows(source="manual", symbol="eurusd")["total"] == 1
+    assert rows(source="manual", symbol="eurusd")["symbols"] == first["symbols"]
+    assert rows(trades_only=True)["total"] == 3
+
+
+def test_journal_stats_uses_explicit_bounds_and_uncapped_cash_totals(client, account):
+    connection = _seed_trades(client, account)
+    start = 1_699_500_000
+    end = 1_699_600_000
+    with SessionLocal.begin() as db:
+        db.execute(
+            insert(CashFlowDeal),
+            [
+                {
+                    "connection_id": connection["id"],
+                    "ticket": ticket,
+                    "category": "DEPOSIT",
+                    "amount": 1.0,
+                    "occurred_at": datetime.fromtimestamp(start, timezone.utc),
+                }
+                for ticket in range(5001)
+            ],
+        )
+        db.add(
+            CashFlowDeal(
+                connection_id=connection["id"],
+                ticket=5001,
+                category="WITHDRAWAL",
+                amount=-20.0,
+                occurred_at=datetime.fromtimestamp(end, timezone.utc),
+            )
+        )
+
+    def stats(**params):
+        return client.get("/api/v1/journal/stats", params=params, headers=account["headers"])
+
+    response = stats(range="MONTH", start=start, end=end, include_daily=True)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["start"] == start
+    assert body["end"] == end
+    assert body["totals"]["trades"] == 1
+    assert body["daily_pnl"] == {"2023-11-09": 75.0}
+    assert body["cash_flow"] == {"deposits": 5001.0, "withdrawals": 0.0, "net_funding": 5001.0}
+
+    filtered = stats(range="1M", end=end, source="manual", symbol="EURUSD").json()
+    assert filtered["start"] is None
+    assert filtered["totals"]["trades"] == 0
+    assert filtered["cash_flow"] == body["cash_flow"]
+    assert "daily_pnl" not in filtered
+    assert stats(range="MONTH", end=end).status_code == 422
+    assert stats(range="MONTH", start=end, end=start).status_code == 422
+
+    response = client.get(
+        "/api/v1/journal/rows", params={"limit": 2, "offset": 5002}, headers=account["headers"]
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 5004
+    assert body["trade_total"] == 2
+    assert [row["ticket"] for row in body["cash_flow"]] == [1, 0]

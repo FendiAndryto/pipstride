@@ -14,35 +14,49 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Trade
 
+TRADE_MOMENT = func.coalesce(Trade.closed_at, Trade.opened_at, Trade.created_at)
+TRADE_SYMBOL = func.upper(func.trim(Trade.symbol))
 
-def list_trades(
-    db: Session,
+
+def trade_scope(
     connection_id: str,
     *,
     since: Optional[datetime] = None,
+    before: Optional[datetime] = None,
     symbol: Optional[str] = None,
     direction: Optional[str] = None,
     source: str = "all",
-) -> list[Trade]:
-    """Return the trades matching the dashboard's journal filters.
-
-    The EA may not report a close time for very old deals; fall back to the
-    open time and finally to ingest time so a trade is never silently dropped.
-    """
-    moment = func.coalesce(Trade.closed_at, Trade.opened_at, Trade.created_at)
-
+):
+    """Filter by close time, falling back to open time and then ingest time."""
     conditions = [Trade.connection_id == connection_id]
     if since is not None:
-        conditions.append(moment >= since)
+        conditions.append(TRADE_MOMENT >= since)
+    if before is not None:
+        conditions.append(TRADE_MOMENT < before)
     if symbol:
-        conditions.append(func.upper(Trade.symbol) == symbol.strip().upper())
+        conditions.append(TRADE_SYMBOL == symbol.strip().upper())
     if direction:
         conditions.append(func.upper(Trade.direction) == direction)
     if source == "ea":
         conditions.append(Trade.magic > 0)
     elif source == "manual":
         conditions.append(Trade.magic == 0)
+    return conditions
 
+
+def list_trades(
+    db: Session,
+    connection_id: str,
+    *,
+    since: Optional[datetime] = None,
+    before: Optional[datetime] = None,
+    symbol: Optional[str] = None,
+    direction: Optional[str] = None,
+    source: str = "all",
+) -> list[Trade]:
+    conditions = trade_scope(
+        connection_id, since=since, before=before, symbol=symbol, direction=direction, source=source
+    )
     return list(db.scalars(select(Trade).where(*conditions)))
 
 

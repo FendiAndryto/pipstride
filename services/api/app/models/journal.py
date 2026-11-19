@@ -4,6 +4,21 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.models.bridge import CashFlowItem, ClosedTradeItem
+
+
+class JournalSymbol(BaseModel):
+    symbol: str
+    count: int
+
+
+class JournalRowsResponse(BaseModel):
+    trades: List[ClosedTradeItem]
+    cash_flow: List[CashFlowItem]
+    total: int
+    trade_total: int
+    symbols: List[JournalSymbol]
+
 
 class JournalTotals(BaseModel):
     trades: int = 0
@@ -52,9 +67,9 @@ class CashFlowSummary(BaseModel):
 
 
 class JournalStatsResponse(BaseModel):
-    range: str = Field(..., description="Requested window: 1M, 3M, 1Y, or ALL")
+    range: str = Field(..., description="Requested window: MONTH, 1M, 3M, 1Y, or ALL")
     source: str = Field(..., description="all, ea, or manual")
-    start: Optional[int] = Field(None, description="Window start (unix seconds), null for ALL")
+    start: Optional[int] = Field(None, description="Inclusive window start (unix seconds), if set")
     end: int = Field(..., description="Window end (unix seconds)")
     totals: JournalTotals = Field(default_factory=JournalTotals)
     cash_flow: CashFlowSummary = Field(default_factory=CashFlowSummary)
@@ -63,5 +78,6 @@ class JournalStatsResponse(BaseModel):
     by_hour: List[JournalBucket] = Field(default_factory=list)
     by_direction: List[JournalBucket] = Field(default_factory=list)
     by_source: List[JournalBucket] = Field(default_factory=list)
+    daily_pnl: Optional[dict[str, float]] = Field(None, description="Net PnL by UTC date, if requested")
     account_number: Optional[int] = None
     server: Optional[str] = None

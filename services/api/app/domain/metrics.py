@@ -161,9 +161,9 @@ def compute_totals(rows: Sequence[Any]) -> dict:
     }
 
 
-def compute_stats(rows: Iterable[Any]) -> dict:
+def compute_stats(rows: Iterable[Any], *, include_daily: bool = False) -> dict:
     rows = list(rows)
-    return {
+    stats = {
         "totals": compute_totals(rows),
         "by_symbol": _bucketize(rows, _symbol_key),
         "by_weekday": _bucketize(rows, _weekday_key, order=WEEKDAY_LABELS),
@@ -171,6 +171,15 @@ def compute_stats(rows: Iterable[Any]) -> dict:
         "by_direction": _bucketize(rows, _direction_key, order=["BUY", "SELL"]),
         "by_source": _bucketize(rows, _source_key, order=["EA", "Manual"]),
     }
+    if include_daily:
+        daily = {}
+        for row in rows:
+            moment = close_time(row)
+            if moment is not None:
+                day = moment.date().isoformat()
+                daily[day] = daily.get(day, 0.0) + row.profit
+        stats["daily_pnl"] = {day: round(profit, 2) for day, profit in daily.items()}
+    return stats
 
 
 def compute_cash_flow(deals: Iterable[Any]) -> dict:
