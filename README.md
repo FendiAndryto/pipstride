@@ -125,6 +125,8 @@ The web container's nginx proxies `/api/` to the API service, so the dashboard w
 
 The web and marketing containers publish on `127.0.0.1` by default. If the reverse proxy lives outside this compose project (another container, another host, or a tunnel pointing at the host's VPN address), set `WEB_BIND_IP` / `MARKETING_BIND_IP` to that address — a proxy cannot reach a loopback-only port and every request fails with `502`/`000`.
 
+The API trusts client IP headers only from the dashboard and admin Nginx containers on the API network. The bundled Caddy overwrites `X-Real-IP` with the resolved client IP. For an external ingress such as Nginx Proxy Manager, set `EXTERNAL_INGRESS_PROXY_CIDR` to its exact source address as seen by the web/admin containers (`/32` for IPv4, `/128` for IPv6). Configure the external ingress to overwrite `X-Real-IP` with the verified client address. For a Cloudflare Tunnel chain, resolve the client address at the trusted ingress before forwarding it. Set this up before rolling out the Nginx change so login limits and audit records continue to use individual client addresses. See `.env.example` if the Compose network ranges overlap an existing network.
+
 ### Option B — Local development
 
 Start Postgres and Redis (any local install or `docker compose up postgres redis`), then:

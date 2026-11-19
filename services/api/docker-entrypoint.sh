@@ -7,4 +7,5 @@ if [ -n "$DATABASE_URL" ]; then
     alembic upgrade head
 fi
 
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}
+# Keep the socket peer intact for the application's X-Real-IP trust check.
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-proxy-headers --workers ${UVICORN_WORKERS:-2}

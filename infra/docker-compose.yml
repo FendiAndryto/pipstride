@@ -18,7 +18,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - pipstride_net
+      - pipstride_api_net
 
   redis:
     image: redis:7-alpine
@@ -35,7 +35,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - pipstride_net
+      - pipstride_api_net
 
   api:
     build:
@@ -83,7 +83,7 @@ services:
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - HEARTBEAT_RATE_LIMIT=${HEARTBEAT_RATE_LIMIT:-120}
       - HEARTBEAT_RATE_WINDOW_SECONDS=${HEARTBEAT_RATE_WINDOW_SECONDS:-10}
-      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      - TRUSTED_PROXY_IPS=${WEB_API_PROXY_IP:-172.30.245.2},${ADMIN_API_PROXY_IP:-172.30.245.3}
       - LAST_SEEN_FLUSH_SECONDS=${LAST_SEEN_FLUSH_SECONDS:-10}
       - SNAPSHOT_MIN_INTERVAL_SECONDS=${SNAPSHOT_MIN_INTERVAL_SECONDS:-30}
       - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
@@ -103,7 +103,7 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - pipstride_net
+      - pipstride_api_net
 
   web:
     build:
@@ -111,6 +111,9 @@ services:
       dockerfile: Dockerfile
     container_name: pipstride_web
     restart: unless-stopped
+    environment:
+      CADDY_INGRESS_IP: ${CADDY_INGRESS_IP:-172.30.244.2}
+      EXTERNAL_INGRESS_PROXY_CIDR: ${EXTERNAL_INGRESS_PROXY_CIDR:-127.0.0.1/32}
     ports:
       # Loopback by default; the public proxy reaches this container over the
       # address in WEB_BIND_IP (set it when the proxy lives outside the network).
@@ -118,7 +121,9 @@ services:
     depends_on:
       - api
     networks:
-      - pipstride_net
+      pipstride_net:
+      pipstride_api_net:
+        ipv4_address: ${WEB_API_PROXY_IP:-172.30.245.2}
 
   marketing:
     build:
@@ -138,6 +143,9 @@ services:
       dockerfile: Dockerfile
     container_name: pipstride_admin
     restart: unless-stopped
+    environment:
+      CADDY_INGRESS_IP: ${CADDY_INGRESS_IP:-172.30.244.2}
+      EXTERNAL_INGRESS_PROXY_CIDR: ${EXTERNAL_INGRESS_PROXY_CIDR:-127.0.0.1/32}
     ports:
       # Separate origin and bundle from apps/web (ADR 0008 §7). The public path
       # is gated by an IP allowlist in Caddy; this port stays loopback-bound.
@@ -145,12 +153,25 @@ services:
     depends_on:
       - api
     networks:
-      - pipstride_net
+      pipstride_net:
+      pipstride_api_net:
+        ipv4_address: ${ADMIN_API_PROXY_IP:-172.30.245.3}
 
 networks:
   pipstride_net:
-    name: pipstride_network
+    name: pipstride_ingress_network
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${PIPSTRIDE_INGRESS_SUBNET:-172.30.244.0/28}
+          ip_range: ${PIPSTRIDE_INGRESS_IP_RANGE:-172.30.244.8/29}
+  pipstride_api_net:
+    name: pipstride_api_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${PIPSTRIDE_API_SUBNET:-172.30.245.0/28}
+          ip_range: ${PIPSTRIDE_API_IP_RANGE:-172.30.245.8/29}
 
 volumes:
   postgres_data:

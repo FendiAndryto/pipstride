@@ -1,4 +1,5 @@
 fastapi==0.161.1
+opentelemetry-api==1.45.2  # FastAPI dependency, patched for CVE-2026-126360.
 uvicorn[standard]==0.54.0
 pydantic==2.14.1
 pydantic-settings==2.16.1

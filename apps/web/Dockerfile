@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 COPY package*.json ./
@@ -8,7 +8,10 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+ENV CADDY_INGRESS_IP=127.0.0.1 \
+    EXTERNAL_INGRESS_PROXY_CIDR=127.0.0.1/32 \
+    NGINX_ENVSUBST_FILTER=^(CADDY_INGRESS_IP|EXTERNAL_INGRESS_PROXY_CIDR)$
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 

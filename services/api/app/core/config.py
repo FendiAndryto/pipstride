@@ -92,11 +92,9 @@ class Settings(BaseSettings):
     HEARTBEAT_RATE_LIMIT: int = 120
     HEARTBEAT_RATE_WINDOW_SECONDS: int = 10
 
-    # Only requests from these peers may supply X-Real-IP. Defaults cover
-    # loopback and Docker's private ranges; override if the proxy network uses
-    # different addresses. The public path is Cloudflare -> Caddy -> nginx, so
-    # in practice only the nginx container address is ever exercised.
-    TRUSTED_PROXY_IPS: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    # Only requests from these peers may supply X-Real-IP. Compose sets this
+    # to the two Nginx proxy addresses on the API network.
+    TRUSTED_PROXY_IPS: str = ""
     
     # Risk Watchdog & Account Safeguard Defaults
     DEFAULT_RISK_PER_TRADE_PERCENT: float = 1.0
