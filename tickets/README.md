@@ -183,3 +183,10 @@ Fase ini mengikuti `docs/specs/011-journal-period-and-history.md`.
 - [x] **01-journal-query-and-pagination.md** (`done`) menambahkan filter waktu bersama dan pagination server.
 - [x] **02-journal-period-and-calendar-ui.md** (`done`) mengatur default Semua Waktu, CSV sesuai filter, dan bulan kalender independen.
 
+### Fase 016 · Alur Kerja Admin Console (Selesai)
+
+Fase ini mengikuti `docs/specs/012-admin-operator-workflows.md`.
+
+- [x] **01-support-session-lifecycle.md** (`done`) menyelaraskan grant, status pencabutan, dan detail privat.
+- [x] **02-directory-accessibility-and-operator-filters.md** (`done`) memperbaiki direktori, akses keyboard, Overview, dan filter Audit.
+
