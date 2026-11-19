@@ -25,8 +25,8 @@ const usedFraction = (value, limit) => {
 
 /**
  * All-time performance of the active account.
- * Backend fields settle the ground truth; only floating PnL and percentages
- * are derived locally when the bridge has not reported them yet.
+ * Backend fields supply PnL and ROI when available. A reported non-positive
+ * net capital sets both percentages to zero, including for cached responses.
  */
 export function summarizeAccountPnl(bridgeStatus, metrics) {
   const status = bridgeStatus ?? {};
@@ -36,25 +36,23 @@ export function summarizeAccountPnl(bridgeStatus, metrics) {
   const floatingPnl = live.floating_pnl ?? (equity - balance);
 
   const initialDeposit = status.initial_deposit ?? live.initial_deposit ?? balance;
-  const netCapital = provided(status.net_capital) ? status.net_capital : initialDeposit;
+  const netCapital = status.net_capital ?? initialDeposit;
+  const hasNonPositiveNetCapital = provided(status.net_capital) && netCapital <= 0;
 
   const settledPnl = provided(status.settled_pnl) ? status.settled_pnl : 0;
   const allTimePnl = provided(status.all_time_pnl) ? status.all_time_pnl : settledPnl + floatingPnl;
 
-  const baseCapital = netCapital > 0 ? netCapital : initialDeposit;
+  const settledPnlPercent = status.settled_pnl_percent ?? percentOfBase(settledPnl, netCapital);
+  const allTimePnlPercent = status.all_time_pnl_percent ?? percentOfBase(allTimePnl, netCapital);
 
   return {
     initialDeposit,
     netCapital,
     isDepositOverridden: status.is_deposit_overridden ?? false,
     settledPnl,
-    settledPnlPercent: provided(status.settled_pnl_percent)
-      ? status.settled_pnl_percent
-      : percentOfBase(settledPnl, baseCapital),
+    settledPnlPercent: hasNonPositiveNetCapital ? 0 : settledPnlPercent,
     allTimePnl,
-    allTimePnlPercent: provided(status.all_time_pnl_percent)
-      ? status.all_time_pnl_percent
-      : percentOfBase(allTimePnl, baseCapital)
+    allTimePnlPercent: hasNonPositiveNetCapital ? 0 : allTimePnlPercent
   };
 }
 

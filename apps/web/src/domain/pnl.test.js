@@ -42,7 +42,7 @@ describe('summarizeAccountPnl', () => {
   it('treats a null field as absent without falling back to a delta', () => {
     // `provided()` must treat null as absent — this is the 0365743 regression.
     const result = summarizeAccountPnl(
-      { initial_deposit: 1000, settled_pnl: null, all_time_pnl_percent: null },
+      { initial_deposit: 1000, net_capital: null, settled_pnl: null, all_time_pnl_percent: null },
       metrics
     );
 
@@ -78,13 +78,26 @@ describe('summarizeAccountPnl', () => {
     expect(result.settledPnl).toBe(0);
   });
 
-  it('falls back to the initial deposit as the percentage base when net capital is zero', () => {
+  it.each([0, -100])('reports zero ROI when net capital is %s', (netCapital) => {
     const result = summarizeAccountPnl(
-      { initial_deposit: 1000, net_capital: 0, settled_pnl: 100 },
-      { balance: 1100, equity: 1100 }
+      { initial_deposit: 1000, net_capital: netCapital, settled_pnl: 100 },
+      metrics
     );
 
-    expect(result.settledPnlPercent).toBe(10);
+    expect(result.settledPnl).toBe(100);
+    expect(result.allTimePnl).toBe(150);
+    expect(result.settledPnlPercent).toBe(0);
+    expect(result.allTimePnlPercent).toBe(0);
+  });
+
+  it('reports zero ROI despite stale backend percentages when net capital is zero', () => {
+    const result = summarizeAccountPnl(
+      { net_capital: 0, settled_pnl_percent: 10, all_time_pnl_percent: 15 },
+      metrics
+    );
+
+    expect(result.settledPnlPercent).toBe(0);
+    expect(result.allTimePnlPercent).toBe(0);
   });
 
   it('does not throw when bridgeStatus and metrics are null', () => {

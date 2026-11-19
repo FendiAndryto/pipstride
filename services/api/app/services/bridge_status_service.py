@@ -59,35 +59,31 @@ class BridgeStatusService:
             return False
         return (time.time() - float(live.get("captured_at", 0))) <= settings.HEARTBEAT_TIMEOUT_SECONDS
 
+    def _matching_baseline_id(
+        self, db: Session, connection: Mt5Connection, sensor_deposit: Optional[float]
+    ) -> Optional[int]:
+        """Identify the opening deposit without discarding an unmatched top-up."""
+        if not sensor_deposit:
+            return None
+        earliest = cash_flow_repository.earliest_deposit(db, connection.id)
+        if earliest is not None and abs(float(earliest.amount) - sensor_deposit) < 0.01:
+            return earliest.id
+        return None
+
     def get_status(self, db: Session, connection: Mt5Connection) -> BridgeStatusResponse:
         live = self._live(connection)
         fresh = self._is_fresh(live)
         deposit = account_settings_service.get_effective_initial_deposit(db, connection)
         overridden = account_settings_service.has_override(db, connection)
 
-        # Net capital is funding, not performance. The sensor's initial_deposit
-        # *is* the first positive balance deal, so that row is excluded from the
-        # cash-flow delta to avoid counting the baseline twice. A row whose
-        # amount does not match the sensor baseline is a later movement (the
-        # baseline itself has not been ingested yet) and must be kept.
-        realized_pnl = round(
-            float(trade_repository.sum_profit_between(db, connection.id) or 0.0), 2
-        )
         sensor_deposit = account_settings_service.get_sensor_initial_deposit(connection)
-        cash_totals = cash_flow_repository.sum_cash_flow(db, connection.id)
-        baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
-        baseline_id = None
-        if sensor_deposit and baseline_deal is not None:
-            if abs(float(baseline_deal.amount or 0.0) - float(sensor_deposit)) < 0.01:
-                baseline_id = baseline_deal.id
+        baseline_id = self._matching_baseline_id(db, connection, sensor_deposit)
+        cash_totals = cash_flow_repository.sum_cash_flow(
+            db, connection.id, exclude_id=baseline_id
+        )
 
         if sensor_deposit:
-            adjusted_cash = cash_flow_repository.sum_cash_flow(
-                db, connection.id, exclude_id=baseline_id
-            )
-            net_capital = round(
-                float(deposit or 0.0) + float(adjusted_cash.get("net_funding") or 0.0), 2
-            )
+            net_capital = round(float(deposit or 0.0) + cash_totals["net_funding"], 2)
         elif cash_totals["deposits"]:
             # No sensor baseline to anchor on: the cash rows are the only source.
             net_capital = round(float(cash_totals["net_funding"]), 2)
@@ -116,14 +112,13 @@ class BridgeStatusService:
         payload = HeartbeatPayload(**live["payload"])
         payload.bridge_token = None
 
-        settled_pnl = realized_pnl
-        all_time_pnl = round(realized_pnl + float(payload.floating_pnl or 0.0), 2)
-        base_capital = net_capital if (net_capital and net_capital > 0) else float(deposit or 0.0)
+        settled_pnl = trade_repository.sum_profit_between(db, connection.id)
+        all_time_pnl = round(settled_pnl + float(payload.floating_pnl or 0.0), 2)
         settled_pnl_pct = (
-            round((settled_pnl / base_capital) * 100.0, 2) if base_capital > 0 else 0.0
+            round((settled_pnl / net_capital) * 100.0, 2) if net_capital > 0 else 0.0
         )
         all_time_pnl_pct = (
-            round((all_time_pnl / base_capital) * 100.0, 2) if base_capital > 0 else 0.0
+            round((all_time_pnl / net_capital) * 100.0, 2) if net_capital > 0 else 0.0
         )
 
         return BridgeStatusResponse(
@@ -277,28 +272,10 @@ class BridgeStatusService:
         since = now - timedelta(days=days) if days is not None else None
 
         deposit = account_settings_service.get_effective_initial_deposit(db, connection)
-        overridden = account_settings_service.has_override(db, connection)
         if not deposit or deposit <= 0:
             deposit = 500.0
 
-        # Cash movements are step events in the reconstruction, never trading
-        # results. The sensor's ``initial_deposit`` *is* the account's first
-        # balance deal, so re-applying that row would double the starting
-        # equity. A manual override (or the balance fallback) is not a cash
-        # event, so in those cases every deposit counts.
-        baseline_id = None
-        if not overridden and account_settings_service.get_sensor_initial_deposit(
-            connection
-        ):
-            baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
-            baseline_id = baseline_deal.id if baseline_deal is not None else None
-        cash_events = [
-            (as_utc(occurred_at), amount)
-            for event_id, amount, occurred_at in cash_flow_repository.cash_flow_events(
-                db, connection.id
-            )
-            if event_id != baseline_id
-        ]
+        cash_events = self._cash_flow_timeline(db, connection)
 
         # Fetch the selected window from PostgreSQL and aggregate the baseline
         # in SQL. The previous version loaded every trade the account ever made.
@@ -607,41 +584,29 @@ class BridgeStatusService:
         deposit: float,
         boundary: datetime,
     ) -> float:
-        """Capital the account held at ``boundary``, from cash movements + realized P&L.
-
-        ``deposit + realized`` alone is only true while no cash has moved since
-        the first deposit. On account #452024626 it ignored a -1,700.00
-        withdrawal, reconstructed a 1,694.30 anchor for an account holding 0.00
-        and reported a 100% daily drawdown on a day with no trades (spec 009).
-
-        The sensor's ``initial_deposit`` *is* the first balance deal, so net
-        funding already covers it; adding ``deposit`` on top would count the
-        baseline twice. A manual override replaces that baseline, so the first
-        deal is dropped from the totals and the override stands in its place
-        (spec 009 D1).
-        """
+        """Rebuild capital from historical funding and realized P&L (spec 009)."""
         realized = trade_repository.sum_profit_between(db, connection.id, until=boundary)
         overridden = account_settings_service.has_override(db, connection)
-        baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
-
-        if baseline_deal is None:
-            # No balance-deal history to reconcile against: the deposit baseline
-            # is the only capital this connection has told us about.
-            return round(float(deposit) + realized, 2)
+        sensor_deposit = account_settings_service.get_sensor_initial_deposit(connection)
+        baseline_id = self._matching_baseline_id(db, connection, sensor_deposit)
+        if not sensor_deposit:
+            # Older heartbeats omit the sensor value. Preserve the historical
+            # anchor rule that uses the first recorded deposit as the baseline.
+            earliest = cash_flow_repository.earliest_deposit(db, connection.id)
+            baseline_id = earliest.id if earliest is not None else None
+        if not sensor_deposit and baseline_id is None:
+            return round(deposit + realized, 2)
 
         summary = cash_flow_repository.sum_cash_flow(
             db,
             connection.id,
             until=boundary,
-            exclude_id=baseline_deal.id if overridden else None,
+            exclude_id=baseline_id if overridden else None,
         )
-        funding = float(summary["net_funding"] or 0.0)
-
-        if overridden:
-            return round(float(deposit) + funding + realized, 2)
-        # Net funding already includes the sensor baseline, which *is* the first
-        # balance deal; only the movements after it have to be added again.
-        return round(funding + realized, 2)
+        if overridden or (sensor_deposit and baseline_id is None):
+            return round(deposit + summary["net_funding"] + realized, 2)
+        # Use the recorded time of the opening deposit for historical anchors.
+        return round(summary["net_funding"] + realized, 2)
 
     def _apply_cash_flow(
         self, db: Session, connection: Mt5Connection, anchor: dict
@@ -674,19 +639,9 @@ class BridgeStatusService:
     def _cash_flow_timeline(
         self, db: Session, connection: Mt5Connection
     ) -> List[tuple[datetime, float]]:
-        """Cash movements as ``(occurred_at, amount)``, baseline deal excluded.
-
-        The sensor's ``initial_deposit`` *is* the account's first balance deal, so
-        re-applying that row would double the starting equity. A manual override
-        is not a cash event, so in that case every deposit counts. Same rule as
-        ``get_equity_curve``.
-        """
-        baseline_id = None
-        if not account_settings_service.has_override(
-            db, connection
-        ) and account_settings_service.get_sensor_initial_deposit(connection):
-            baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
-            baseline_id = baseline_deal.id if baseline_deal is not None else None
+        """Return cash movements with the matched opening deposit excluded."""
+        sensor_deposit = account_settings_service.get_sensor_initial_deposit(connection)
+        baseline_id = self._matching_baseline_id(db, connection, sensor_deposit)
 
         return [
             (as_utc(occurred_at), float(amount or 0.0))

@@ -64,7 +64,6 @@ $$\text{Settled P/L} = \sum_{t \in \text{Closed Trades}} \text{Trade.profit}$$
    - Bila sensor belum pernah melaporkan `initial_deposit`, baris cash flow (`net_funding`) menjadi sumber utama; bila keduanya kosong, `net_capital = initial_deposit` (deposit efektif / fallback saldo).
 2. **All-Time Equity P/L:**
    $$\text{All-Time Equity P/L} = \text{Settled P/L} + \text{Floating P/L}$$
-   (Atau setara dengan $\text{Live Equity} - \text{Net Capital}$).
 3. **Persentase Pertumbuhan (Return on Capital):**
    $$\text{Settled P/L \%} = \begin{cases} 
    \dfrac{\text{Settled P/L}}{\text{Net Capital}} \times 100\%, & \text{jika Net Capital} > 0 \\
@@ -92,7 +91,7 @@ $$\text{Settled P/L} = \sum_{t \in \text{Closed Trades}} \text{Trade.profit}$$
 1. Beri label periode yang eksplisit pada kartu arus kas di Journal:
    - Misalnya: `Total Deposit (30 Hari Terakhir)` atau `Total Deposit (Bulan Ini)`.
 2. Saat pengguna memilih filter `ALL`, label otomatis berubah menjadi `Total Deposit (Semua Waktu)`.
-3. Sediakan catatan/petunjuk visual ringkas bahwa untuk melihat akumulasi seluruh modal dari awal buka akun, pengguna dapat beralih ke filter `ALL`.
+3. Tampilkan petunjuk untuk memilih filter `ALL` guna melihat akumulasi modal sejak akun dibuka pada setiap periode selain `ALL`, termasuk periode yang memiliki setoran atau penarikan.
 
 ---
 
@@ -118,23 +117,12 @@ class BridgeStatusResponse(BaseModel):
 ```python
 # 0. Hitung net capital SEBELUM cabang fresh/offline, supaya payload offline
 #    tetap membawa modal bersih.
-realized_pnl = round(float(trade_repository.sum_profit_between(db, connection.id) or 0.0), 2)
-
 sensor_deposit = account_settings_service.get_sensor_initial_deposit(connection)
-cash_totals = cash_flow_repository.sum_cash_flow(db, connection.id)
-baseline_deal = cash_flow_repository.earliest_deposit(db, connection.id)
-
-# Baseline hanya dikecualikan bila baris paling awal benar-benar setoran sensor.
-# Kalau nominalnya beda, baris itu adalah mutasi tambahan (baseline belum
-# ter-ingest) dan tidak boleh dibuang.
-baseline_id = None
-if sensor_deposit and baseline_deal is not None:
-    if abs(float(baseline_deal.amount or 0.0) - float(sensor_deposit)) < 0.01:
-        baseline_id = baseline_deal.id
+baseline_id = self._matching_baseline_id(db, connection, sensor_deposit)
+cash_totals = cash_flow_repository.sum_cash_flow(db, connection.id, exclude_id=baseline_id)
 
 if sensor_deposit:
-    adjusted_cash = cash_flow_repository.sum_cash_flow(db, connection.id, exclude_id=baseline_id)
-    net_capital = round(float(deposit or 0.0) + float(adjusted_cash.get("net_funding") or 0.0), 2)
+    net_capital = round(float(deposit or 0.0) + cash_totals["net_funding"], 2)
 elif cash_totals["deposits"]:
     # Sensor tidak melaporkan baseline: baris cash flow adalah satu-satunya sumber.
     net_capital = round(float(cash_totals["net_funding"]), 2)
@@ -145,23 +133,25 @@ if not fresh:
     return BridgeStatusResponse(..., net_capital=net_capital, settled_pnl=0.0, ...)
 
 # 1. Settled P/L = akumulasi trade riil (bukan balance - deposit).
-settled_pnl = realized_pnl
+settled_pnl = round(trade_repository.sum_profit_between(db, connection.id), 2)
 
 # 2. All-time P/L = realized + floating.
 floating_pnl = float(payload.floating_pnl or 0.0)
-all_time_pnl = round(realized_pnl + floating_pnl, 2)
+all_time_pnl = round(settled_pnl + floating_pnl, 2)
 
 # 3. Persentase terhadap modal bersih berjalan.
-base_capital = net_capital if (net_capital and net_capital > 0) else float(deposit or 0.0)
-settled_pnl_pct = round((settled_pnl / base_capital) * 100.0, 2) if base_capital > 0 else 0.0
-all_time_pnl_pct = round((all_time_pnl / base_capital) * 100.0, 2) if base_capital > 0 else 0.0
+settled_pnl_pct = round((settled_pnl / net_capital) * 100.0, 2) if net_capital > 0 else 0.0
+all_time_pnl_pct = round((all_time_pnl / net_capital) * 100.0, 2) if net_capital > 0 else 0.0
 ```
 
 Catatan:
+- `_matching_baseline_id()` mengecualikan setoran positif tertua hanya jika nominalnya cocok dengan deposit awal sensor dalam toleransi kurang dari 0,01.
 - `sum_profit_between` menjumlahkan `Trade.profit` yang **sudah** termasuk swap + commission (`PipstrideMonitor.mq5`), jadi tidak ada drift terhadap saldo.
-- `get_initial_deposit_info()` (`InitialDepositResponse`) mewarisi nilai `get_status()`. Setelah SPEC ini, field `settled_pnl` di endpoint `/bridge/initial-deposit` ikut bermakna *all-time trading P/L vs net capital*. Endpoint ini tidak dipakai UI (`api.js` hanya mendefinisikan `getInitialDeposit`), tetapi test lama mengunci nilainya — lihat tiket 14-01.
+- `get_initial_deposit_info()` (`InitialDepositResponse`) mewarisi nilai `get_status()`. Pada endpoint `/bridge/initial-deposit`, `settled_pnl` adalah akumulasi hasil trade riil dan `settled_pnl_percent` adalah persentase terhadap modal bersih, dengan nilai 0% jika modal bersih tidak positif.
 
 ### 3.3 Domain Parity Frontend (`apps/web/src/domain/pnl.js`)
+Jika `net_capital` tidak tersedia, UI menggunakan deposit awal sebagai basis perhitungan lokal. Jika API mengirimkan `net_capital` yang tidak positif, kedua persentase tampil sebagai 0%.
+
 ```javascript
 export function summarizeAccountPnl(bridgeStatus, metrics) {
   const status = bridgeStatus ?? {};
@@ -171,7 +161,8 @@ export function summarizeAccountPnl(bridgeStatus, metrics) {
   const floatingPnl = live.floating_pnl ?? (equity - balance);
 
   const initialDeposit = status.initial_deposit ?? live.initial_deposit ?? balance;
-  const netCapital = provided(status.net_capital) ? status.net_capital : initialDeposit;
+  const netCapital = status.net_capital ?? initialDeposit;
+  const hasNonPositiveNetCapital = provided(status.net_capital) && netCapital <= 0;
 
   // Realized PnL hanya dari backend. TIDAK ada fallback `balance - deposit`
   // atau `balance - netCapital`: keduanya adalah turunan selisih yang SPEC ini
@@ -179,20 +170,17 @@ export function summarizeAccountPnl(bridgeStatus, metrics) {
   const settledPnl = provided(status.settled_pnl) ? status.settled_pnl : 0;
   const allTimePnl = provided(status.all_time_pnl) ? status.all_time_pnl : settledPnl + floatingPnl;
 
-  const baseCapital = netCapital > 0 ? netCapital : initialDeposit;
+  const settledPnlPercent = status.settled_pnl_percent ?? percentOfBase(settledPnl, netCapital);
+  const allTimePnlPercent = status.all_time_pnl_percent ?? percentOfBase(allTimePnl, netCapital);
 
   return {
     initialDeposit,
     netCapital,
     isDepositOverridden: status.is_deposit_overridden ?? false,
     settledPnl,
-    settledPnlPercent: provided(status.settled_pnl_percent)
-      ? status.settled_pnl_percent
-      : percentOfBase(settledPnl, baseCapital),
+    settledPnlPercent: hasNonPositiveNetCapital ? 0 : settledPnlPercent,
     allTimePnl,
-    allTimePnlPercent: provided(status.all_time_pnl_percent)
-      ? status.all_time_pnl_percent
-      : percentOfBase(allTimePnl, baseCapital)
+    allTimePnlPercent: hasNonPositiveNetCapital ? 0 : allTimePnlPercent
   };
 }
 ```
@@ -209,6 +197,7 @@ Konsekuensi: dua test lama di `pnl.test.js` yang mengunci fallback `balance - de
    - Menarik dana setelah profit trading mempertahankan `settled_pnl` positif sesuai total keuntungan trade riil.
 3. **Modal Bersih Terpantau Transparan:**
    - Dashboard menampilkan modal bersih yang akurat: `effective deposit + (deposits − withdrawals setelah baseline deal)`.
+   - API dan Dashboard menampilkan kedua persentase P/L sebagai 0% jika modal bersih nol atau negatif.
 4. **Verifikasi Test Suite & Lint:**
    - Seluruh test suite backend (`pytest`) dan frontend (`vitest`) lulus 100%.
    - Assertion lama yang mengunci formula `balance - deposit` **diganti** dengan nilai trade-based, bukan dihapus tanpa pengganti: `tests/test_connections.py` (`500.0`/`5.0` → `30.0`/`0.3`; `5_500.0` → `30.0` pada test override) serta dua test fallback di `apps/web/src/domain/pnl.test.js` (`100` → `0`).

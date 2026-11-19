@@ -68,7 +68,7 @@ export default function KpiCards({
               <div className="label">{t('journal_stat_net_funding_period', { period: periodLabel })}</div>
             </div>
           </div>
-          {period !== 'ALL' && cashFlow.deposits === 0 && cashFlow.withdrawals === 0 && (
+          {period !== 'ALL' && (
             <div className="tiny" style={{ ...tinyStyle, marginTop: '6px' }}>
               {t('journal_cashflow_period_hint')}
             </div>

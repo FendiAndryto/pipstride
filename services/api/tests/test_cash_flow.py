@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.db.base import SessionLocal
 from app.db.models import CashFlowDeal, TelemetrySnapshot, Trade
@@ -208,9 +208,7 @@ def test_equity_curve_applies_cash_flow_as_step_events(client, account):
     assert equities[1:5] == [1050.0, 750.0, 950.0, 930.0]
 
 
-def test_equity_curve_counts_every_deposit_when_the_baseline_is_overridden(
-    client, account
-):
+def test_equity_curve_replaces_the_opening_deposit_when_overridden(client, account):
     created = create_connection(client, account)
     payload = heartbeat_payload(ACCOUNT, cash_flow=cash_flow_items())
     payload["initial_deposit"] = 1000.0
@@ -234,11 +232,82 @@ def test_equity_curve_counts_every_deposit_when_the_baseline_is_overridden(
     ).json()
 
     equities = [point["equity"] for point in body["points"]]
-    # A manual baseline is not a cash event, so the 1000 opening deposit is
-    # applied as a step instead of being swallowed as the starting point.
-    assert equities[0] == 5000.0
-    assert equities[1:5] == [6000.0, 6050.0, 5750.0, 5950.0]
-    assert equities[5] == 5930.0
+    assert equities[:-1] == [5000.0, 5050.0, 4750.0, 4950.0, 4930.0]
+
+
+@pytest.mark.parametrize("opening_deposit_ingested", [False, True])
+@pytest.mark.parametrize("override_deposit", [None, 5000.0])
+def test_capital_reconstruction_keeps_real_top_ups(
+    client, account, opening_deposit_ingested, override_deposit
+):
+    created = create_connection(client, account)
+    baseline = override_deposit or 1000.0
+    capital = baseline + 500.0
+    cash_flow = [
+        {"ticket": 7103, "category": "DEPOSIT", "profit": 500.0, "time": 1_699_700_000},
+    ]
+    if opening_deposit_ingested:
+        cash_flow.insert(0, cash_flow_items()[0])
+    send_heartbeat(
+        client,
+        created,
+        initial_deposit=1000.0,
+        balance=capital,
+        equity=capital,
+        floating_pnl=0.0,
+        open_positions=0,
+        positions=[],
+        closed_trades=[],
+        cash_flow=cash_flow,
+    )
+    if override_deposit is not None:
+        override = client.post(
+            "/api/v1/bridge/initial-deposit",
+            json={"initial_deposit": override_deposit},
+            headers=account["headers"],
+        )
+        assert override.status_code == 200, override.text
+
+    with SessionLocal() as db:
+        db.execute(
+            delete(TelemetrySnapshot).where(TelemetrySnapshot.connection_id == created["id"])
+        )
+        db.commit()
+
+    status = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert status["net_capital"] == capital
+    curve = client.get(
+        "/api/v1/bridge/equity-curve", params={"range": "ALL"}, headers=account["headers"]
+    ).json()
+    assert [point["equity"] for point in curve["points"]] == [baseline, capital, capital]
+    assert curve["peak_equity"] == capital
+    watchdog = risk(client, account)
+    assert watchdog["daily_anchor_source"] == "deposit_reconstruction"
+    assert watchdog["daily_starting_equity"] == capital
+    assert watchdog["overall_drawdown_percent"] == 0.0
+    assert watchdog["peak_equity"] == baseline
+
+
+@pytest.mark.parametrize("withdrawal", [-1000.0, -1100.0])
+def test_status_reports_zero_returns_with_nonpositive_net_capital(client, account, withdrawal):
+    created = create_connection(client, account)
+    opening_deposit = cash_flow_items()[0]
+    send_heartbeat(
+        client,
+        created,
+        initial_deposit=1000.0,
+        cash_flow=[
+            opening_deposit,
+            {"ticket": 7102, "category": "WITHDRAWAL", "profit": withdrawal, "time": 1_699_800_000},
+        ],
+    )
+
+    status = client.get("/api/v1/bridge/status", headers=account["headers"]).json()
+    assert status["net_capital"] == 1000.0 + withdrawal
+    assert status["settled_pnl"] == 30.0
+    assert status["all_time_pnl"] == -20.0
+    assert status["settled_pnl_percent"] == 0.0
+    assert status["all_time_pnl_percent"] == 0.0
 
 
 def test_reset_journal_clears_cash_flow(client, account):
