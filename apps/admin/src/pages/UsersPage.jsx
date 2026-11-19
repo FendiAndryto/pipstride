@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -8,64 +8,50 @@ import { UserCredentialsModal } from '../features/users/UserCredentialsModal';
 import { fetchUsers } from '../features/users/api';
 import { Search, RefreshCw, X, UserPlus } from 'lucide-react';
 
-export function UsersPage({ onNavigate }) {
-  const [users, setUsers] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [limit] = useState(50);
-  const [offset, setOffset] = useState(0);
+export function UsersPage({ canMutate, initialStatus = '' }) {
+  const limit = 50;
   const [search, setSearch] = useState('');
-  const [activeSearch, setActiveSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const searchInput = useRef(null);
+  const [query, setQuery] = useState({ search: '', status: initialStatus, offset: 0 });
+  const [result, setResult] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
   const [newCredentials, setNewCredentials] = useState(null);
-
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await fetchUsers({
-        search: activeSearch,
-        limit,
-        offset,
-      });
-      setUsers(data.items || []);
-      setTotal(data.total || 0);
-    } catch (err) {
-      setError(err.message || 'Failed to load user accounts.');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeSearch, limit, offset]);
+  const loading = result?.query !== query;
+  const error = loading ? '' : result.error;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadUsers();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [loadUsers]);
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    fetchUsers({ ...query, limit, signal })
+      .then((data) => {
+        if (!signal.aborted) setResult({ query, ...data });
+      })
+      .catch((err) => {
+        if (!signal.aborted) setResult({ query, error: err.message || 'Failed to load user accounts.' });
+      });
+
+    return () => controller.abort();
+  }, [query]);
+
+  const refreshUsers = () => setQuery((current) => ({ ...current }));
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setOffset(0);
-    setActiveSearch(search.trim());
+    setQuery((current) => ({ ...current, search: search.trim(), offset: 0 }));
   };
 
   const handleClearSearch = () => {
+    searchInput.current?.focus();
     setSearch('');
-    setActiveSearch('');
-    setOffset(0);
-  };
-
-  const handleSelectUser = (user) => {
-    onNavigate('users', user.id);
+    setQuery((current) => ({ ...current, search: '', offset: 0 }));
   };
 
   const handleCreateSuccess = (_createdUser, creds) => {
     setNewCredentials(creds);
     setCredentialsModalOpen(true);
-    void loadUsers();
+    refreshUsers();
   };
 
   return (
@@ -79,21 +65,23 @@ export function UsersPage({ onNavigate }) {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={UserPlus}
-            onClick={() => setCreateModalOpen(true)}
-          >
-            Tambah Pengguna
-          </Button>
+          {canMutate ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={UserPlus}
+              onClick={() => setCreateModalOpen(true)}
+            >
+              Tambah Pengguna
+            </Button>
+          ) : null}
 
           <Button
             variant="secondary"
             size="sm"
             icon={RefreshCw}
             loading={loading}
-            onClick={loadUsers}
+            onClick={refreshUsers}
             className="btn-refresh"
             aria-label="Refresh directory"
           >
@@ -103,14 +91,12 @@ export function UsersPage({ onNavigate }) {
       </div>
 
       <Card>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <form
-            onSubmit={handleSearchSubmit}
-            style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '240px' }}
-          >
-            <div style={{ flex: 1, position: 'relative' }}>
+        <div className="users-filters">
+          <form className="users-search" onSubmit={handleSearchSubmit}>
+            <div className="users-search-field">
               <Input
-                placeholder="Search username or user ID..."
+                ref={searchInput}
+                label="Username or user ID"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 mono
@@ -119,16 +105,7 @@ export function UsersPage({ onNavigate }) {
                 <button
                   type="button"
                   onClick={handleClearSearch}
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                  }}
+                  className="users-search-clear"
                   aria-label="Clear search"
                 >
                   <X size={14} />
@@ -139,6 +116,22 @@ export function UsersPage({ onNavigate }) {
               Search
             </Button>
           </form>
+          <div className="form-group">
+            <label className="form-label" htmlFor="users-status">Status</label>
+            <select
+              id="users-status"
+              className="form-input"
+              value={query.status}
+              onChange={(e) => {
+                const status = e.target.value;
+                setQuery((current) => ({ ...current, status, offset: 0 }));
+              }}
+            >
+              <option value="">All users</option>
+              <option value="expiring">Expiring soon</option>
+              <option value="pending_connection">Pending connection</option>
+            </select>
+          </div>
         </div>
 
         {error ? (
@@ -148,30 +141,33 @@ export function UsersPage({ onNavigate }) {
         ) : null}
 
         <UsersTable
-          users={users}
-          total={total}
+          users={loading ? undefined : result.items}
+          total={result?.total}
           limit={limit}
-          offset={offset}
-          onOffsetChange={setOffset}
-          onSelectUser={handleSelectUser}
+          offset={query.offset}
+          onOffsetChange={(offset) => setQuery((current) => ({ ...current, offset }))}
           loading={loading}
         />
       </Card>
 
-      <UserCreateModal
-        isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        onSuccess={handleCreateSuccess}
-      />
+      {canMutate ? (
+        <>
+          <UserCreateModal
+            isOpen={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            onSuccess={handleCreateSuccess}
+          />
 
-      <UserCredentialsModal
-        isOpen={credentialsModalOpen}
-        onClose={() => {
-          setCredentialsModalOpen(false);
-          setNewCredentials(null);
-        }}
-        credentials={newCredentials}
-      />
+          <UserCredentialsModal
+            isOpen={credentialsModalOpen}
+            onClose={() => {
+              setCredentialsModalOpen(false);
+              setNewCredentials(null);
+            }}
+            credentials={newCredentials}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

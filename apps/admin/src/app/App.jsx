@@ -9,9 +9,9 @@ import { SupportSessionsPage } from '../pages/SupportSessionsPage';
 import { Modal } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
 import { getMe, logout } from '../features/auth/api';
-import { fetchSupportSessions, revokeSupportSession } from '../features/support/api';
+import { useSupportSessions } from '../features/support/useSupportSessions';
 import { getToken, clearStorage, getStoredUser, setStoredUser } from '../lib/storage';
-import { isSessionActive } from '../domain/supportSession';
+import { findTargetSupportSession } from '../domain/supportSession';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export function App() {
@@ -19,8 +19,15 @@ export function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
 
-  // Active support session state (ADR 0008 §6)
-  const [activeSupportSession, setActiveSupportSession] = useState(null);
+  const {
+    activeSessions,
+    verificationError,
+    revokedById,
+    revokingIds,
+    sessionGranted,
+    revokeSession,
+    clearSupportSessions,
+  } = useSupportSessions(authChecked && currentUser ? getToken() : null);
 
   // Hash-based router state
   const [routeState, setRouteState] = useState(() => parseHash(window.location.hash));
@@ -85,59 +92,25 @@ export function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Poll / load active support sessions when authed. Wait for the mount-time
-  // getMe() check so a stale token cannot fire an extra unauthenticated request.
-  const refreshActiveSupport = useCallback(async () => {
-    if (!authChecked || !currentUser) return;
-    try {
-      const res = await fetchSupportSessions({ mine: true, active_only: true });
-      const active = (res.items || []).find((s) => isSessionActive(s));
-      setActiveSupportSession(active || null);
-    } catch {
-      setActiveSupportSession(null);
-    }
-  }, [authChecked, currentUser]);
-
-  useEffect(() => {
-    if (!authChecked || !currentUser) return;
-    const timer = setTimeout(() => {
-      void refreshActiveSupport();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [authChecked, currentUser, refreshActiveSupport]);
-
   // Session expired event handler from lib/http
   useEffect(() => {
     const handleExpired = () => {
       clearStorage();
       setCurrentUser(null);
-      setActiveSupportSession(null);
+      clearSupportSessions();
       setSessionExpiredOpen(true);
     };
 
     window.addEventListener('pipstride:admin-session-expired', handleExpired);
     return () => window.removeEventListener('pipstride:admin-session-expired', handleExpired);
-  }, []);
+  }, [clearSupportSessions]);
 
   const handleLogout = async () => {
     await logout();
     clearStorage();
     setCurrentUser(null);
-    setActiveSupportSession(null);
+    clearSupportSessions();
     window.location.hash = '';
-  };
-
-  const handleRevokeSupport = async (sessionId) => {
-    try {
-      await revokeSupportSession(sessionId);
-      setActiveSupportSession(null);
-    } catch {
-      // Handled
-    }
-  };
-
-  const handleExpireSupport = () => {
-    setActiveSupportSession(null);
   };
 
   if (!authChecked) {
@@ -195,22 +168,24 @@ export function App() {
 
   const renderActiveRoute = () => {
     const { route, param } = routeState;
+    const canMutate = currentUser.role === 'admin';
 
     if (route === 'users') {
-      if (param) {
+      const initialStatus = param === 'expiring' || param === 'pending_connection' ? param : undefined;
+      if (param && !initialStatus) {
         return (
           <UserDetailPage
+            key={param}
             userId={param}
-            canMutate={currentUser?.role === 'admin'}
+            canMutate={canMutate}
             onNavigate={navigate}
-            activeSupportSession={activeSupportSession}
-            onSessionGranted={(newSession) => {
-              setActiveSupportSession(newSession);
-            }}
+            activeSupportSession={findTargetSupportSession(activeSessions, param)}
+            supportVerified={!verificationError}
+            onSessionGranted={sessionGranted}
           />
         );
       }
-      return <UsersPage onNavigate={navigate} />;
+      return <UsersPage key={initialStatus || 'all'} canMutate={canMutate} initialStatus={initialStatus} />;
     }
 
     if (route === 'audit') {
@@ -220,9 +195,12 @@ export function App() {
     if (route === 'support') {
       return (
         <SupportSessionsPage
-          onSessionRevoked={() => {
-            setActiveSupportSession(null);
-          }}
+          key={param === 'active' ? 'active' : 'all'}
+          canViewAll={canMutate}
+          initialActiveOnly={param === 'active'}
+          revokeSession={revokeSession}
+          revokedById={revokedById}
+          revokingIds={revokingIds}
         />
       );
     }
@@ -236,9 +214,10 @@ export function App() {
       currentRoute={routeState.route}
       onNavigate={navigate}
       onLogout={handleLogout}
-      activeSupportSession={activeSupportSession}
-      onRevokeSupportSession={handleRevokeSupport}
-      onExpireSupportSession={handleExpireSupport}
+      activeSupportSessions={activeSessions}
+      supportVerificationError={verificationError}
+      revokingSupportIds={revokingIds}
+      onRevokeSupportSession={revokeSession}
     >
       {renderActiveRoute()}
     </Shell>

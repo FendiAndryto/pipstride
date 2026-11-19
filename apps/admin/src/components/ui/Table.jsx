@@ -8,9 +8,15 @@ export function Table({
   onRowClick,
   loading = false,
   emptyText = 'No records found',
+  scrollLabel,
 }) {
   return (
-    <div className="table-container">
+    <div
+      className="table-container"
+      tabIndex={scrollLabel ? 0 : undefined}
+      role={scrollLabel ? 'region' : undefined}
+      aria-label={scrollLabel}
+    >
       <table className="admin-table">
         <thead>
           <tr>

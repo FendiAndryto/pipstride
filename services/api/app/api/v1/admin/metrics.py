@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.deps import require_role
 from app.db.base import get_db
 from app.infrastructure.db.repositories import admin_repository
@@ -17,4 +18,7 @@ router = APIRouter(
 
 @router.get("", response_model=AdminMetricsResponse, summary="Platform counters")
 def get_metrics(db: Session = Depends(get_db)):
-    return AdminMetricsResponse(**admin_repository.metrics(db))
+    metrics = admin_repository.metrics(db)
+    if not settings.SUPPORT_MODE_ENABLED:
+        metrics["support_sessions"]["active"] = 0
+    return AdminMetricsResponse(**metrics)

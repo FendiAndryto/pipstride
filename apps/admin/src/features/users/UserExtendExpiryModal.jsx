@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -26,6 +26,10 @@ export function UserExtendExpiryModal({
   const [exactDate, setExactDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const formId = useId();
+  const methodLabelId = useId();
+  const durationLabelId = useId();
+  const dateId = useId();
 
   if (!user) return null;
 
@@ -87,7 +91,8 @@ export function UserExtendExpiryModal({
           </Button>
           <Button
             variant="primary"
-            onClick={handleSubmit}
+            type="submit"
+            form={formId}
             loading={loading}
             icon={Clock}
           >
@@ -96,7 +101,7 @@ export function UserExtendExpiryModal({
         </>
       }
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <form id={formId} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {error ? (
           <div className="alert alert-danger" role="alert">
             <AlertCircle size={16} />
@@ -129,11 +134,12 @@ export function UserExtendExpiryModal({
 
         {/* Action mode selector */}
         <div className="form-group">
-          <label className="form-label">Metode Perpanjangan</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+          <div className="form-label" id={methodLabelId}>Metode Perpanjangan</div>
+          <div role="group" aria-labelledby={methodLabelId} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
             <button
               type="button"
               className={`btn btn-sm ${mode === 'preset' ? 'btn-primary' : 'btn-secondary'}`}
+              aria-pressed={mode === 'preset'}
               onClick={() => setMode('preset')}
               style={{ justifyContent: 'center' }}
             >
@@ -142,6 +148,7 @@ export function UserExtendExpiryModal({
             <button
               type="button"
               className={`btn btn-sm ${mode === 'custom' ? 'btn-primary' : 'btn-secondary'}`}
+              aria-pressed={mode === 'custom'}
               onClick={() => setMode('custom')}
               style={{ justifyContent: 'center' }}
             >
@@ -150,6 +157,7 @@ export function UserExtendExpiryModal({
             <button
               type="button"
               className={`btn btn-sm ${mode === 'exact' ? 'btn-primary' : 'btn-secondary'}`}
+              aria-pressed={mode === 'exact'}
               onClick={() => setMode('exact')}
               style={{ justifyContent: 'center' }}
             >
@@ -158,6 +166,7 @@ export function UserExtendExpiryModal({
             <button
               type="button"
               className={`btn btn-sm ${mode === 'lifetime' ? 'btn-primary' : 'btn-secondary'}`}
+              aria-pressed={mode === 'lifetime'}
               onClick={() => setMode('lifetime')}
               style={{ justifyContent: 'center' }}
             >
@@ -169,14 +178,15 @@ export function UserExtendExpiryModal({
         {/* Mode: Preset */}
         {mode === 'preset' && (
           <div className="form-group">
-            <label className="form-label">Pilih Tambahan Durasi</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+            <div className="form-label" id={durationLabelId}>Pilih Tambahan Durasi</div>
+            <div role="group" aria-labelledby={durationLabelId} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
               {PRESET_DURATIONS.map((preset) => {
                 const active = selectedPresetDays === preset.days;
                 return (
                   <button
                     key={preset.id}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => setSelectedPresetDays(preset.days)}
                     style={{
                       padding: '10px 12px',
@@ -214,19 +224,19 @@ export function UserExtendExpiryModal({
             value={customDays}
             onChange={(e) => setCustomDays(e.target.value)}
             placeholder="Contoh: 45"
-            helper="Durasi ditambahkan ke masa aktif yang ada (atau dari sekarang jika sudah lewat)."
+            helperText="Durasi ditambahkan ke masa aktif yang ada (atau dari sekarang jika sudah lewat)."
           />
         )}
 
         {/* Mode: Exact date */}
         {mode === 'exact' && (
           <div className="form-group">
-            <label className="form-label" htmlFor="exact-expiry-date">
+            <label className="form-label" htmlFor={dateId}>
               Pilih Tanggal Kedaluwarsa
             </label>
             <div style={{ position: 'relative' }}>
               <input
-                id="exact-expiry-date"
+                id={dateId}
                 type="date"
                 className="form-input"
                 value={exactDate}

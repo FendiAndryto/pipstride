@@ -8,6 +8,7 @@ them reads ``Mt5Connection.token_hash``.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from math import ceil
 from typing import Optional
 
 from app.domain.time import as_utc
@@ -25,7 +26,7 @@ def _remaining_seconds(expires_at: Optional[datetime]) -> int:
     normalised = as_utc(expires_at)
     if normalised is None:
         return 0
-    return max(0, int((normalised - datetime.now(timezone.utc)).total_seconds()))
+    return max(0, ceil((normalised - datetime.now(timezone.utc)).total_seconds()))
 
 
 def user_item(row: dict) -> AdminUserItem:

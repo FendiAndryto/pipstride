@@ -2,7 +2,7 @@ import React from 'react';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatNumber, formatRelativeTime, truncateId, formatExpiryStatus } from '../../domain/format';
+import { formatDate, formatNumber, formatRelativeTime, truncateId, formatExpiryStatus } from '../../domain/format';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function UsersTable({
@@ -11,7 +11,6 @@ export function UsersTable({
   limit = 50,
   offset = 0,
   onOffsetChange,
-  onSelectUser,
   loading = false,
 }) {
   const currentPage = Math.floor(offset / limit) + 1;
@@ -23,7 +22,9 @@ export function UsersTable({
       key: 'username',
       render: (u) => (
         <div>
-          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.username}</div>
+          <a className="users-table-link" href={`#users/${encodeURIComponent(u.id)}`}>
+            {u.username}
+          </a>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }} className="font-mono">
             {truncateId(u.id, 12)}
           </div>
@@ -33,6 +34,8 @@ export function UsersTable({
     {
       header: 'Role',
       key: 'role',
+      headerClassName: 'users-table-secondary',
+      className: 'users-table-secondary',
       render: (u) => {
         let variant = 'neutral';
         if (u.role === 'admin') variant = 'danger';
@@ -49,8 +52,17 @@ export function UsersTable({
       },
     },
     {
+      header: 'Expiry (UTC)',
+      key: 'expires_at',
+      render: (u) => u.expires_at ? (
+        <time className="font-mono" dateTime={u.expires_at}>{formatDate(u.expires_at)}</time>
+      ) : '—',
+    },
+    {
       header: 'Plan',
       key: 'plan_code',
+      headerClassName: 'users-table-secondary',
+      className: 'users-table-secondary',
       render: (u) => (
         <Badge variant={u.plan_code === 'pro' ? 'purple' : u.plan_code === 'plus' ? 'info' : 'neutral'}>
           {u.plan_code?.toUpperCase() || 'FREE'}
@@ -60,6 +72,8 @@ export function UsersTable({
     {
       header: 'Connections',
       key: 'connections',
+      headerClassName: 'users-table-secondary',
+      className: 'users-table-secondary',
       render: (u) => (
         <span className="font-mono">
           <strong style={{ color: u.active_connection_count > 0 ? 'var(--accent-emerald)' : 'inherit' }}>
@@ -72,11 +86,15 @@ export function UsersTable({
     {
       header: 'Trades',
       key: 'trade_count',
+      headerClassName: 'users-table-secondary',
+      className: 'users-table-secondary',
       render: (u) => <span className="font-mono">{formatNumber(u.trade_count)}</span>,
     },
     {
       header: 'Last Seen',
       key: 'last_seen_at',
+      headerClassName: 'users-table-secondary',
+      className: 'users-table-secondary',
       render: (u) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {formatRelativeTime(u.last_seen_at)}
@@ -86,18 +104,19 @@ export function UsersTable({
   ];
 
   return (
-    <div>
+    <div className="users-table">
       <Table
         columns={columns}
         data={users}
         keyExtractor={(u) => u.id}
-        onRowClick={onSelectUser}
+        scrollLabel="User accounts table"
         loading={loading}
         emptyText="No users found matching query"
       />
 
       {total > limit ? (
         <div
+          className="users-table-pagination"
           style={{
             display: 'flex',
             alignItems: 'center',

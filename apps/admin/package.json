@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "lint:arch": "depcruise src --config .dependency-cruiser.cjs",
+    "test": "node --test",
     "preview": "vite preview"
   },
   "dependencies": {

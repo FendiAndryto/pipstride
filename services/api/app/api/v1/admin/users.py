@@ -5,7 +5,7 @@ second, narrower guard (``admin`` only) on each endpoint, so support staff can
 inspect but cannot change entitlements or account state.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -38,12 +38,15 @@ router = APIRouter(
 )
 def list_users(
     search: Optional[str] = Query(None, max_length=128),
+    user_status: Optional[Literal["expiring", "pending_connection"]] = Query(
+        None, alias="status"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     rows, total = admin_repository.list_users(
-        db, search=search, limit=limit, offset=offset
+        db, search=search, status=user_status, limit=limit, offset=offset
     )
     return AdminUserListResponse(
         items=[user_item(row) for row in rows],

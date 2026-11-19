@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useId, useLayoutEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 
@@ -10,34 +10,64 @@ export function Modal({
   footer,
   maxWidth = 'md',
 }) {
-  useEffect(() => {
+  const dialogRef = useRef(null);
+  const titleId = useId();
+
+  useLayoutEffect(() => {
     if (!isOpen) return;
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+    const dialog = dialogRef.current;
+    const trigger = document.activeElement;
+    dialog.showModal();
+    dialog.querySelector('[data-modal-autofocus]')?.focus();
+    return () => {
+      dialog.close();
+      queueMicrotask(() => {
+        const focused = document.activeElement;
+        if (trigger instanceof HTMLElement && trigger.isConnected && !dialog.open &&
+          (focused === document.body || dialog.contains(focused))) {
+          trigger.focus({ preventScroll: true });
+        }
+      });
     };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Tab') return;
+
+    const controls = [...e.currentTarget.querySelectorAll(
+      'a[href], button, input, select, textarea, [tabindex]',
+    )].filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length);
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  };
+
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       className="modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onKeyDown={handleKeyDown}
+      aria-labelledby={titleId}
     >
       <div className={`modal-dialog ${maxWidth === 'lg' ? 'max-w-lg' : ''}`}>
         <div className="modal-header">
-          <h2 id="modal-title" className="modal-title">
+          <h2 id={titleId} className="modal-title">
             {title}
           </h2>
           <Button
@@ -52,6 +82,6 @@ export function Modal({
         <div className="modal-body">{children}</div>
         {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
-    </div>
+    </dialog>
   );
 }

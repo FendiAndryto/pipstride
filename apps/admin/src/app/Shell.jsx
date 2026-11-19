@@ -16,9 +16,10 @@ export function Shell({
   currentRoute,
   onNavigate,
   onLogout,
-  activeSupportSession,
+  activeSupportSessions,
+  supportVerificationError,
+  revokingSupportIds,
   onRevokeSupportSession,
-  onExpireSupportSession,
   children,
 }) {
   const navItems = [
@@ -75,6 +76,7 @@ export function Shell({
                     onNavigate(item.id);
                   }}
                   className={`nav-item ${isActive ? 'active' : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
                 >
                   <Icon size={15} />
                   <span>{item.label}</span>
@@ -110,9 +112,10 @@ export function Shell({
 
       {/* Persistent Support Elevation Banner (ADR 0008 §6) */}
       <SupportBanner
-        session={activeSupportSession}
+        sessions={activeSupportSessions}
+        verificationError={supportVerificationError}
+        revokingIds={revokingSupportIds}
         onRevoke={onRevokeSupportSession}
-        onExpire={onExpireSupportSession}
       />
 
       <main className="admin-main">{children}</main>

@@ -12,21 +12,25 @@ export function configureHttp({ authHeaders, unauthorized, timeoutMs } = {}) {
   if (timeoutMs !== undefined) defaultTimeoutMs = timeoutMs;
 }
 
-async function send(url, options = {}, { authed = false } = {}) {
+async function send(url, { signal, ...options } = {}, { authed = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), defaultTimeoutMs);
+  const cancel = () => controller.abort(signal.reason);
+  signal?.addEventListener('abort', cancel, { once: true });
+  if (signal?.aborted) cancel();
   try {
     const headers = {
       ...(authed && getAuthHeaders ? getAuthHeaders() : {}),
       ...(options.headers || {}),
     };
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
-    if (authed && res.status === 401 && onUnauthorized) {
+    if (!controller.signal.aborted && authed && res.status === 401 && onUnauthorized) {
       onUnauthorized();
     }
     return res;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
   }
 }
 

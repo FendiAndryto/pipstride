@@ -175,7 +175,7 @@ export function UserCreateModal({ isOpen, onClose, onSuccess }) {
           placeholder="contoh: trader_pro"
           helperText="3–32 karakter (huruf, angka, dot, dash, underscore)"
           required
-          autoFocus
+          data-modal-autofocus
         />
 
         <div className="form-group">

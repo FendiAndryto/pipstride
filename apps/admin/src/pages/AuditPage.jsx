@@ -1,82 +1,72 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { AuditTable } from '../features/audit/AuditTable';
 import { fetchAuditLogs } from '../features/audit/api';
+import { auditDateBounds } from '../features/audit/auditDates';
 import { RefreshCw, Filter, X } from 'lucide-react';
 
+const PAGE_SIZE = 100;
+const EMPTY_FILTERS = { action: '', user_id: '', target_user_id: '', from: '', through: '' };
+
 export function AuditPage() {
-  const [logs, setLogs] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [limit] = useState(100);
+  const [draft, setDraft] = useState(EMPTY_FILTERS);
+  const [applied, setApplied] = useState({});
   const [offset, setOffset] = useState(0);
+  const [refresh, setRefresh] = useState(0);
+  const [result, setResult] = useState(null);
+  const [actions, setActions] = useState([]);
+  const [dateError, setDateError] = useState('');
 
-  // Filters
-  const [actionFilter, setActionFilter] = useState('');
-  const [userFilter, setUserFilter] = useState('');
-  const [targetFilter, setTargetFilter] = useState('');
-
-  // Applied filters
-  const [applied, setApplied] = useState({
-    action: '',
-    user_id: '',
-    target_user_id: '',
-  });
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await fetchAuditLogs({
-        action: applied.action,
-        user_id: applied.user_id,
-        target_user_id: applied.target_user_id,
-        limit,
-        offset,
-      });
-      setLogs(data.items || []);
-      setTotal(data.total || 0);
-    } catch (err) {
-      setError(err.message || 'Failed to load audit logs.');
-    } finally {
-      setLoading(false);
-    }
-  }, [applied, limit, offset]);
+  const requestKey = JSON.stringify([applied, offset, refresh]);
+  const currentResult = result?.key === requestKey ? result : null;
+  const hasFilters = Object.values(applied).some(Boolean);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadLogs();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [loadLogs]);
+    const controller = new AbortController();
+    fetchAuditLogs({ ...applied, limit: PAGE_SIZE, offset, signal: controller.signal })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setActions(data.actions || []);
+        setResult({ key: requestKey, data });
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setResult({ key: requestKey, error: err.message || 'Failed to load audit logs.' });
+      });
+    return () => controller.abort();
+  }, [applied, offset, requestKey]);
 
-  const handleApplyFilters = (e) => {
-    e.preventDefault();
-    setOffset(0);
-    setApplied({
-      action: actionFilter.trim(),
-      user_id: userFilter.trim(),
-      target_user_id: targetFilter.trim(),
-    });
+  const updateDraft = (field) => (event) => {
+    const value = event.target.value;
+    setDraft((previous) => ({ ...previous, [field]: value }));
+    if (field === 'from' || field === 'through') setDateError('');
+  };
+
+  const handleApplyFilters = (event) => {
+    event.preventDefault();
+    try {
+      const bounds = auditDateBounds(draft.from, draft.through);
+      setDateError('');
+      setOffset(0);
+      setApplied({
+        action: draft.action,
+        user_id: draft.user_id.trim(),
+        target_user_id: draft.target_user_id.trim(),
+        ...bounds,
+      });
+    } catch (error) {
+      setDateError(error.message);
+    }
   };
 
   const handleClearFilters = () => {
-    setActionFilter('');
-    setUserFilter('');
-    setTargetFilter('');
+    setDateError('');
+    setDraft(EMPTY_FILTERS);
     setOffset(0);
-    setApplied({
-      action: '',
-      user_id: '',
-      target_user_id: '',
-    });
+    setApplied({});
   };
-
-  const hasFilters = Boolean(applied.action || applied.user_id || applied.target_user_id);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -84,7 +74,7 @@ export function AuditPage() {
         <div className="page-title-group">
           <h1>Security Audit Trail</h1>
           <div className="page-subtitle">
-            Tamper-evident record of administrative mutations, auth events, and privacy elevations
+            Administrative actions, authentication events, and support access
           </div>
         </div>
 
@@ -92,8 +82,8 @@ export function AuditPage() {
           variant="secondary"
           size="sm"
           icon={RefreshCw}
-          loading={loading}
-          onClick={loadLogs}
+          loading={!currentResult}
+          onClick={() => setRefresh((previous) => previous + 1)}
           className="btn-refresh"
           aria-label="Refresh logs"
         >
@@ -106,66 +96,69 @@ export function AuditPage() {
           onSubmit={handleApplyFilters}
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
             gap: '12px',
             marginBottom: '16px',
-            alignItems: 'flex-end',
+            alignItems: 'end',
           }}
         >
-          <Input
-            label="Filter Action"
-            placeholder="e.g. revoke, entitlement, deactivate..."
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-          />
+          <div className="form-group">
+            <label className="form-label" htmlFor="audit-action">Action</label>
+            <select
+              id="audit-action"
+              className="form-input"
+              value={draft.action}
+              onChange={updateDraft('action')}
+            >
+              <option value="">All actions</option>
+              {actions.map((action) => <option value={action} key={action}>{action}</option>)}
+            </select>
+          </div>
 
           <Input
-            label="Actor User ID"
-            placeholder="UUID of acting admin"
-            value={userFilter}
-            onChange={(e) => setUserFilter(e.target.value)}
+            label="Related User ID"
+            placeholder="UUID of actor or affected user"
+            value={draft.user_id}
+            onChange={updateDraft('user_id')}
             mono
           />
 
           <Input
             label="Target User ID"
             placeholder="UUID of affected user"
-            value={targetFilter}
-            onChange={(e) => setTargetFilter(e.target.value)}
+            value={draft.target_user_id}
+            onChange={updateDraft('target_user_id')}
             mono
           />
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button type="submit" variant="primary" icon={Filter}>
-              Apply Filters
-            </Button>
-            {hasFilters ? (
-              <Button
-                type="button"
-                variant="ghost"
-                icon={X}
-                onClick={handleClearFilters}
-              >
+          <Input label="From date (UTC)" type="date" value={draft.from} onChange={updateDraft('from')} />
+          <Input label="Through date (UTC)" type="date" value={draft.through} onChange={updateDraft('through')} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <Button type="submit" variant="primary" icon={Filter}>Apply Filters</Button>
+            {hasFilters || Object.values(draft).some(Boolean) ? (
+              <Button type="button" variant="ghost" icon={X} onClick={handleClearFilters}>
                 Clear
               </Button>
             ) : null}
           </div>
         </form>
 
-        {error ? (
+        {dateError || currentResult?.error ? (
           <div className="alert alert-danger" role="alert" style={{ marginBottom: '16px' }}>
-            {error}
+            {dateError || currentResult.error}
           </div>
         ) : null}
 
-        <AuditTable
-          logs={logs}
-          total={total}
-          limit={limit}
-          offset={offset}
-          onOffsetChange={setOffset}
-          loading={loading}
-        />
+        {!currentResult?.error ? (
+          <AuditTable
+            logs={currentResult?.data?.items}
+            total={currentResult?.data?.total}
+            limit={PAGE_SIZE}
+            offset={offset}
+            onOffsetChange={setOffset}
+            loading={!currentResult}
+          />
+        ) : null}
       </Card>
     </div>
   );

@@ -33,7 +33,7 @@ export function MetricsGrid({ metrics, loading = false }) {
         </div>
         <div className="metric-value">{formatNumber(users.total)}</div>
         <div className="metric-footer">
-          <span>Active: <strong style={{ color: 'var(--accent-emerald)' }}>{formatNumber(users.active)}</strong></span>
+          <span>Enabled: <strong style={{ color: 'var(--accent-emerald)' }}>{formatNumber(users.active)}</strong></span>
           <span>•</span>
           <span>Staff: {formatNumber((users.admins || 0) + (users.support || 0))}</span>
         </div>
@@ -46,7 +46,7 @@ export function MetricsGrid({ metrics, loading = false }) {
         </div>
         <div className="metric-value">{formatNumber(conns.total)}</div>
         <div className="metric-footer">
-          <span>Active: <strong style={{ color: 'var(--accent-emerald)' }}>{formatNumber(conns.active)}</strong></span>
+          <span>Not revoked: <strong style={{ color: 'var(--accent-emerald)' }}>{formatNumber(conns.active)}</strong></span>
           <span>•</span>
           <span>Revoked: {formatNumber(conns.revoked)}</span>
         </div>

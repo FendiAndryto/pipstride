@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Copy, Check, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
@@ -17,6 +17,9 @@ export function TotpEnrollModal({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const formId = useId();
+  const secretId = useId();
+  const uriId = useId();
 
   const handleCopySecret = async () => {
     if (!enrollData?.secret) return;
@@ -31,7 +34,7 @@ export function TotpEnrollModal({
 
   const handleVerify = async (e) => {
     e.preventDefault();
-    if (!code || code.trim().length < 6) {
+    if (code.length !== 6) {
       setError('Please enter a 6-digit verification code.');
       return;
     }
@@ -43,9 +46,9 @@ export function TotpEnrollModal({
       await verifyTotpEnroll({
         username,
         password,
-        code: code.trim(),
+        code,
       });
-      onSuccess(code.trim());
+      onSuccess(code);
     } catch (err) {
       setError(err.message || 'Verification failed. Please check the code and try again.');
     } finally {
@@ -67,7 +70,8 @@ export function TotpEnrollModal({
           </Button>
           <Button
             variant="primary"
-            onClick={handleVerify}
+            type="submit"
+            form={formId}
             loading={loading}
             icon={ShieldCheck}
           >
@@ -76,7 +80,7 @@ export function TotpEnrollModal({
         </>
       }
     >
-      <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <form id={formId} onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           Two-factor authentication is mandatory for administrative accounts.
           Add this secret to your authenticator app (1Password, Google Authenticator, etc.).
@@ -90,10 +94,11 @@ export function TotpEnrollModal({
         ) : null}
 
         <div className="form-group">
-          <label className="form-label">Authenticator Secret</label>
+          <label className="form-label" htmlFor={secretId}>Authenticator Secret</label>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
               type="text"
+              id={secretId}
               readOnly
               value={enrollData.secret}
               className="form-input font-mono"
@@ -111,9 +116,10 @@ export function TotpEnrollModal({
         </div>
 
         <div className="form-group">
-          <label className="form-label">Key URI (Alternative)</label>
+          <label className="form-label" htmlFor={uriId}>Key URI (Alternative)</label>
           <input
             type="text"
+            id={uriId}
             readOnly
             value={enrollData.otpauth_uri}
             className="form-input font-mono"
@@ -126,10 +132,12 @@ export function TotpEnrollModal({
           type="text"
           placeholder="000000"
           value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
           mono
-          autoFocus
-          maxLength={8}
+          data-modal-autofocus
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
           helperText="Enter the 6-digit code shown in your authenticator app"
         />
       </form>

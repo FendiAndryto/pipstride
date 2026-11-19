@@ -1,19 +1,22 @@
 import { apiFetch } from '../../lib/api';
 
-export async function fetchUsers({ search = '', limit = 50, offset = 0 } = {}) {
+export async function fetchUsers({ search = '', status = '', limit = 50, offset = 0, signal } = {}) {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
+  if (status) params.set('status', status);
   params.set('limit', String(limit));
   params.set('offset', String(offset));
 
   return apiFetch(`/api/v1/admin/users?${params.toString()}`, {
     method: 'GET',
+    signal,
   }, { authed: true });
 }
 
-export async function fetchUser(id) {
+export async function fetchUser(id, { signal } = {}) {
   return apiFetch(`/api/v1/admin/users/${encodeURIComponent(id)}`, {
     method: 'GET',
+    signal,
   }, { authed: true });
 }
 
