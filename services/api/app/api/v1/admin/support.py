@@ -52,6 +52,8 @@ def list_sessions(
     actor: User = Depends(require_role("admin", "support")),
     db: Session = Depends(get_db),
 ):
+    if active_only and not settings.SUPPORT_MODE_ENABLED:
+        return SupportSessionListResponse(items=[])
     admin_id = actor.id if (mine or actor.role != "admin") else None
     rows = admin_repository.list_support_sessions(
         db, admin_id=admin_id, active_only=active_only

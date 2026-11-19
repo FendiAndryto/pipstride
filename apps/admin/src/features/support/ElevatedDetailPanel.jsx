@@ -1,45 +1,60 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { fetchElevatedDetail } from './api';
 import { formatCurrency, formatDateTime } from '../../domain/format';
+import { isSessionActive, matchesElevatedSupportSession } from '../../domain/supportSession';
 import { Eye, EyeOff, AlertCircle, TrendingUp, Sliders } from 'lucide-react';
 
 export function ElevatedDetailPanel({
   userId,
-  isActiveSession,
+  session,
 }) {
   const [elevatedData, setElevatedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [visible, setVisible] = useState(false);
+  const pending = useRef(null);
+
+  useLayoutEffect(() => () => pending.current?.abort(), []);
 
   const loadData = async () => {
+    if (pending.current || !isSessionActive(session)) return;
+    const request = new AbortController();
+    pending.current = request;
     setLoading(true);
     setError('');
     try {
-      const data = await fetchElevatedDetail(userId);
+      const data = await fetchElevatedDetail(userId, { signal: request.signal });
+      if (request.signal.aborted || !isSessionActive(session)) return;
+      if (!matchesElevatedSupportSession(data, userId, session)) {
+        setError('The support elevation changed. Refresh the session before viewing these records.');
+        return;
+      }
       setElevatedData(data);
       setVisible(true);
     } catch (err) {
+      if (request.signal.aborted || !isSessionActive(session)) return;
       setError(err.detail || err.message || 'Failed to fetch elevated detail.');
       setElevatedData(null);
     } finally {
-      setLoading(false);
+      if (pending.current === request) pending.current = null;
+      if (!request.signal.aborted) setLoading(false);
     }
   };
 
   const handleToggle = () => {
     if (visible) {
       setVisible(false);
+      setElevatedData(null);
     } else {
       loadData();
     }
   };
 
-  if (!isActiveSession) {
+  if (!isSessionActive(session)) {
     return null;
   }
 

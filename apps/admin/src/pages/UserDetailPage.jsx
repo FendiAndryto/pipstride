@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useRef } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -8,6 +8,7 @@ import { UserExtendExpiryModal } from '../features/users/UserExtendExpiryModal';
 import { UserActionConfirmModal } from '../features/users/UserActionConfirmModal';
 import { ElevatedDetailPanel } from '../features/support/ElevatedDetailPanel';
 import { SupportGrantModal } from '../features/support/SupportGrantModal';
+import { isSessionActive } from '../lib/supportSession';
 import {
   fetchUser,
   activateUser,
@@ -35,12 +36,18 @@ export function UserDetailPage({
   canMutate = false,
   onNavigate,
   activeSupportSession,
+  supportVerified,
   onSessionGranted,
 }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mutating, setMutating] = useState(false);
   const [error, setError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
+  const mounted = useRef(false);
+  const pendingRead = useRef(null);
+  const pendingAction = useRef(false);
+  const messageTimer = useRef(null);
 
   // Modals state
   const [entitlementOpen, setEntitlementOpen] = useState(false);
@@ -56,33 +63,51 @@ export function UserDetailPage({
   });
 
   const loadUser = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !mounted.current) return;
+    pendingRead.current?.abort();
+    const request = new AbortController();
+    pendingRead.current = request;
     setLoading(true);
     setError('');
     try {
-      const data = await fetchUser(userId);
-      setUser(data);
+      const data = await fetchUser(userId, { signal: request.signal });
+      if (!request.signal.aborted) setUser(data);
     } catch (err) {
-      setError(err.message || 'Failed to load user detail.');
+      if (!request.signal.aborted) {
+        setUser(null);
+        setError(err.message || 'Failed to load user detail.');
+      }
     } finally {
-      setLoading(false);
+      if (pendingRead.current === request) {
+        pendingRead.current = null;
+        setLoading(false);
+      }
     }
   }, [userId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    mounted.current = true;
     const timer = setTimeout(() => {
       void loadUser();
     }, 0);
-    return () => clearTimeout(timer);
+    return () => {
+      mounted.current = false;
+      clearTimeout(timer);
+      clearTimeout(messageTimer.current);
+      pendingRead.current?.abort();
+      pendingRead.current = null;
+    };
   }, [loadUser]);
 
   const notifySuccess = (msg) => {
+    if (!mounted.current) return;
     setActionSuccess(msg);
-    setTimeout(() => setActionSuccess(''), 4000);
+    clearTimeout(messageTimer.current);
+    messageTimer.current = setTimeout(() => setActionSuccess(''), 4000);
   };
 
   const handleToggleActive = () => {
-    if (!user) return;
+    if (!user || !canMutate || loading || mutating) return;
     const isDeactivating = user.is_active;
     setConfirmModal({
       isOpen: true,
@@ -106,6 +131,7 @@ export function UserDetailPage({
   };
 
   const handleRevokeConnectionPrompt = (connection) => {
+    if (!user || !canMutate || loading || mutating) return;
     setConfirmModal({
       isOpen: true,
       title: `Revoke MT5 Connection: ${connection.label}`,
@@ -121,20 +147,24 @@ export function UserDetailPage({
   };
 
   const handleConfirmExecute = async () => {
-    if (!confirmModal.action) return;
-    setLoading(true);
+    if (!canMutate || !confirmModal.action || pendingAction.current) return;
+    pendingAction.current = true;
+    setMutating(true);
+    setError('');
     try {
       await confirmModal.action();
-      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      if (mounted.current) setConfirmModal((prev) => ({ ...prev, isOpen: false }));
     } catch (err) {
-      setError(err.message || 'Operation failed.');
+      if (mounted.current) setError(err.message || 'Operation failed.');
     } finally {
-      setLoading(false);
+      pendingAction.current = false;
+      if (mounted.current) setMutating(false);
     }
   };
 
   const isCurrentSessionTarget =
-    activeSupportSession?.active && activeSupportSession?.target_user_id === userId;
+    isSessionActive(activeSupportSession) && activeSupportSession.target_user_id === userId;
+  const actionsDisabled = loading || mutating;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -162,6 +192,7 @@ export function UserDetailPage({
             size="sm"
             icon={RefreshCw}
             loading={loading}
+            disabled={mutating || entitlementOpen || extendExpiryOpen || confirmModal.isOpen || supportGrantOpen}
             onClick={loadUser}
           >
             Refresh
@@ -175,6 +206,7 @@ export function UserDetailPage({
                     variant="secondary"
                     size="sm"
                     icon={Clock}
+                    disabled={actionsDisabled}
                     onClick={() => setExtendExpiryOpen(true)}
                   >
                     Edit Masa Aktif
@@ -184,6 +216,7 @@ export function UserDetailPage({
                     variant="secondary"
                     size="sm"
                     icon={Sliders}
+                    disabled={actionsDisabled}
                     onClick={() => setEntitlementOpen(true)}
                   >
                     Edit Entitlement
@@ -193,6 +226,7 @@ export function UserDetailPage({
                     variant={user.is_active ? 'danger' : 'secondary'}
                     size="sm"
                     icon={user.is_active ? UserX : UserCheck}
+                    disabled={actionsDisabled}
                     onClick={handleToggleActive}
                   >
                     {user.is_active ? 'Deactivate' : 'Activate'}
@@ -205,6 +239,7 @@ export function UserDetailPage({
                   variant="primary"
                   size="sm"
                   icon={LifeBuoy}
+                  disabled={actionsDisabled}
                   onClick={() => setSupportGrantOpen(true)}
                 >
                   Open Support Session
@@ -321,10 +356,13 @@ export function UserDetailPage({
       ) : null}
 
       {/* Elevated Financial Detail (Protected by ADR 0008 Support Mode) */}
-      <ElevatedDetailPanel
-        userId={userId}
-        isActiveSession={Boolean(isCurrentSessionTarget)}
-      />
+      {supportVerified && isCurrentSessionTarget ? (
+        <ElevatedDetailPanel
+          key={`${userId}:${activeSupportSession.id}`}
+          userId={userId}
+          session={activeSupportSession}
+        />
+      ) : null}
 
       {/* Connected MT5 Terminals Card */}
       <Card
@@ -334,9 +372,9 @@ export function UserDetailPage({
       >
         <UserConnectionsTable
           connections={user?.connections || []}
-          canRevoke={canMutate}
+          canRevoke={canMutate && !actionsDisabled}
           onRevokeConnection={handleRevokeConnectionPrompt}
-          loading={loading}
+          loading={actionsDisabled}
         />
       </Card>
 
@@ -373,7 +411,7 @@ export function UserDetailPage({
           message={confirmModal.message}
           confirmLabel={confirmModal.confirmLabel}
           danger={confirmModal.danger}
-          loading={loading}
+          loading={mutating}
           onConfirm={handleConfirmExecute}
         />
       ) : null}

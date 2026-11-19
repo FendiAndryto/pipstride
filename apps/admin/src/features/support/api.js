@@ -1,12 +1,13 @@
 import { apiFetch } from '../../lib/api';
 
-export async function fetchSupportSessions({ mine = true, active_only = false } = {}) {
+export async function fetchSupportSessions({ mine = true, active_only = false, signal } = {}) {
   const params = new URLSearchParams();
   params.set('mine', String(mine));
   params.set('active_only', String(active_only));
 
   return apiFetch(`/api/v1/admin/support/sessions?${params.toString()}`, {
     method: 'GET',
+    signal,
   }, { authed: true });
 }
 
@@ -23,8 +24,9 @@ export async function revokeSupportSession(id) {
   }, { authed: true });
 }
 
-export async function fetchElevatedDetail(userId) {
+export async function fetchElevatedDetail(userId, { signal } = {}) {
   return apiFetch(`/api/v1/admin/support/users/${encodeURIComponent(userId)}/detail`, {
     method: 'GET',
+    signal,
   }, { authed: true });
 }

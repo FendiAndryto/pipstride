@@ -3,12 +3,13 @@ import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { formatDateTime, truncateId } from '../../domain/format';
-import { formatCountdown, isSessionActive } from '../../domain/supportSession';
+import { calculateRemainingSeconds, formatCountdown, isSessionActive } from '../../domain/supportSession';
 import { ShieldX } from 'lucide-react';
 
 export function SupportSessionsTable({
   sessions = [],
   onRevokeSession,
+  revokingIds,
   loading = false,
 }) {
   const columns = [
@@ -52,7 +53,7 @@ export function SupportSessionsTable({
         if (active) {
           return (
             <Badge variant="warning">
-              Active ({formatCountdown(s.seconds_remaining)})
+              Active ({formatCountdown(calculateRemainingSeconds(s.expires_at))})
             </Badge>
           );
         }
@@ -92,6 +93,7 @@ export function SupportSessionsTable({
             variant="danger"
             size="sm"
             icon={ShieldX}
+            loading={revokingIds.has(s.id)}
             onClick={() => onRevokeSession(s.id)}
           >
             Revoke

@@ -79,6 +79,7 @@ class AdminAuditItem(BaseModel):
 
 class AdminAuditListResponse(BaseModel):
     items: List[AdminAuditItem]
+    actions: List[str] = Field(default_factory=list)
     total: int
     limit: int
     offset: int
@@ -90,6 +91,7 @@ class AdminMetricGroup(BaseModel):
 
 
 class AdminMetricsResponse(BaseModel):
+    as_of: datetime
     users: dict
     connections: dict
     trades: dict

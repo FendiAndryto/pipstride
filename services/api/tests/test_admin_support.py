@@ -1,12 +1,13 @@
 """Support mode: time-boxed elevation, visible to the affected user (ADR 0008 §6)."""
 
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from sqlalchemy import select
 
 from app.core.config import settings
 from app.db.base import SessionLocal
-from app.db.models import AccountSettings, AuditLog, SupportSession, Trade
+from app.db.models import AccountSettings, AuditLog, SupportSession, Trade, User
 from tests.conftest import current_totp
 
 
@@ -45,6 +46,34 @@ def test_support_mode_is_disabled_by_default(client, make_user, monkeypatch):
     )
     assert res.status_code == 403
     assert "disabled" in res.json()["detail"].lower()
+
+
+def test_active_listing_covers_all_grants_and_respects_disabled_mode(client, make_user, monkeypatch):
+    monkeypatch.setattr(settings, "SUPPORT_MODE_ENABLED", True)
+    operator = make_user("support", enrolled=True)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    targets = [User(id=str(uuid4()), username=f"target-{uuid4().hex}", password_hash="unused") for _ in range(51)]
+    with SessionLocal.begin() as db:
+        db.add_all(targets)
+        db.flush()
+        db.add_all([
+            SupportSession(
+                admin_id=operator["id"], target_user_id=target.id,
+                reason="Local API test", expires_at=expires_at,
+            )
+            for target in targets
+        ])
+
+    headers = _login(client, operator)
+    path = "/api/v1/admin/support/sessions"
+    active = client.get(path, params={"active_only": True}, headers=headers)
+    assert active.status_code == 200
+    assert len(active.json()["items"]) == 51
+
+    monkeypatch.setattr(settings, "SUPPORT_MODE_ENABLED", False)
+    assert client.get(path, params={"active_only": True}, headers=headers).json()["items"] == []
+    assert len(client.get(path, headers=headers).json()["items"]) == 50
+    assert client.get("/api/v1/admin/metrics", headers=headers).json()["support_sessions"]["active"] == 0
 
 
 def test_support_flow_grant_view_revoke(client, account, make_user, monkeypatch):

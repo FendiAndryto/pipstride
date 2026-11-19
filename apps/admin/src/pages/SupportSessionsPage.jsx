@@ -1,58 +1,101 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useRef } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SupportSessionsTable } from '../features/support/SupportSessionsTable';
-import { fetchSupportSessions, revokeSupportSession } from '../features/support/api';
+import { fetchSupportSessions } from '../features/support/api';
+import { isSessionActive } from '../lib/supportSession';
 import { RefreshCw, LifeBuoy } from 'lucide-react';
 
 export function SupportSessionsPage({
-  onSessionRevoked,
+  canViewAll,
+  initialActiveOnly,
+  revokeSession,
+  revokedById,
+  revokingIds,
 }) {
   const [sessions, setSessions] = useState([]);
-  const [mineOnly, setMineOnly] = useState(true);
-  const [activeOnly, setActiveOnly] = useState(false);
+  const [mineOnly, setMineOnly] = useState(!canViewAll || !initialActiveOnly);
+  const [activeOnly, setActiveOnly] = useState(initialActiveOnly);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const pendingRead = useRef(null);
+  const messageTimer = useRef(null);
+  const mounted = useRef(false);
+
+  const cancelRead = useCallback(() => {
+    pendingRead.current?.abort();
+    pendingRead.current = null;
+  }, []);
 
   const loadSessions = useCallback(async () => {
+    cancelRead();
+    const request = new AbortController();
+    pendingRead.current = request;
     setLoading(true);
     setError('');
     try {
       const data = await fetchSupportSessions({
         mine: mineOnly,
         active_only: activeOnly,
+        signal: request.signal,
       });
-      setSessions(data.items || []);
+      if (!request.signal.aborted) setSessions(data.items || []);
     } catch (err) {
-      setError(err.message || 'Failed to load support sessions.');
+      if (!request.signal.aborted) {
+        setSessions([]);
+        setError(err.message || 'Failed to load support sessions.');
+      }
     } finally {
-      setLoading(false);
+      if (pendingRead.current === request) {
+        pendingRead.current = null;
+        setLoading(false);
+      }
     }
-  }, [mineOnly, activeOnly]);
+  }, [mineOnly, activeOnly, cancelRead]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimeout(messageTimer.current);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     const timer = setTimeout(() => {
       void loadSessions();
     }, 0);
-    return () => clearTimeout(timer);
-  }, [loadSessions]);
+    return () => {
+      clearTimeout(timer);
+      cancelRead();
+    };
+  }, [loadSessions, cancelRead, revokedById]);
+
+  const changeFilter = (update) => {
+    cancelRead();
+    setLoading(true);
+    update();
+  };
 
   const handleRevoke = async (sessionId) => {
-    setLoading(true);
+    setError('');
     try {
-      await revokeSupportSession(sessionId);
+      const revoked = await revokeSession(sessionId);
+      if (!revoked || !mounted.current) return;
       setMessage('Support session revoked successfully.');
-      setTimeout(() => setMessage(''), 4000);
-      if (onSessionRevoked) {
-        onSessionRevoked(sessionId);
-      }
-      await loadSessions();
+      clearTimeout(messageTimer.current);
+      messageTimer.current = setTimeout(() => setMessage(''), 4000);
     } catch (err) {
-      setError(err.message || 'Failed to revoke support session.');
-      setLoading(false);
+      if (mounted.current) setError(err.message || 'Failed to revoke support session.');
     }
   };
+
+  const currentSessions = sessions.flatMap((session) => {
+    const revoked = revokedById.get(session.id);
+    if (activeOnly) return !revoked && isSessionActive(session) ? [session] : [];
+    return [revoked || session];
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -94,24 +137,31 @@ export function SupportSessionsPage({
         icon={LifeBuoy}
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button
-              variant={mineOnly ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setMineOnly(true)}
-            >
-              My Sessions
-            </Button>
-            <Button
-              variant={!mineOnly ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setMineOnly(false)}
-            >
-              All Staff Sessions
-            </Button>
+            {canViewAll ? (
+              <>
+                <Button
+                  variant={mineOnly ? 'primary' : 'secondary'}
+                  size="sm"
+                  aria-pressed={mineOnly}
+                  onClick={() => { if (!mineOnly) changeFilter(() => setMineOnly(true)); }}
+                >
+                  My Sessions
+                </Button>
+                <Button
+                  variant={!mineOnly ? 'primary' : 'secondary'}
+                  size="sm"
+                  aria-pressed={!mineOnly}
+                  onClick={() => { if (mineOnly) changeFilter(() => setMineOnly(false)); }}
+                >
+                  All Staff Sessions
+                </Button>
+              </>
+            ) : null}
             <Button
               variant={activeOnly ? 'primary' : 'secondary'}
               size="sm"
-              onClick={() => setActiveOnly((prev) => !prev)}
+              aria-pressed={activeOnly}
+              onClick={() => changeFilter(() => setActiveOnly((prev) => !prev))}
             >
               {activeOnly ? 'Active Only' : 'All States'}
             </Button>
@@ -119,8 +169,9 @@ export function SupportSessionsPage({
         }
       >
         <SupportSessionsTable
-          sessions={sessions}
+          sessions={currentSessions}
           onRevokeSession={handleRevoke}
+          revokingIds={revokingIds}
           loading={loading}
         />
       </Card>

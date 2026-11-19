@@ -7,7 +7,7 @@ export function calculateRemainingSeconds(expiresAtIso, now = Date.now()) {
   if (Number.isNaN(expiry)) return 0;
   const remainingMs = expiry - now;
   if (remainingMs <= 0) return 0;
-  return Math.floor(remainingMs / 1000);
+  return Math.ceil(remainingMs / 1000);
 }
 
 export function formatCountdown(seconds) {
@@ -30,6 +30,26 @@ export function isSessionActive(session, now = Date.now()) {
   if (!session || !session.active) return false;
   if (session.revoked_at) return false;
   return calculateRemainingSeconds(session.expires_at, now) > 0;
+}
+
+export function indexActiveSupportSessions(sessions, now = Date.now()) {
+  return new Map(
+    sessions
+      .filter((session) => isSessionActive(session, now))
+      .map((session) => [session.id, session]),
+  );
+}
+
+export function findTargetSupportSession(sessions, userId) {
+  return sessions.find((session) => session.target_user_id === userId) || null;
+}
+
+export function matchesElevatedSupportSession(detail, userId, session, now = Date.now()) {
+  return detail?.user_id === userId
+    && detail.support_session?.target_user_id === userId
+    && detail.support_session.id === session?.id
+    && isSessionActive(session, now)
+    && isSessionActive(detail.support_session, now);
 }
 
 export function isSessionExpiringSoon(seconds, thresholdSeconds = 300) {

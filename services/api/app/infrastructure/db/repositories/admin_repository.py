@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.db.models import (
@@ -31,6 +31,18 @@ from app.domain.time import as_utc
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _expiring_users(now: datetime):
+    return and_(
+        User.is_active.is_(True),
+        User.expires_at > now,
+        User.expires_at <= now + timedelta(days=7),
+    )
+
+
+def _pending_connections():
+    return and_(Mt5Connection.revoked_at.is_(None), Mt5Connection.status == "pending")
 
 
 def _user_rollups():
@@ -122,6 +134,7 @@ def list_users(
     db: Session,
     *,
     search: Optional[str] = None,
+    status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
@@ -133,6 +146,14 @@ def list_users(
                 func.lower(User.username).like(pattern),
                 func.lower(func.coalesce(User.email, "")).like(pattern),
             )
+        )
+    if status == "expiring":
+        filters.append(_expiring_users(_now()))
+    elif status == "pending_connection":
+        filters.append(
+            select(Mt5Connection.id)
+            .where(Mt5Connection.user_id == User.id, _pending_connections())
+            .exists()
         )
 
     total = db.scalar(select(func.count()).select_from(User).where(*filters)) or 0
@@ -223,6 +244,8 @@ def list_audit(
     user_id: Optional[str] = None,
     target_user_id: Optional[str] = None,
     action: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
@@ -237,6 +260,10 @@ def list_audit(
         filters.append(AuditLog.target_user_id == target_user_id)
     if action:
         filters.append(AuditLog.action == action)
+    if start is not None:
+        filters.append(AuditLog.created_at >= start)
+    if end is not None:
+        filters.append(AuditLog.created_at < end)
 
     total = db.scalar(select(func.count()).select_from(AuditLog).where(*filters)) or 0
     rows = db.execute(
@@ -261,6 +288,10 @@ def list_audit(
     return items, int(total)
 
 
+def list_audit_actions(db: Session) -> list[str]:
+    return list(db.scalars(select(AuditLog.action).distinct().order_by(AuditLog.action)))
+
+
 def metrics(db: Session) -> dict:
     now = _now()
     last_day = now - timedelta(hours=24)
@@ -273,6 +304,10 @@ def metrics(db: Session) -> dict:
         or 0
     )
     roles = dict(db.execute(select(User.role, func.count()).group_by(User.role)).all())
+    user_expiring = (
+        db.scalar(select(func.count()).select_from(User).where(_expiring_users(now)))
+        or 0
+    )
 
     connection_total = db.scalar(select(func.count()).select_from(Mt5Connection)) or 0
     connection_active = (
@@ -287,6 +322,12 @@ def metrics(db: Session) -> dict:
         db.execute(
             select(Mt5Connection.status, func.count()).group_by(Mt5Connection.status)
         ).all()
+    )
+    connection_pending = (
+        db.scalar(
+            select(func.count()).select_from(Mt5Connection).where(_pending_connections())
+        )
+        or 0
     )
 
     trade_total = db.scalar(select(func.count()).select_from(Trade)) or 0
@@ -322,9 +363,11 @@ def metrics(db: Session) -> dict:
     )
 
     return {
+        "as_of": now,
         "users": {
             "total": int(user_total),
             "active": int(user_active),
+            "expiring_soon": int(user_expiring),
             "admins": int(roles.get("admin", 0)),
             "support": int(roles.get("support", 0)),
             "traders": int(roles.get("trader", 0)),
@@ -333,7 +376,7 @@ def metrics(db: Session) -> dict:
             "total": int(connection_total),
             "active": int(connection_active),
             "connected": int(connection_statuses.get("connected", 0)),
-            "pending": int(connection_statuses.get("pending", 0)),
+            "pending": int(connection_pending),
             "revoked": int(connection_statuses.get("revoked", 0)),
         },
         "trades": {"total": int(trade_total), "last_24h": int(trade_last_day)},
@@ -368,7 +411,7 @@ def list_support_sessions(
         .outerjoin(target, target.id == SupportSession.target_user_id)
         .where(*filters)
         .order_by(SupportSession.granted_at.desc())
-        .limit(limit)
+        .limit(None if active_only else limit)
     ).all()
     return [
         {

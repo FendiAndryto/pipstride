@@ -1,72 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, ShieldX, Clock } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { calculateRemainingSeconds, formatCountdown, isSessionActive } from '../../domain/supportSession';
+import { calculateRemainingSeconds, formatCountdown } from '../../domain/supportSession';
 import { truncateId } from '../../domain/format';
 
-export function SupportBanner({
-  session,
-  onRevoke,
-  onExpire,
-}) {
+function SupportBannerGrant({ session, revoking, onRevoke }) {
   const [now, setNow] = useState(() => Date.now());
-  const [revoking, setRevoking] = useState(false);
+  const [error, setError] = useState('');
+  const remaining = calculateRemainingSeconds(session.expires_at, now);
+  const target = session.target_username || truncateId(session.target_user_id, 10);
 
   useEffect(() => {
-    if (!session || !isSessionActive(session)) return;
-
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [session]);
-
-  const secondsRemaining = session ? calculateRemainingSeconds(session.expires_at, now) : 0;
-
-  useEffect(() => {
-    if (session && secondsRemaining <= 0) {
-      if (onExpire) onExpire();
-    }
-  }, [session, secondsRemaining, onExpire]);
-
-  if (!session || !isSessionActive(session) || secondsRemaining <= 0) {
-    return null;
-  }
+  }, []);
 
   const handleRevoke = async () => {
-    setRevoking(true);
+    setError('');
     try {
       await onRevoke(session.id);
-    } finally {
-      setRevoking(false);
+    } catch (err) {
+      setError(err.detail || err.message || 'Failed to revoke support elevation.');
     }
   };
 
   return (
-    <div className="support-banner" role="alert" aria-live="polite">
+    <div>
       <div className="support-banner-inner">
         <div className="support-banner-info">
-          <div className="support-live-dot" />
-          <ShieldAlert size={18} style={{ color: 'var(--accent-amber)' }} />
-          <div>
-            <strong>Support Elevation Active:</strong>{' '}
-            <span style={{ color: 'var(--text-primary)' }}>
-              {session.target_username || truncateId(session.target_user_id, 10)}
-            </span>
-            <span style={{ margin: '0 8px', color: 'var(--text-muted)' }}>|</span>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              &ldquo;{session.reason}&rdquo;
-            </span>
+          <ShieldAlert size={18} style={{ color: 'var(--accent-amber)', flexShrink: 0 }} />
+          <div style={{ overflowWrap: 'anywhere' }}>
+            <strong>{target}</strong>{' '}
+            <span style={{ color: 'var(--text-secondary)' }}>&ldquo;{session.reason}&rdquo;</span>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Clock size={14} style={{ color: 'var(--accent-amber)' }} />
-            <span className="support-countdown">
-              {formatCountdown(secondsRemaining)}
-            </span>
+            <span className="support-countdown">{formatCountdown(remaining)}</span>
           </div>
 
           <Button
@@ -75,11 +47,44 @@ export function SupportBanner({
             icon={ShieldX}
             loading={revoking}
             onClick={handleRevoke}
+            aria-label={revoking ? `Revoking elevation for ${target}` : `Revoke elevation for ${target}`}
           >
-            Revoke Elevation
+            {revoking ? 'Revoking…' : 'Revoke Elevation'}
           </Button>
         </div>
       </div>
+      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
     </div>
+  );
+}
+
+export function SupportBanner({ sessions, verificationError, revokingIds, onRevoke }) {
+  const hasSessions = sessions.length > 0;
+
+  if (!hasSessions && !verificationError) return null;
+
+  return (
+    <aside className="support-banner" aria-label="Support elevation">
+      <div className="support-banner-inner">
+        {hasSessions ? (
+          <strong role="status">
+            {sessions.length} {verificationError ? 'last verified' : 'active'} support {sessions.length === 1 ? 'elevation' : 'elevations'}
+          </strong>
+        ) : null}
+        {verificationError ? (
+          <div role="alert">Unable to verify support elevations. {verificationError}</div>
+        ) : null}
+      </div>
+      <div style={{ maxHeight: 'min(30vh, 240px)', overflowY: 'auto' }}>
+        {sessions.map((session) => (
+          <SupportBannerGrant
+            key={session.id}
+            session={session}
+            revoking={revokingIds.has(session.id)}
+            onRevoke={onRevoke}
+          />
+        ))}
+      </div>
+    </aside>
   );
 }
