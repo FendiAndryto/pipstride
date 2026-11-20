@@ -5,6 +5,7 @@ import HomeTab from './HomeTab';
 import JournalTab from './JournalTab';
 import MarketTab from './MarketTab';
 import ComingSoonTab from './ComingSoonTab';
+import ReplayTab from '../features/replay/ReplayTab';
 import ProfileTab from './ProfileTab';
 import Mt5ConnectModal from './Mt5ConnectModal';
 import {
@@ -25,8 +26,9 @@ function applyConnections(list, setConnections, setActiveConnectionId) {
   }
 }
 
-export default function Dashboard({ user, onLogout, onRefreshUser }) {
+export default function Dashboard({ user, onLogout, onRefreshUser, onActivity }) {
   const [activeTab, setActiveTab] = useState('home');
+  const [replayVisited, setReplayVisited] = useState(false);
   const [bridgeStatus, setBridgeStatus] = useState(null);
   const [riskStatus, setRiskStatus] = useState(null);
   const [connections, setConnections] = useState([]);
@@ -38,6 +40,11 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
   const [isMt5ModalOpen, setIsMt5ModalOpen] = useState(false);
   const timerRef = useRef(null);
   const inFlightRef = useRef(false);
+
+  function selectTab(tab) {
+    if (tab === 'replay') setReplayVisited(true);
+    setActiveTab(tab);
+  }
 
   const loadConnections = useCallback(async () => {
     try {
@@ -160,7 +167,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
       {/* Sticky Header with Logo, Navigation Tabs & Status */}
       <PipstrideHeader
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={selectTab}
         isConnected={isConnected}
         latency={secondsSinceHeartbeat}
         hostType={hostType}
@@ -213,9 +220,15 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
           <ComingSoonTab type="ai" onBackToHome={() => setActiveTab('home')} />
         </div>
 
-        {/* Tab 5: Replay & Backtest (Coming Soon) */}
         <div className={`page-container ${activeTab === 'replay' ? 'active' : ''}`} id="tab-replay">
-          <ComingSoonTab type="replay" onBackToHome={() => setActiveTab('home')} />
+          {replayVisited && (
+            <ReplayTab
+              key={user.username}
+              accountId={user.username}
+              active={activeTab === 'replay'}
+              onActivity={onActivity}
+            />
+          )}
         </div>
 
         {/* Tab 6: Profile & Settings */}
@@ -236,7 +249,7 @@ export default function Dashboard({ user, onLogout, onRefreshUser }) {
       </div>
 
       {/* Mobile Fixed Bottom Navigation Bar */}
-      <PipstrideBottomNav activeTab={activeTab} onSelectTab={setActiveTab} />
+      <PipstrideBottomNav activeTab={activeTab} onSelectTab={selectTab} />
 
       {/* MT5 Connect & Broker Screen Modal */}
       <Mt5ConnectModal

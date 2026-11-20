@@ -84,7 +84,7 @@ export default function App() {
 
   // Idle logout: drop the JWT after 15 min without interaction, but keep the
   // selected MT5 connection so the user does not lose their account on re-login.
-  useIdleLogout({
+  const resetIdleTimer = useIdleLogout({
     onIdle: () => {
       if (!user) return;
       clearToken();
@@ -161,7 +161,7 @@ export default function App() {
   return (
     <>
       {user ? (
-        <Dashboard user={user} onLogout={handleLogout} onRefreshUser={handleRefreshUser} />
+        <Dashboard user={user} onLogout={handleLogout} onRefreshUser={handleRefreshUser} onActivity={resetIdleTimer} />
       ) : (
         <LoginPage
           onLoginSuccess={handleLoginSuccess}

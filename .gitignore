@@ -41,6 +41,7 @@ htmlcov/
 *.sql.gz
 backups/
 data/
+!apps/web/public/replay/data/
 backend/data/
 services/api/data/
 

@@ -31,10 +31,12 @@
 {$PIPSTRIDE_DOMAIN:app-pipstride.homever.my.id} {
     encode gzip zstd
 
+    @outsideReplayTerminal not path /replay/terminal.html
+    header @outsideReplayTerminal X-Frame-Options "DENY"
+
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "geolocation=(), microphone=(), camera=()"
     }

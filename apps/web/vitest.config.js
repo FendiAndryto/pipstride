@@ -11,7 +11,7 @@ export default defineConfig({
   test: {
     // Pure modules only for now — no jsdom, no component tests (ticket 008-01 scope).
     environment: 'node',
-    include: ['src/**/*.test.{js,jsx}'],
+    include: ['src/**/*.test.{js,jsx}', 'tests/**/*.test.js'],
     restoreMocks: true
   }
 });

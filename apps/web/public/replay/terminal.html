@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="XAUUSD Pure Price Action Replay Terminal">
+  <meta name="theme-color" content="#080f14">
+  <title>XAUUSD Replay Terminal</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/replay/css/replay.css">
+</head>
+<body>
+  <main class="main-container">
+    <div id="pane-replay">
+      <section class="panel replay-panel" aria-labelledby="heading-replay">
+        <div class="panel-header replay-header">
+          <h2 id="heading-replay" class="panel-heading">XAUUSD Price Action Replay</h2>
+        </div>
+
+        <!-- Toolbar Selector (T-PAR-08) -->
+        <div class="replay-toolbar" role="toolbar" aria-label="Konfigurasi Replay">
+          <!-- Group 1: Mode & Periode -->
+          <div class="replay-group replay-mode-group">
+            <span class="replay-group-label">Mode:</span>
+            <div id="replay-mode-toggle" class="replay-toggle-group" role="group" aria-label="Pilih mode periode">
+              <button type="button" id="replay-mode-month" class="replay-pill is-active" data-mode="month">Per Bulan</button>
+              <button type="button" id="replay-mode-multi-month" class="replay-pill" data-mode="multi_month">Rentang Bulan</button>
+              <button type="button" id="replay-mode-year" class="replay-pill" data-mode="year">Tahunan</button>
+              <button type="button" id="replay-mode-custom" class="replay-pill" data-mode="custom">Kustom</button>
+              <button type="button" id="replay-mode-all" class="replay-pill" data-mode="all">Semua Data</button>
+            </div>
+
+            <div class="replay-period-inputs">
+              <label id="replay-year-wrap" class="replay-field">
+                <span class="replay-field-label">Tahun</span>
+                <select id="replay-year" class="replay-select" aria-label="Pilih tahun"></select>
+              </label>
+
+              <label id="replay-month-wrap" class="replay-field">
+                <span class="replay-field-label">Bulan</span>
+                <select id="replay-month" class="replay-select" aria-label="Pilih bulan"></select>
+              </label>
+
+              <label id="replay-date-start-wrap" class="replay-field hidden">
+                <span class="replay-field-label">Dari</span>
+                <input type="date" id="replay-date-start" class="replay-input" aria-label="Tanggal mulai" />
+              </label>
+
+              <label id="replay-date-end-wrap" class="replay-field hidden">
+                <span class="replay-field-label">Sampai</span>
+                <input type="date" id="replay-date-end" class="replay-input" aria-label="Tanggal selesai" />
+              </label>
+            </div>
+          </div>
+
+          <!-- Group 2: Timeframe Pills -->
+          <div class="replay-group replay-tf-group">
+            <span class="replay-group-label">TF:</span>
+            <div id="replay-timeframes" class="replay-toggle-group" role="group" aria-label="Pilih timeframe">
+              <!-- Dynamically generated from timeframe_coverage -->
+            </div>
+          </div>
+
+          <!-- Actions: Muat Replay + Fullscreen -->
+          <div class="replay-group replay-actions-group">
+            <button type="button" id="replay-btn-load" class="replay-btn replay-btn-primary" aria-label="Muat Replay">
+              Muat Replay
+            </button>
+            <button type="button" id="replay-btn-fullscreen" class="replay-btn" title="Layar Penuh (F)" aria-label="Layar Penuh">
+              ⛶ Fullscreen
+            </button>
+          </div>
+        </div>
+
+        <!-- Warning & Error Banners -->
+        <div id="replay-warnings-banner" class="replay-banner replay-banner-warning hidden" role="alert">
+          <span class="replay-banner-icon">⚠️</span>
+          <span id="replay-warnings-text" class="replay-banner-text"></span>
+        </div>
+
+        <div id="replay-error-banner" class="replay-banner replay-banner-error hidden" role="alert">
+          <span class="replay-banner-icon">❌</span>
+          <span id="replay-error-text" class="replay-banner-text"></span>
+        </div>
+
+        <!-- Transport Bar (T-PAR-10) -->
+        <div class="replay-transport-bar">
+          <div class="replay-transport-cluster">
+            <button type="button" id="replay-step-back" class="replay-btn" title="Mundur 1 bar (←)" aria-label="Mundur satu bar">⏮</button>
+            <button type="button" id="replay-play" class="replay-btn replay-btn-transport" title="Putar / Jeda (Space)" aria-label="Putar replay">▶ Play</button>
+            <button type="button" id="replay-step-forward" class="replay-btn" title="Maju 1 bar (→)" aria-label="Maju satu bar">⏭</button>
+            <span id="replay-state" class="replay-state is-stopped">STOPPED</span>
+            <span id="replay-position" class="replay-position">0 / 0</span>
+          </div>
+
+          <div class="replay-speed-cluster">
+            <span class="replay-field-label">Kecepatan:</span>
+            <div id="replay-speeds" class="replay-speeds" role="group" aria-label="Preset kecepatan">
+              <button type="button" class="replay-speed" data-speed="0.5" aria-pressed="false">0.5x</button>
+              <button type="button" class="replay-speed is-active" data-speed="1" aria-pressed="true">1x</button>
+              <button type="button" class="replay-speed" data-speed="2" aria-pressed="false">2x</button>
+              <button type="button" class="replay-speed" data-speed="5" aria-pressed="false">5x</button>
+              <button type="button" class="replay-speed" data-speed="10" aria-pressed="false">10x</button>
+              <button type="button" class="replay-speed" data-speed="25" aria-pressed="false">25x</button>
+              <button type="button" class="replay-speed" data-speed="50" aria-pressed="false">50x</button>
+              <button type="button" class="replay-speed" data-speed="max" aria-pressed="false">Max</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scrubber & Timeline -->
+        <div class="replay-timeline">
+          <div class="replay-scrubber-wrap" id="replay-scrubber-wrap">
+            <div id="replay-scrubber-fill" class="replay-scrubber-fill" aria-hidden="true"></div>
+            <input type="range" id="replay-scrubber" class="replay-scrubber" min="0" max="0" step="1" value="0" aria-label="Timeline replay" />
+            <div id="replay-scrubber-tooltip" class="replay-scrubber-tooltip hidden"></div>
+          </div>
+          <div class="replay-status-row">
+            <p id="replay-status" class="replay-status" role="status" aria-live="polite">Memuat cakupan data…</p>
+          </div>
+        </div>
+
+        <!-- Chart Container Area (T-PAR-09 & T-PAR-10) -->
+        <div class="replay-body">
+          <div id="replay-chart-wrap" class="replay-chart-wrap">
+            <!-- Vertical Tools Dock (T-SIM-03) -->
+            <nav id="replay-dock" class="replay-dock" aria-label="Toolbar Alat Gambar & Simulasi">
+              <div class="replay-dock-group" role="toolbar" aria-label="Peralatan Gambar">
+                <button type="button" class="replay-dock-btn is-active" id="tool-cursor" data-tool="cursor" data-tooltip="Kursor / Pilih (V)" aria-label="Kursor / Pilih (V)" aria-pressed="true">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
+                </button>
+                <button type="button" class="replay-dock-btn" id="tool-hline" data-tool="hline" data-tooltip="Horizontal Line (Alt+H)" aria-label="Horizontal Line (Alt+H)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>
+                </button>
+                <button type="button" class="replay-dock-btn" id="tool-rect" data-tool="rect" data-tooltip="Kotak Zona / Rectangle (R)" aria-label="Kotak Zona / Rectangle (R)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg>
+                </button>
+                <button type="button" class="replay-dock-btn" id="tool-trendline" data-tool="trendline" data-tooltip="Trendline (T)" aria-label="Trendline (T)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="19" x2="20" y2="5"/><circle cx="4" cy="19" r="2" fill="currentColor"/><circle cx="20" cy="5" r="2" fill="currentColor"/></svg>
+                </button>
+                <button type="button" class="replay-dock-btn" id="tool-fib" data-tool="fib" data-tooltip="Fibonacci Retracement (G)" aria-label="Fibonacci Retracement (G)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M3 10h18M3 14h18M3 19h18"/></svg>
+                </button>
+                <button type="button" class="replay-dock-btn" id="tool-ruler" data-tool="ruler" data-tooltip="Penggaris / Ukur (M)" aria-label="Penggaris / Ukur (M)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 17l15-15 5 5-15 15-5-5z"/><path d="M6 9l2 2"/><path d="M9 6l2 2"/><path d="M12 3l2 2"/></svg>
+                </button>
+                <div class="replay-dock-divider" aria-hidden="true"></div>
+                <button type="button" class="replay-dock-btn replay-dock-btn-sim" id="tool-long" data-tool="long_pos" data-tooltip="Posisi Long / BUY (L)" aria-label="Posisi Long / BUY (L)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                </button>
+                <button type="button" class="replay-dock-btn replay-dock-btn-sim" id="tool-short" data-tool="short_pos" data-tooltip="Posisi Short / SELL (S)" aria-label="Posisi Short / SELL (S)" aria-pressed="false">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                </button>
+                <div class="replay-dock-divider" aria-hidden="true"></div>
+                <button type="button" class="replay-dock-btn replay-dock-btn-danger" id="tool-clear" data-action="clear" data-tooltip="Hapus Semua Gambar (Del)" aria-label="Hapus Semua Gambar (Del)">
+                  <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+                </button>
+              </div>
+            </nav>
+
+            <div class="replay-chart-stack">
+              <div class="replay-price-view">
+                <div id="replay-chart" class="replay-chart">
+                  <canvas id="replay-drawing-canvas" class="replay-drawing-canvas" aria-hidden="true"></canvas>
+                  <p class="chart-empty" id="replay-chart-empty">Memuat data replay…</p>
+                </div>
+
+                <!-- Floating Follow Button (Saat user pan ke masa lalu) -->
+                <button type="button" id="replay-btn-follow" class="replay-btn-follow hidden" aria-label="Ikuti lilin terbaru">
+                  ⬇ Ikuti Lilin Terbaru
+                </button>
+
+                <!-- Floating HUD (Pojok Kiri Atas - Top-Left) -->
+                <div id="replay-hud" class="replay-hud-floating" aria-label="Live replay HUD">
+                  <div class="replay-hud-header">
+                    <div class="replay-hud-meta">
+                      <span id="replay-hud-status" class="replay-hud-status">STOPPED</span>
+                      <span id="replay-hud-progress" class="replay-hud-progress">0.0%</span>
+                      <span id="replay-loaded-timeframe" class="replay-loaded-timeframe" hidden></span>
+                    </div>
+                    <button type="button" id="replay-hud-toggle" class="replay-hud-btn-toggle" title="Ciutkan / Bentangkan HUD (H)" aria-label="Ciutkan HUD">—</button>
+                  </div>
+                  <div class="replay-hud-body">
+                    <div class="replay-hud-time">
+                      <div class="replay-hud-time-row">
+                        <span class="replay-hud-time-label">UTC:</span>
+                        <span id="replay-hud-time-utc" class="replay-hud-time-val">—</span>
+                      </div>
+                      <div class="replay-hud-time-row">
+                        <span class="replay-hud-time-label">Lokal:</span>
+                        <span id="replay-hud-time-local" class="replay-hud-time-val">—</span>
+                      </div>
+                    </div>
+                    <div class="replay-hud-divider" aria-hidden="true"></div>
+                    <div class="replay-hud-ohlc">
+                      <div class="replay-hud-ohlc-item">
+                        <span class="replay-hud-label">O</span>
+                        <span id="replay-hud-open" class="replay-hud-val">—</span>
+                      </div>
+                      <div class="replay-hud-ohlc-item">
+                        <span class="replay-hud-label">H</span>
+                        <span id="replay-hud-high" class="replay-hud-val">—</span>
+                      </div>
+                      <div class="replay-hud-ohlc-item">
+                        <span class="replay-hud-label">L</span>
+                        <span id="replay-hud-low" class="replay-hud-val">—</span>
+                      </div>
+                      <div class="replay-hud-ohlc-item">
+                        <span class="replay-hud-label">C</span>
+                        <span id="replay-hud-close" class="replay-hud-val">—</span>
+                      </div>
+                    </div>
+                    <div class="replay-hud-divider" aria-hidden="true"></div>
+                    <div class="replay-hud-range-row">
+                      <span class="replay-hud-label">Range:</span>
+                      <span id="replay-hud-range" class="replay-hud-val">—</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="replay-indicator-legend" class="replay-indicator-legend" aria-label="Nilai indikator pada candle aktif"></div>
+              <div id="replay-indicator-panes" class="replay-indicator-panes"></div>
+              <div class="replay-indicator-toolbar">
+                <a class="replay-attribution" href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts</a>
+                <details id="replay-indicators-menu" class="replay-indicators-menu">
+                  <summary>Indikator</summary>
+                  <div class="replay-indicators-options">
+                    <div class="replay-indicator-toggles">
+                      <label><input type="checkbox" data-indicator="sma"> SMA</label>
+                      <label><input type="checkbox" data-indicator="ema"> EMA</label>
+                      <label><input type="checkbox" data-indicator="supertrend"> Supertrend</label>
+                      <label><input type="checkbox" data-indicator="bollinger"> Bollinger Bands</label>
+                      <label><input type="checkbox" data-indicator="vwap"> VWAP</label>
+                      <label><input type="checkbox" data-indicator="rsi"> RSI</label>
+                      <label><input type="checkbox" data-indicator="macd"> MACD</label>
+                      <label><input type="checkbox" data-indicator="atr"> ATR</label>
+                    </div>
+                    <form id="replay-indicator-settings" class="replay-indicator-settings">
+                      <label>Pengaturan indikator
+                        <select id="replay-indicator-selected"></select>
+                      </label>
+                      <div id="replay-indicator-parameters" class="replay-indicator-parameters"></div>
+                      <label>Ukuran tampilan
+                        <select id="replay-indicator-size">
+                          <option value="small">Kecil</option>
+                          <option value="default">Normal</option>
+                          <option value="large">Besar</option>
+                        </select>
+                      </label>
+                      <p id="replay-indicator-error" role="alert" hidden></p>
+                      <div class="replay-indicator-actions">
+                        <button type="submit">Terapkan</button>
+                        <button type="button" id="replay-indicator-reset">Reset ke default</button>
+                      </div>
+                    </form>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/replay/vendor/lightweight-charts.standalone.production.js"></script>
+  <script src="/replay/js/replay_engine.js"></script>
+  <script src="/replay/js/replay_indicators.js"></script>
+  <script src="/replay/js/replay_chart.js"></script>
+  <script src="/replay/js/replay_canvas.js"></script>
+  <script src="/replay/js/replay_drawings.js"></script>
+  <script src="/replay/js/replay_ledger.js"></script>
+  <script src="/replay/js/replay_simulator.js"></script>
+  <script src="/replay/js/replay_storage.js"></script>
+  <script src="/replay/js/replay.js"></script>
+  <script src="/replay/data-source.js"></script>
+  <script src="/replay/js/bootstrap.js"></script>
+</body>
+</html>

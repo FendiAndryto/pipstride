@@ -1,0 +1,12 @@
+.app-shell:has(#tab-replay.active) {
+  max-width: none;
+}
+
+.replay-terminal-frame {
+  display: block;
+  width: 100%;
+  height: max(42rem, calc(100dvh - 9rem));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}

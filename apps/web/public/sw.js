@@ -7,7 +7,7 @@
  * than a visible failure. Bump CACHE_VERSION on every deploy that changes the shell.
  */
 
-const CACHE_VERSION = 'pipstride-shell-v1';
+const CACHE_VERSION = 'pipstride-shell-v2';
 
 const SHELL_ASSETS = [
   '/',
@@ -44,6 +44,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Replay is a separate document. Keep its assets out of the app-shell cache.
+  if (url.pathname.startsWith('/replay/')) return;
 
   // Telemetry, auth and health endpoints are never served from cache.
   if (url.pathname.startsWith('/api/') || url.pathname === '/health' || url.pathname === '/ready') {

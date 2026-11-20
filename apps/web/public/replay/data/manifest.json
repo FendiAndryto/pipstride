@@ -1,0 +1,1953 @@
+{
+  "source": {
+    "cachePath": "data/cache_bars",
+    "startDate": "2018-07-01",
+    "endDate": "2026-11-13"
+  },
+  "coverage": {
+    "available_years": [
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "timeframe_coverage": {
+      "M5": {
+        "start_date": "2025-06-01",
+        "end_date": "2026-11-06",
+        "total_bars": 98670,
+        "months": 18,
+        "years": [
+          2025,
+          2026
+        ],
+        "available_months": [
+          "2025-06",
+          "2025-07",
+          "2025-08",
+          "2025-09",
+          "2025-10",
+          "2025-11",
+          "2025-12",
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07",
+          "2026-08",
+          "2026-09",
+          "2026-10",
+          "2026-11"
+        ],
+        "median_bars": 5915,
+        "usable_start_date": "2025-06-01",
+        "sparse_months": [
+          "2026-11"
+        ]
+      },
+      "M15": {
+        "start_date": "2022-11-01",
+        "end_date": "2026-11-06",
+        "total_bars": 94942,
+        "months": 49,
+        "years": [
+          2022,
+          2023,
+          2024,
+          2025,
+          2026
+        ],
+        "available_months": [
+          "2022-11",
+          "2022-12",
+          "2023-01",
+          "2023-02",
+          "2023-03",
+          "2023-04",
+          "2023-05",
+          "2023-06",
+          "2023-07",
+          "2023-08",
+          "2023-09",
+          "2023-10",
+          "2023-11",
+          "2023-12",
+          "2024-01",
+          "2024-02",
+          "2024-03",
+          "2024-04",
+          "2024-05",
+          "2024-06",
+          "2024-07",
+          "2024-08",
+          "2024-09",
+          "2024-10",
+          "2024-11",
+          "2024-12",
+          "2025-01",
+          "2025-02",
+          "2025-03",
+          "2025-04",
+          "2025-05",
+          "2025-06",
+          "2025-07",
+          "2025-08",
+          "2025-09",
+          "2025-10",
+          "2025-11",
+          "2025-12",
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07",
+          "2026-08",
+          "2026-09",
+          "2026-10",
+          "2026-11"
+        ],
+        "median_bars": 1940,
+        "usable_start_date": "2022-11-01",
+        "sparse_months": [
+          "2026-11"
+        ]
+      },
+      "H1": {
+        "start_date": "2018-07-01",
+        "end_date": "2026-11-13",
+        "total_bars": 32718,
+        "months": 101,
+        "years": [
+          2018,
+          2019,
+          2020,
+          2021,
+          2022,
+          2023,
+          2024,
+          2025,
+          2026
+        ],
+        "available_months": [
+          "2018-07",
+          "2018-08",
+          "2018-09",
+          "2018-10",
+          "2018-11",
+          "2018-12",
+          "2019-01",
+          "2019-02",
+          "2019-03",
+          "2019-04",
+          "2019-05",
+          "2019-06",
+          "2019-07",
+          "2019-08",
+          "2019-09",
+          "2019-10",
+          "2019-11",
+          "2019-12",
+          "2020-01",
+          "2020-02",
+          "2020-03",
+          "2020-04",
+          "2020-05",
+          "2020-06",
+          "2020-07",
+          "2020-08",
+          "2020-09",
+          "2020-10",
+          "2020-11",
+          "2020-12",
+          "2021-01",
+          "2021-02",
+          "2021-03",
+          "2021-04",
+          "2021-05",
+          "2021-06",
+          "2021-07",
+          "2021-08",
+          "2021-09",
+          "2021-10",
+          "2021-11",
+          "2021-12",
+          "2022-01",
+          "2022-02",
+          "2022-03",
+          "2022-04",
+          "2022-05",
+          "2022-06",
+          "2022-07",
+          "2022-08",
+          "2022-09",
+          "2022-10",
+          "2022-11",
+          "2022-12",
+          "2023-01",
+          "2023-02",
+          "2023-03",
+          "2023-04",
+          "2023-05",
+          "2023-06",
+          "2023-07",
+          "2023-08",
+          "2023-09",
+          "2023-10",
+          "2023-11",
+          "2023-12",
+          "2024-01",
+          "2024-02",
+          "2024-03",
+          "2024-04",
+          "2024-05",
+          "2024-06",
+          "2024-07",
+          "2024-08",
+          "2024-09",
+          "2024-10",
+          "2024-11",
+          "2024-12",
+          "2025-01",
+          "2025-02",
+          "2025-03",
+          "2025-04",
+          "2025-05",
+          "2025-06",
+          "2025-07",
+          "2025-08",
+          "2025-09",
+          "2025-10",
+          "2025-11",
+          "2025-12",
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07",
+          "2026-08",
+          "2026-09",
+          "2026-10",
+          "2026-11"
+        ],
+        "median_bars": 480,
+        "usable_start_date": "2021-07-01",
+        "sparse_months": [
+          "2018-07",
+          "2018-08",
+          "2018-09",
+          "2018-10",
+          "2018-11",
+          "2018-12",
+          "2019-01",
+          "2019-02",
+          "2019-03",
+          "2019-04",
+          "2019-05",
+          "2019-06",
+          "2019-07",
+          "2019-08",
+          "2019-09",
+          "2019-10",
+          "2019-11",
+          "2019-12",
+          "2020-01",
+          "2020-02",
+          "2020-03",
+          "2020-04",
+          "2020-05",
+          "2020-06",
+          "2020-07",
+          "2020-08",
+          "2020-09",
+          "2020-10",
+          "2020-11",
+          "2020-12",
+          "2021-01",
+          "2021-02",
+          "2021-03",
+          "2021-04",
+          "2021-05",
+          "2021-06"
+        ]
+      },
+      "M1": {
+        "start_date": "2026-01-01",
+        "end_date": "2026-11-06",
+        "total_bars": 301877,
+        "months": 11,
+        "years": [
+          2026
+        ],
+        "available_months": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07",
+          "2026-08",
+          "2026-09",
+          "2026-10",
+          "2026-11"
+        ],
+        "median_bars": 29049,
+        "usable_start_date": "2026-01-01",
+        "sparse_months": [
+          "2026-11"
+        ]
+      }
+    },
+    "timeframes": [
+      "M5",
+      "M15",
+      "H1",
+      "M1"
+    ],
+    "period_modes": [
+      "month",
+      "year",
+      "multi_month",
+      "custom",
+      "all"
+    ],
+    "default_selection": {
+      "period_mode": "month",
+      "year": 2026,
+      "month": 10,
+      "timeframe": "M5"
+    }
+  },
+  "months": {
+    "M5": [
+      {
+        "year": 2025,
+        "month": 6,
+        "file": "M5/2025-06.json.gz",
+        "bars": 2262,
+        "startDate": "2025-06-18",
+        "endDate": "2025-06-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 7,
+        "file": "M5/2025-07.json.gz",
+        "bars": 6293,
+        "startDate": "2025-07-01",
+        "endDate": "2025-07-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 8,
+        "file": "M5/2025-08.json.gz",
+        "bars": 5791,
+        "startDate": "2025-08-01",
+        "endDate": "2025-08-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "file": "M5/2025-09.json.gz",
+        "bars": 6035,
+        "startDate": "2025-09-01",
+        "endDate": "2025-09-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "file": "M5/2025-10.json.gz",
+        "bars": 6320,
+        "startDate": "2025-10-01",
+        "endDate": "2025-10-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "file": "M5/2025-11.json.gz",
+        "bars": 5466,
+        "startDate": "2025-11-02",
+        "endDate": "2025-11-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "file": "M5/2025-12.json.gz",
+        "bars": 6011,
+        "startDate": "2025-12-01",
+        "endDate": "2025-12-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "file": "M5/2026-01.json.gz",
+        "bars": 5761,
+        "startDate": "2026-01-01",
+        "endDate": "2026-01-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "file": "M5/2026-02.json.gz",
+        "bars": 5489,
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-27",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "file": "M5/2026-03.json.gz",
+        "bars": 6095,
+        "startDate": "2026-03-01",
+        "endDate": "2026-03-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "file": "M5/2026-04.json.gz",
+        "bars": 5792,
+        "startDate": "2026-04-01",
+        "endDate": "2026-04-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "file": "M5/2026-05.json.gz",
+        "bars": 5766,
+        "startDate": "2026-05-01",
+        "endDate": "2026-05-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "file": "M5/2026-06.json.gz",
+        "bars": 6024,
+        "startDate": "2026-06-01",
+        "endDate": "2026-06-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "file": "M5/2026-07.json.gz",
+        "bars": 6276,
+        "startDate": "2026-07-01",
+        "endDate": "2026-07-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "file": "M5/2026-08.json.gz",
+        "bars": 5820,
+        "startDate": "2026-08-02",
+        "endDate": "2026-08-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "file": "M5/2026-09.json.gz",
+        "bars": 6041,
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 10,
+        "file": "M5/2026-10.json.gz",
+        "bars": 6048,
+        "startDate": "2026-10-01",
+        "endDate": "2026-10-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 11,
+        "file": "M5/2026-11.json.gz",
+        "bars": 1380,
+        "startDate": "2026-11-01",
+        "endDate": "2026-11-06",
+        "warning": "November 2026 hanya berisi 1380 bar M5 (bulan normal ~5915 bar). Data M5 yang rapat baru tersedia sejak 2025-06-01."
+      }
+    ],
+    "M15": [
+      {
+        "year": 2022,
+        "month": 11,
+        "file": "M15/2022-11.json.gz",
+        "bars": 1997,
+        "startDate": "2022-11-01",
+        "endDate": "2022-11-30",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 12,
+        "file": "M15/2022-12.json.gz",
+        "bars": 1928,
+        "startDate": "2022-12-01",
+        "endDate": "2022-12-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 1,
+        "file": "M15/2023-01.json.gz",
+        "bars": 1926,
+        "startDate": "2023-01-02",
+        "endDate": "2023-01-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 2,
+        "file": "M15/2023-02.json.gz",
+        "bars": 1829,
+        "startDate": "2023-02-01",
+        "endDate": "2023-02-28",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 3,
+        "file": "M15/2023-03.json.gz",
+        "bars": 2100,
+        "startDate": "2023-03-01",
+        "endDate": "2023-03-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 4,
+        "file": "M15/2023-04.json.gz",
+        "bars": 1756,
+        "startDate": "2023-04-02",
+        "endDate": "2023-04-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 5,
+        "file": "M15/2023-05.json.gz",
+        "bars": 2101,
+        "startDate": "2023-05-01",
+        "endDate": "2023-05-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 6,
+        "file": "M15/2023-06.json.gz",
+        "bars": 2001,
+        "startDate": "2023-06-01",
+        "endDate": "2023-06-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 7,
+        "file": "M15/2023-07.json.gz",
+        "bars": 1929,
+        "startDate": "2023-07-02",
+        "endDate": "2023-07-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 8,
+        "file": "M15/2023-08.json.gz",
+        "bars": 2116,
+        "startDate": "2023-08-01",
+        "endDate": "2023-08-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 9,
+        "file": "M15/2023-09.json.gz",
+        "bars": 1909,
+        "startDate": "2023-09-01",
+        "endDate": "2023-09-29",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 10,
+        "file": "M15/2023-10.json.gz",
+        "bars": 2032,
+        "startDate": "2023-10-01",
+        "endDate": "2023-10-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 11,
+        "file": "M15/2023-11.json.gz",
+        "bars": 1991,
+        "startDate": "2023-11-01",
+        "endDate": "2023-11-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 12,
+        "file": "M15/2023-12.json.gz",
+        "bars": 1836,
+        "startDate": "2023-12-01",
+        "endDate": "2023-12-29",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 1,
+        "file": "M15/2024-01.json.gz",
+        "bars": 2017,
+        "startDate": "2024-01-01",
+        "endDate": "2024-01-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 2,
+        "file": "M15/2024-02.json.gz",
+        "bars": 1921,
+        "startDate": "2024-02-01",
+        "endDate": "2024-02-29",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 3,
+        "file": "M15/2024-03.json.gz",
+        "bars": 1844,
+        "startDate": "2024-03-01",
+        "endDate": "2024-03-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 4,
+        "file": "M15/2024-04.json.gz",
+        "bars": 2024,
+        "startDate": "2024-04-01",
+        "endDate": "2024-04-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 5,
+        "file": "M15/2024-05.json.gz",
+        "bars": 2093,
+        "startDate": "2024-05-01",
+        "endDate": "2024-05-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 6,
+        "file": "M15/2024-06.json.gz",
+        "bars": 1833,
+        "startDate": "2024-06-02",
+        "endDate": "2024-06-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 7,
+        "file": "M15/2024-07.json.gz",
+        "bars": 2101,
+        "startDate": "2024-07-01",
+        "endDate": "2024-07-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 8,
+        "file": "M15/2024-08.json.gz",
+        "bars": 2016,
+        "startDate": "2024-08-01",
+        "endDate": "2024-08-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 9,
+        "file": "M15/2024-09.json.gz",
+        "bars": 1926,
+        "startDate": "2024-09-01",
+        "endDate": "2024-09-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 10,
+        "file": "M15/2024-10.json.gz",
+        "bars": 2116,
+        "startDate": "2024-10-01",
+        "endDate": "2024-10-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 11,
+        "file": "M15/2024-11.json.gz",
+        "bars": 1895,
+        "startDate": "2024-11-01",
+        "endDate": "2024-11-29",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 12,
+        "file": "M15/2024-12.json.gz",
+        "bars": 1918,
+        "startDate": "2024-12-01",
+        "endDate": "2024-12-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 1,
+        "file": "M15/2025-01.json.gz",
+        "bars": 2010,
+        "startDate": "2025-01-01",
+        "endDate": "2025-01-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 2,
+        "file": "M15/2025-02.json.gz",
+        "bars": 1829,
+        "startDate": "2025-02-02",
+        "endDate": "2025-02-28",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 3,
+        "file": "M15/2025-03.json.gz",
+        "bars": 1940,
+        "startDate": "2025-03-02",
+        "endDate": "2025-03-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 4,
+        "file": "M15/2025-04.json.gz",
+        "bars": 1931,
+        "startDate": "2025-04-01",
+        "endDate": "2025-04-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 5,
+        "file": "M15/2025-05.json.gz",
+        "bars": 2005,
+        "startDate": "2025-05-01",
+        "endDate": "2025-05-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 6,
+        "file": "M15/2025-06.json.gz",
+        "bars": 1925,
+        "startDate": "2025-06-01",
+        "endDate": "2025-06-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 7,
+        "file": "M15/2025-07.json.gz",
+        "bars": 2099,
+        "startDate": "2025-07-01",
+        "endDate": "2025-07-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 8,
+        "file": "M15/2025-08.json.gz",
+        "bars": 1932,
+        "startDate": "2025-08-01",
+        "endDate": "2025-08-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "file": "M15/2025-09.json.gz",
+        "bars": 2013,
+        "startDate": "2025-09-01",
+        "endDate": "2025-09-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "file": "M15/2025-10.json.gz",
+        "bars": 2108,
+        "startDate": "2025-10-01",
+        "endDate": "2025-10-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "file": "M15/2025-11.json.gz",
+        "bars": 1823,
+        "startDate": "2025-11-02",
+        "endDate": "2025-11-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "file": "M15/2025-12.json.gz",
+        "bars": 2005,
+        "startDate": "2025-12-01",
+        "endDate": "2025-12-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "file": "M15/2026-01.json.gz",
+        "bars": 1922,
+        "startDate": "2026-01-01",
+        "endDate": "2026-01-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "file": "M15/2026-02.json.gz",
+        "bars": 1830,
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-27",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "file": "M15/2026-03.json.gz",
+        "bars": 2032,
+        "startDate": "2026-03-01",
+        "endDate": "2026-03-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "file": "M15/2026-04.json.gz",
+        "bars": 1931,
+        "startDate": "2026-04-01",
+        "endDate": "2026-04-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "file": "M15/2026-05.json.gz",
+        "bars": 1922,
+        "startDate": "2026-05-01",
+        "endDate": "2026-05-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "file": "M15/2026-06.json.gz",
+        "bars": 2008,
+        "startDate": "2026-06-01",
+        "endDate": "2026-06-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "file": "M15/2026-07.json.gz",
+        "bars": 2092,
+        "startDate": "2026-07-01",
+        "endDate": "2026-07-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "file": "M15/2026-08.json.gz",
+        "bars": 1940,
+        "startDate": "2026-08-02",
+        "endDate": "2026-08-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "file": "M15/2026-09.json.gz",
+        "bars": 2014,
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 10,
+        "file": "M15/2026-10.json.gz",
+        "bars": 2016,
+        "startDate": "2026-10-01",
+        "endDate": "2026-10-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 11,
+        "file": "M15/2026-11.json.gz",
+        "bars": 460,
+        "startDate": "2026-11-01",
+        "endDate": "2026-11-06",
+        "warning": "November 2026 hanya berisi 460 bar M15 (bulan normal ~1940 bar). Data M15 yang rapat baru tersedia sejak 2022-11-01."
+      }
+    ],
+    "H1": [
+      {
+        "year": 2018,
+        "month": 7,
+        "file": "H1/2018-07.json.gz",
+        "bars": 28,
+        "startDate": "2018-07-01",
+        "endDate": "2018-08-01",
+        "warning": "Juli 2018 hanya berisi 28 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2018,
+        "month": 8,
+        "file": "H1/2018-08.json.gz",
+        "bars": 27,
+        "startDate": "2018-08-01",
+        "endDate": "2018-08-31",
+        "warning": "Agustus 2018 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2018,
+        "month": 9,
+        "file": "H1/2018-09.json.gz",
+        "bars": 26,
+        "startDate": "2018-09-02",
+        "endDate": "2018-10-01",
+        "warning": "September 2018 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2018,
+        "month": 10,
+        "file": "H1/2018-10.json.gz",
+        "bars": 28,
+        "startDate": "2018-10-01",
+        "endDate": "2018-11-01",
+        "warning": "Oktober 2018 hanya berisi 28 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2018,
+        "month": 11,
+        "file": "H1/2018-11.json.gz",
+        "bars": 26,
+        "startDate": "2018-11-01",
+        "endDate": "2018-11-30",
+        "warning": "November 2018 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2018,
+        "month": 12,
+        "file": "H1/2018-12.json.gz",
+        "bars": 25,
+        "startDate": "2018-12-02",
+        "endDate": "2018-12-31",
+        "warning": "Desember 2018 hanya berisi 25 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 1,
+        "file": "H1/2019-01.json.gz",
+        "bars": 27,
+        "startDate": "2019-01-02",
+        "endDate": "2019-02-01",
+        "warning": "Januari 2019 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 2,
+        "file": "H1/2019-02.json.gz",
+        "bars": 25,
+        "startDate": "2019-02-01",
+        "endDate": "2019-03-01",
+        "warning": "Februari 2019 hanya berisi 25 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 3,
+        "file": "H1/2019-03.json.gz",
+        "bars": 27,
+        "startDate": "2019-03-01",
+        "endDate": "2019-04-01",
+        "warning": "Maret 2019 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 4,
+        "file": "H1/2019-04.json.gz",
+        "bars": 25,
+        "startDate": "2019-04-01",
+        "endDate": "2019-05-01",
+        "warning": "April 2019 hanya berisi 25 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 5,
+        "file": "H1/2019-05.json.gz",
+        "bars": 27,
+        "startDate": "2019-05-01",
+        "endDate": "2019-05-31",
+        "warning": "Mei 2019 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 6,
+        "file": "H1/2019-06.json.gz",
+        "bars": 26,
+        "startDate": "2019-06-02",
+        "endDate": "2019-07-01",
+        "warning": "Juni 2019 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 7,
+        "file": "H1/2019-07.json.gz",
+        "bars": 28,
+        "startDate": "2019-07-01",
+        "endDate": "2019-08-01",
+        "warning": "Juli 2019 hanya berisi 28 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 8,
+        "file": "H1/2019-08.json.gz",
+        "bars": 27,
+        "startDate": "2019-08-01",
+        "endDate": "2019-09-01",
+        "warning": "Agustus 2019 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 9,
+        "file": "H1/2019-09.json.gz",
+        "bars": 27,
+        "startDate": "2019-09-01",
+        "endDate": "2019-10-01",
+        "warning": "September 2019 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 10,
+        "file": "H1/2019-10.json.gz",
+        "bars": 28,
+        "startDate": "2019-10-01",
+        "endDate": "2019-11-01",
+        "warning": "Oktober 2019 hanya berisi 28 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 11,
+        "file": "H1/2019-11.json.gz",
+        "bars": 26,
+        "startDate": "2019-11-01",
+        "endDate": "2019-12-01",
+        "warning": "November 2019 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2019,
+        "month": 12,
+        "file": "H1/2019-12.json.gz",
+        "bars": 26,
+        "startDate": "2019-12-01",
+        "endDate": "2019-12-31",
+        "warning": "Desember 2019 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 1,
+        "file": "H1/2020-01.json.gz",
+        "bars": 26,
+        "startDate": "2020-01-02",
+        "endDate": "2020-01-31",
+        "warning": "Januari 2020 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 2,
+        "file": "H1/2020-02.json.gz",
+        "bars": 25,
+        "startDate": "2020-02-02",
+        "endDate": "2020-03-01",
+        "warning": "Februari 2020 hanya berisi 25 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 3,
+        "file": "H1/2020-03.json.gz",
+        "bars": 28,
+        "startDate": "2020-03-01",
+        "endDate": "2020-04-01",
+        "warning": "Maret 2020 hanya berisi 28 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 4,
+        "file": "H1/2020-04.json.gz",
+        "bars": 26,
+        "startDate": "2020-04-01",
+        "endDate": "2020-05-01",
+        "warning": "April 2020 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 5,
+        "file": "H1/2020-05.json.gz",
+        "bars": 27,
+        "startDate": "2020-05-01",
+        "endDate": "2020-06-01",
+        "warning": "Mei 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 6,
+        "file": "H1/2020-06.json.gz",
+        "bars": 27,
+        "startDate": "2020-06-01",
+        "endDate": "2020-07-01",
+        "warning": "Juni 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 7,
+        "file": "H1/2020-07.json.gz",
+        "bars": 27,
+        "startDate": "2020-07-01",
+        "endDate": "2020-07-31",
+        "warning": "Juli 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 8,
+        "file": "H1/2020-08.json.gz",
+        "bars": 27,
+        "startDate": "2020-08-02",
+        "endDate": "2020-09-01",
+        "warning": "Agustus 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 9,
+        "file": "H1/2020-09.json.gz",
+        "bars": 27,
+        "startDate": "2020-09-01",
+        "endDate": "2020-10-01",
+        "warning": "September 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 10,
+        "file": "H1/2020-10.json.gz",
+        "bars": 27,
+        "startDate": "2020-10-01",
+        "endDate": "2020-11-01",
+        "warning": "Oktober 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 11,
+        "file": "H1/2020-11.json.gz",
+        "bars": 27,
+        "startDate": "2020-11-01",
+        "endDate": "2020-12-01",
+        "warning": "November 2020 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2020,
+        "month": 12,
+        "file": "H1/2020-12.json.gz",
+        "bars": 26,
+        "startDate": "2020-12-01",
+        "endDate": "2020-12-31",
+        "warning": "Desember 2020 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 1,
+        "file": "H1/2021-01.json.gz",
+        "bars": 26,
+        "startDate": "2021-01-03",
+        "endDate": "2021-02-01",
+        "warning": "Januari 2021 hanya berisi 26 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 2,
+        "file": "H1/2021-02.json.gz",
+        "bars": 25,
+        "startDate": "2021-02-01",
+        "endDate": "2021-03-01",
+        "warning": "Februari 2021 hanya berisi 25 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 3,
+        "file": "H1/2021-03.json.gz",
+        "bars": 28,
+        "startDate": "2021-03-01",
+        "endDate": "2021-04-01",
+        "warning": "Maret 2021 hanya berisi 28 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 4,
+        "file": "H1/2021-04.json.gz",
+        "bars": 25,
+        "startDate": "2021-04-01",
+        "endDate": "2021-04-30",
+        "warning": "April 2021 hanya berisi 25 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 5,
+        "file": "H1/2021-05.json.gz",
+        "bars": 27,
+        "startDate": "2021-05-02",
+        "endDate": "2021-06-01",
+        "warning": "Mei 2021 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 6,
+        "file": "H1/2021-06.json.gz",
+        "bars": 27,
+        "startDate": "2021-06-01",
+        "endDate": "2021-07-01",
+        "warning": "Juni 2021 hanya berisi 27 bar H1 (bulan normal ~480 bar). Data H1 yang rapat baru tersedia sejak 2021-07-01."
+      },
+      {
+        "year": 2021,
+        "month": 7,
+        "file": "H1/2021-07.json.gz",
+        "bars": 471,
+        "startDate": "2021-07-01",
+        "endDate": "2021-08-01",
+        "warning": null
+      },
+      {
+        "year": 2021,
+        "month": 8,
+        "file": "H1/2021-08.json.gz",
+        "bars": 512,
+        "startDate": "2021-08-01",
+        "endDate": "2021-09-01",
+        "warning": null
+      },
+      {
+        "year": 2021,
+        "month": 9,
+        "file": "H1/2021-09.json.gz",
+        "bars": 504,
+        "startDate": "2021-09-01",
+        "endDate": "2021-10-01",
+        "warning": null
+      },
+      {
+        "year": 2021,
+        "month": 10,
+        "file": "H1/2021-10.json.gz",
+        "bars": 484,
+        "startDate": "2021-10-01",
+        "endDate": "2021-11-01",
+        "warning": null
+      },
+      {
+        "year": 2021,
+        "month": 11,
+        "file": "H1/2021-11.json.gz",
+        "bars": 499,
+        "startDate": "2021-11-01",
+        "endDate": "2021-12-01",
+        "warning": null
+      },
+      {
+        "year": 2021,
+        "month": 12,
+        "file": "H1/2021-12.json.gz",
+        "bars": 503,
+        "startDate": "2021-12-01",
+        "endDate": "2021-12-31",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 1,
+        "file": "H1/2022-01.json.gz",
+        "bars": 483,
+        "startDate": "2022-01-02",
+        "endDate": "2022-02-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 2,
+        "file": "H1/2022-02.json.gz",
+        "bars": 455,
+        "startDate": "2022-02-01",
+        "endDate": "2022-03-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 3,
+        "file": "H1/2022-03.json.gz",
+        "bars": 531,
+        "startDate": "2022-03-01",
+        "endDate": "2022-04-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 4,
+        "file": "H1/2022-04.json.gz",
+        "bars": 458,
+        "startDate": "2022-04-01",
+        "endDate": "2022-04-29",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 5,
+        "file": "H1/2022-05.json.gz",
+        "bars": 506,
+        "startDate": "2022-05-01",
+        "endDate": "2022-06-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 6,
+        "file": "H1/2022-06.json.gz",
+        "bars": 504,
+        "startDate": "2022-06-01",
+        "endDate": "2022-07-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 7,
+        "file": "H1/2022-07.json.gz",
+        "bars": 481,
+        "startDate": "2022-07-01",
+        "endDate": "2022-08-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 8,
+        "file": "H1/2022-08.json.gz",
+        "bars": 530,
+        "startDate": "2022-08-01",
+        "endDate": "2022-09-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 9,
+        "file": "H1/2022-09.json.gz",
+        "bars": 501,
+        "startDate": "2022-09-01",
+        "endDate": "2022-09-30",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 10,
+        "file": "H1/2022-10.json.gz",
+        "bars": 486,
+        "startDate": "2022-10-02",
+        "endDate": "2022-11-01",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 11,
+        "file": "H1/2022-11.json.gz",
+        "bars": 500,
+        "startDate": "2022-11-01",
+        "endDate": "2022-11-30",
+        "warning": null
+      },
+      {
+        "year": 2022,
+        "month": 12,
+        "file": "H1/2022-12.json.gz",
+        "bars": 482,
+        "startDate": "2022-12-01",
+        "endDate": "2022-12-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 1,
+        "file": "H1/2023-01.json.gz",
+        "bars": 482,
+        "startDate": "2023-01-02",
+        "endDate": "2023-01-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 2,
+        "file": "H1/2023-02.json.gz",
+        "bars": 458,
+        "startDate": "2023-02-01",
+        "endDate": "2023-02-28",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 3,
+        "file": "H1/2023-03.json.gz",
+        "bars": 525,
+        "startDate": "2023-03-01",
+        "endDate": "2023-03-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 4,
+        "file": "H1/2023-04.json.gz",
+        "bars": 439,
+        "startDate": "2023-04-02",
+        "endDate": "2023-04-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 5,
+        "file": "H1/2023-05.json.gz",
+        "bars": 526,
+        "startDate": "2023-05-01",
+        "endDate": "2023-05-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 6,
+        "file": "H1/2023-06.json.gz",
+        "bars": 501,
+        "startDate": "2023-06-01",
+        "endDate": "2023-06-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 7,
+        "file": "H1/2023-07.json.gz",
+        "bars": 483,
+        "startDate": "2023-07-02",
+        "endDate": "2023-07-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 8,
+        "file": "H1/2023-08.json.gz",
+        "bars": 529,
+        "startDate": "2023-08-01",
+        "endDate": "2023-08-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 9,
+        "file": "H1/2023-09.json.gz",
+        "bars": 478,
+        "startDate": "2023-09-01",
+        "endDate": "2023-09-29",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 10,
+        "file": "H1/2023-10.json.gz",
+        "bars": 508,
+        "startDate": "2023-10-01",
+        "endDate": "2023-10-31",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 11,
+        "file": "H1/2023-11.json.gz",
+        "bars": 499,
+        "startDate": "2023-11-01",
+        "endDate": "2023-11-30",
+        "warning": null
+      },
+      {
+        "year": 2023,
+        "month": 12,
+        "file": "H1/2023-12.json.gz",
+        "bars": 459,
+        "startDate": "2023-12-01",
+        "endDate": "2023-12-29",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 1,
+        "file": "H1/2024-01.json.gz",
+        "bars": 505,
+        "startDate": "2024-01-01",
+        "endDate": "2024-01-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 2,
+        "file": "H1/2024-02.json.gz",
+        "bars": 481,
+        "startDate": "2024-02-01",
+        "endDate": "2024-02-29",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 3,
+        "file": "H1/2024-03.json.gz",
+        "bars": 461,
+        "startDate": "2024-03-01",
+        "endDate": "2024-03-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 4,
+        "file": "H1/2024-04.json.gz",
+        "bars": 506,
+        "startDate": "2024-04-01",
+        "endDate": "2024-04-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 5,
+        "file": "H1/2024-05.json.gz",
+        "bars": 524,
+        "startDate": "2024-05-01",
+        "endDate": "2024-05-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 6,
+        "file": "H1/2024-06.json.gz",
+        "bars": 459,
+        "startDate": "2024-06-02",
+        "endDate": "2024-06-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 7,
+        "file": "H1/2024-07.json.gz",
+        "bars": 526,
+        "startDate": "2024-07-01",
+        "endDate": "2024-07-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 8,
+        "file": "H1/2024-08.json.gz",
+        "bars": 504,
+        "startDate": "2024-08-01",
+        "endDate": "2024-08-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 9,
+        "file": "H1/2024-09.json.gz",
+        "bars": 482,
+        "startDate": "2024-09-01",
+        "endDate": "2024-09-30",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 10,
+        "file": "H1/2024-10.json.gz",
+        "bars": 529,
+        "startDate": "2024-10-01",
+        "endDate": "2024-10-31",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 11,
+        "file": "H1/2024-11.json.gz",
+        "bars": 475,
+        "startDate": "2024-11-01",
+        "endDate": "2024-11-29",
+        "warning": null
+      },
+      {
+        "year": 2024,
+        "month": 12,
+        "file": "H1/2024-12.json.gz",
+        "bars": 480,
+        "startDate": "2024-12-01",
+        "endDate": "2024-12-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 1,
+        "file": "H1/2025-01.json.gz",
+        "bars": 504,
+        "startDate": "2025-01-01",
+        "endDate": "2025-01-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 2,
+        "file": "H1/2025-02.json.gz",
+        "bars": 458,
+        "startDate": "2025-02-02",
+        "endDate": "2025-02-28",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 3,
+        "file": "H1/2025-03.json.gz",
+        "bars": 485,
+        "startDate": "2025-03-02",
+        "endDate": "2025-03-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 4,
+        "file": "H1/2025-04.json.gz",
+        "bars": 483,
+        "startDate": "2025-04-01",
+        "endDate": "2025-04-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 5,
+        "file": "H1/2025-05.json.gz",
+        "bars": 502,
+        "startDate": "2025-05-01",
+        "endDate": "2025-05-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 6,
+        "file": "H1/2025-06.json.gz",
+        "bars": 482,
+        "startDate": "2025-06-01",
+        "endDate": "2025-06-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 7,
+        "file": "H1/2025-07.json.gz",
+        "bars": 525,
+        "startDate": "2025-07-01",
+        "endDate": "2025-07-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 8,
+        "file": "H1/2025-08.json.gz",
+        "bars": 483,
+        "startDate": "2025-08-01",
+        "endDate": "2025-08-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 9,
+        "file": "H1/2025-09.json.gz",
+        "bars": 504,
+        "startDate": "2025-09-01",
+        "endDate": "2025-09-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 10,
+        "file": "H1/2025-10.json.gz",
+        "bars": 527,
+        "startDate": "2025-10-01",
+        "endDate": "2025-10-31",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 11,
+        "file": "H1/2025-11.json.gz",
+        "bars": 457,
+        "startDate": "2025-11-02",
+        "endDate": "2025-11-30",
+        "warning": null
+      },
+      {
+        "year": 2025,
+        "month": 12,
+        "file": "H1/2025-12.json.gz",
+        "bars": 502,
+        "startDate": "2025-12-01",
+        "endDate": "2025-12-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 1,
+        "file": "H1/2026-01.json.gz",
+        "bars": 481,
+        "startDate": "2026-01-01",
+        "endDate": "2026-01-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "file": "H1/2026-02.json.gz",
+        "bars": 458,
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-27",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "file": "H1/2026-03.json.gz",
+        "bars": 508,
+        "startDate": "2026-03-01",
+        "endDate": "2026-03-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "file": "H1/2026-04.json.gz",
+        "bars": 483,
+        "startDate": "2026-04-01",
+        "endDate": "2026-04-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "file": "H1/2026-05.json.gz",
+        "bars": 481,
+        "startDate": "2026-05-01",
+        "endDate": "2026-05-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "file": "H1/2026-06.json.gz",
+        "bars": 502,
+        "startDate": "2026-06-01",
+        "endDate": "2026-06-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "file": "H1/2026-07.json.gz",
+        "bars": 523,
+        "startDate": "2026-07-01",
+        "endDate": "2026-07-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "file": "H1/2026-08.json.gz",
+        "bars": 485,
+        "startDate": "2026-08-02",
+        "endDate": "2026-08-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "file": "H1/2026-09.json.gz",
+        "bars": 504,
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 10,
+        "file": "H1/2026-10.json.gz",
+        "bars": 504,
+        "startDate": "2026-10-01",
+        "endDate": "2026-10-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 11,
+        "file": "H1/2026-11.json.gz",
+        "bars": 211,
+        "startDate": "2026-11-01",
+        "endDate": "2026-11-13",
+        "warning": null
+      }
+    ],
+    "M1": [
+      {
+        "year": 2026,
+        "month": 1,
+        "file": "M1/2026-01.json.gz",
+        "bars": 28729,
+        "startDate": "2026-01-01",
+        "endDate": "2026-01-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 2,
+        "file": "M1/2026-02.json.gz",
+        "bars": 27379,
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-27",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 3,
+        "file": "M1/2026-03.json.gz",
+        "bars": 30406,
+        "startDate": "2026-03-01",
+        "endDate": "2026-03-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 4,
+        "file": "M1/2026-04.json.gz",
+        "bars": 28898,
+        "startDate": "2026-04-01",
+        "endDate": "2026-04-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 5,
+        "file": "M1/2026-05.json.gz",
+        "bars": 28773,
+        "startDate": "2026-05-01",
+        "endDate": "2026-05-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 6,
+        "file": "M1/2026-06.json.gz",
+        "bars": 30073,
+        "startDate": "2026-06-01",
+        "endDate": "2026-06-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "file": "M1/2026-07.json.gz",
+        "bars": 31332,
+        "startDate": "2026-07-01",
+        "endDate": "2026-07-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "file": "M1/2026-08.json.gz",
+        "bars": 29049,
+        "startDate": "2026-08-02",
+        "endDate": "2026-08-31",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "file": "M1/2026-09.json.gz",
+        "bars": 30157,
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 10,
+        "file": "M1/2026-10.json.gz",
+        "bars": 30192,
+        "startDate": "2026-10-01",
+        "endDate": "2026-10-30",
+        "warning": null
+      },
+      {
+        "year": 2026,
+        "month": 11,
+        "file": "M1/2026-11.json.gz",
+        "bars": 6889,
+        "startDate": "2026-11-01",
+        "endDate": "2026-11-06",
+        "warning": "November 2026 hanya berisi 6889 bar M1 (bulan normal ~29049 bar). Data M1 yang rapat baru tersedia sejak 2026-01-01."
+      }
+    ]
+  }
+}
