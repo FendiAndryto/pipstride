@@ -183,3 +183,81 @@ export function describeWindow(candles, bars, price) {
     avgRange: average(window.map((c) => c.high - c.low))
   };
 }
+
+export const MARKET_CATEGORIES = {
+  ALL: 'all',
+  FOREX: 'forex',
+  METALS: 'metals',
+  CRYPTO: 'crypto',
+  INDICES: 'indices'
+};
+
+export const MARKET_CATALOG = [
+  { symbol: 'XAUUSD', nameKey: 'market_symbol_gold', category: MARKET_CATEGORIES.METALS, tvSymbol: 'OANDA:XAUUSD', icon: 'Au' },
+  { symbol: 'XAGUSD', nameKey: 'market_symbol_silver', category: MARKET_CATEGORIES.METALS, tvSymbol: 'OANDA:XAGUSD', icon: 'Ag' },
+  { symbol: 'USOIL', nameKey: 'market_symbol_oil', category: MARKET_CATEGORIES.METALS, tvSymbol: 'TVC:USOIL', icon: 'Oil' },
+  { symbol: 'EURUSD', nameKey: 'market_symbol_euro', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:EURUSD', icon: 'Eu' },
+  { symbol: 'GBPUSD', nameKey: 'market_symbol_pound', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:GBPUSD', icon: 'Gu' },
+  { symbol: 'USDJPY', nameKey: 'market_symbol_yen', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:USDJPY', icon: '¥' },
+  { symbol: 'AUDUSD', nameKey: 'market_symbol_aussie', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:AUDUSD', icon: 'A$' },
+  { symbol: 'USDCAD', nameKey: 'market_symbol_loonie', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:USDCAD', icon: 'C$' },
+  { symbol: 'USDCHF', nameKey: 'market_symbol_swissy', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:USDCHF', icon: 'Fr' },
+  { symbol: 'NZDUSD', nameKey: 'market_symbol_kiwi', category: MARKET_CATEGORIES.FOREX, tvSymbol: 'FX:NZDUSD', icon: 'NZ' },
+  { symbol: 'BTCUSD', nameKey: 'market_symbol_bitcoin', category: MARKET_CATEGORIES.CRYPTO, tvSymbol: 'BINANCE:BTCUSDT', icon: '₿' },
+  { symbol: 'ETHUSD', nameKey: 'market_symbol_ether', category: MARKET_CATEGORIES.CRYPTO, tvSymbol: 'BINANCE:ETHUSDT', icon: 'Ξ' },
+  { symbol: 'SOLUSD', nameKey: 'market_symbol_solana', category: MARKET_CATEGORIES.CRYPTO, tvSymbol: 'BINANCE:SOLUSDT', icon: '◎' },
+  { symbol: 'US30', nameKey: 'market_symbol_dow', category: MARKET_CATEGORIES.INDICES, tvSymbol: 'CAPITALCOM:US30', icon: 'DJ' },
+  { symbol: 'NAS100', nameKey: 'market_symbol_nasdaq', category: MARKET_CATEGORIES.INDICES, tvSymbol: 'CAPITALCOM:US100', icon: 'NQ' },
+  { symbol: 'SPX500', nameKey: 'market_symbol_sp500', category: MARKET_CATEGORIES.INDICES, tvSymbol: 'CAPITALCOM:SPX500', icon: 'SP' }
+];
+
+export function normalizeTradingViewSymbol(symbol) {
+  if (typeof symbol !== 'string') return '';
+  const trimmed = symbol.trim();
+  return (trimmed.includes(':') ? trimmed : trimmed.replace(/\s+/g, '')).toUpperCase();
+}
+
+/**
+ * Resolve a broker ticker to a TradingView widget symbol.
+ *
+ * Suffix tolerance handles broker-specific variations (e.g. XAUUSDc, EURUSD.pro,
+ * US30.cash, BTCUSDT) by comparing against curated catalog entries via `isSameInstrument`.
+ * Standard 6-letter FX pairs without curated overrides default to `FX:<SYMBOL>`
+ * because TradingView routes major Forex pairs under the FX provider feed.
+ * Other unmatched tickers fall back to the normalized symbol unchanged.
+ */
+export function resolveTradingViewSymbol(baseSymbol) {
+  const normalised = normalizeTradingViewSymbol(baseSymbol);
+  if (!normalised || normalised.includes(':')) return normalised;
+
+  const catalogEntry =
+    MARKET_CATALOG.find((item) => item.symbol === normalised) ||
+    MARKET_CATALOG.find((item) => isSameInstrument(item.symbol, normalised));
+
+  if (catalogEntry) return catalogEntry.tvSymbol;
+
+  if (/^[A-Z]{6}$/.test(normalised)) {
+    return `FX:${normalised}`;
+  }
+
+  return normalised;
+}
+
+/**
+ * Filter the market catalog by keyword query and category.
+ */
+export function filterMarketCatalog(catalog, query, category) {
+  if (!Array.isArray(catalog)) return [];
+
+  const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
+  const filterCat = category && category !== MARKET_CATEGORIES.ALL ? category : null;
+
+  return catalog.filter((item) => {
+    if (!item) return false;
+    if (filterCat && item.category !== filterCat) return false;
+    if (!q) return true;
+    const symbol = typeof item.symbol === 'string' ? item.symbol.toLowerCase() : '';
+    const name = typeof item.name === 'string' ? item.name.toLowerCase() : '';
+    return symbol.includes(q) || name.includes(q);
+  });
+}

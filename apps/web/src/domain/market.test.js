@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { STRUCTURE, describeWindow, isSameInstrument, normalizeCandles } from './market';
+import {
+  MARKET_CATEGORIES,
+  MARKET_CATALOG,
+  STRUCTURE,
+  describeWindow,
+  filterMarketCatalog,
+  normalizeTradingViewSymbol,
+  isSameInstrument,
+  normalizeCandles,
+  resolveTradingViewSymbol
+} from './market';
 
 // Regression for the bug where the Market tab read the EA's candle array
 // backwards. The EA emits candles oldest-first (see `BuildCandlesJson`), but the
@@ -143,5 +153,125 @@ describe('describeWindow', () => {
     expect(describeWindow([], 24, 100).hasData).toBe(false);
     expect(describeWindow(null, 24, 100).hasData).toBe(false);
     expect(describeWindow([candle(1_700_000_000, 1, 1, 1, 1)], 24, 1).hasData).toBe(false);
+  });
+});
+
+describe('normalizeTradingViewSymbol', () => {
+  it('preserves custom tickers instead of interpreting them as broker suffixes', () => {
+    expect(normalizeTradingViewSymbol(' btcusdc ')).toBe('BTCUSDC');
+    expect(normalizeTradingViewSymbol('eur g b p')).toBe('EURGBP');
+    expect(normalizeTradingViewSymbol(' binance:btcusdc ')).toBe('BINANCE:BTCUSDC');
+  });
+});
+
+describe('resolveTradingViewSymbol', () => {
+  it('maps popular catalog pairs to their curated TradingView symbols', () => {
+    expect(resolveTradingViewSymbol('XAUUSD')).toBe('OANDA:XAUUSD');
+    expect(resolveTradingViewSymbol('XAGUSD')).toBe('OANDA:XAGUSD');
+    expect(resolveTradingViewSymbol('USOIL')).toBe('TVC:USOIL');
+    expect(resolveTradingViewSymbol('EURUSD')).toBe('FX:EURUSD');
+    expect(resolveTradingViewSymbol('GBPUSD')).toBe('FX:GBPUSD');
+    expect(resolveTradingViewSymbol('USDJPY')).toBe('FX:USDJPY');
+    expect(resolveTradingViewSymbol('AUDUSD')).toBe('FX:AUDUSD');
+    expect(resolveTradingViewSymbol('USDCAD')).toBe('FX:USDCAD');
+    expect(resolveTradingViewSymbol('USDCHF')).toBe('FX:USDCHF');
+    expect(resolveTradingViewSymbol('NZDUSD')).toBe('FX:NZDUSD');
+    expect(resolveTradingViewSymbol('BTCUSD')).toBe('BINANCE:BTCUSDT');
+    expect(resolveTradingViewSymbol('ETHUSD')).toBe('BINANCE:ETHUSDT');
+    expect(resolveTradingViewSymbol('SOLUSD')).toBe('BINANCE:SOLUSDT');
+    expect(resolveTradingViewSymbol('US30')).toBe('CAPITALCOM:US30');
+    expect(resolveTradingViewSymbol('NAS100')).toBe('CAPITALCOM:US100');
+    expect(resolveTradingViewSymbol('SPX500')).toBe('CAPITALCOM:SPX500');
+  });
+
+  it('tolerates broker suffixes and maps to the curated symbol', () => {
+    expect(resolveTradingViewSymbol('XAUUSDc')).toBe('OANDA:XAUUSD');
+    expect(resolveTradingViewSymbol('XAUUSDm')).toBe('OANDA:XAUUSD');
+    expect(resolveTradingViewSymbol('XAUUSD.a')).toBe('OANDA:XAUUSD');
+    expect(resolveTradingViewSymbol('XAUUSD#')).toBe('OANDA:XAUUSD');
+    expect(resolveTradingViewSymbol('EURUSD.pro')).toBe('FX:EURUSD');
+    expect(resolveTradingViewSymbol('US30.cash')).toBe('CAPITALCOM:US30');
+    expect(resolveTradingViewSymbol('BTCUSDT')).toBe('BINANCE:BTCUSDT');
+  });
+
+  it('tolerates casing and whitespace', () => {
+    expect(resolveTradingViewSymbol(' eurusd ')).toBe('FX:EURUSD');
+    expect(resolveTradingViewSymbol('xauusd')).toBe('OANDA:XAUUSD');
+  });
+
+  it('passes through explicit provider symbols without alter', () => {
+    expect(resolveTradingViewSymbol('NASDAQ:AAPL')).toBe('NASDAQ:AAPL');
+    expect(resolveTradingViewSymbol('binance:btcusdt')).toBe('BINANCE:BTCUSDT');
+  });
+
+  it('handles fallbacks and empty inputs safely', () => {
+    expect(resolveTradingViewSymbol('EURGBP')).toBe('FX:EURGBP');
+    expect(resolveTradingViewSymbol('AAPL')).toBe('AAPL');
+    expect(resolveTradingViewSymbol('')).toBe('');
+    expect(resolveTradingViewSymbol('   ')).toBe('');
+    expect(resolveTradingViewSymbol(null)).toBe('');
+    expect(resolveTradingViewSymbol(undefined)).toBe('');
+  });
+});
+
+describe('filterMarketCatalog', () => {
+  const sample = [
+    { symbol: 'XAUUSD', name: 'Gold / US Dollar', category: MARKET_CATEGORIES.METALS },
+    { symbol: 'EURUSD', name: 'Euro / US Dollar', category: MARKET_CATEGORIES.FOREX },
+    { symbol: 'BTCUSD', name: 'Bitcoin / US Dollar', category: MARKET_CATEGORIES.CRYPTO },
+    { symbol: 'US30', name: 'Dow Jones Industrial Average', category: MARKET_CATEGORIES.INDICES }
+  ];
+
+  it('filters by symbol substring case-insensitively', () => {
+    const result = filterMarketCatalog(sample, 'xau', MARKET_CATEGORIES.ALL);
+    expect(result).toHaveLength(1);
+    expect(result[0].symbol).toBe('XAUUSD');
+  });
+
+  it('filters by translated name substring case-insensitively', () => {
+    const result = filterMarketCatalog(sample, 'gold', MARKET_CATEGORIES.ALL);
+    expect(result).toHaveLength(1);
+    expect(result[0].symbol).toBe('XAUUSD');
+  });
+
+  it('filters by category', () => {
+    const result = filterMarketCatalog(sample, '', MARKET_CATEGORIES.FOREX);
+    expect(result).toHaveLength(1);
+    expect(result[0].symbol).toBe('EURUSD');
+  });
+
+  it('returns everything for ALL + empty query', () => {
+    const result = filterMarketCatalog(sample, '', MARKET_CATEGORIES.ALL);
+    expect(result).toHaveLength(4);
+  });
+
+  it('returns an empty array for non-array inputs', () => {
+    expect(filterMarketCatalog(null, 'eur', MARKET_CATEGORIES.ALL)).toEqual([]);
+    expect(filterMarketCatalog(undefined, 'eur', MARKET_CATEGORIES.ALL)).toEqual([]);
+    expect(filterMarketCatalog('invalid', 'eur', MARKET_CATEGORIES.ALL)).toEqual([]);
+  });
+
+  it('does not mutate the input array', () => {
+    const frozenSample = Object.freeze([
+      Object.freeze({ symbol: 'XAUUSD', name: 'Gold', category: MARKET_CATEGORIES.METALS })
+    ]);
+    expect(() => filterMarketCatalog(frozenSample, 'xau', MARKET_CATEGORIES.ALL)).not.toThrow();
+  });
+});
+
+describe('MARKET_CATALOG integrity', () => {
+  it('contains expected fields, unique symbols, and valid categories for every entry', () => {
+    const expectedKeys = ['symbol', 'nameKey', 'category', 'tvSymbol', 'icon'];
+    const validCategories = Object.values(MARKET_CATEGORIES).filter((c) => c !== MARKET_CATEGORIES.ALL);
+    const seenSymbols = new Set();
+
+    expect(MARKET_CATALOG.length).toBeGreaterThan(0);
+
+    MARKET_CATALOG.forEach((entry) => {
+      expect(Object.keys(entry).sort()).toEqual(expectedKeys.sort());
+      expect(validCategories).toContain(entry.category);
+      expect(seenSymbols.has(entry.symbol)).toBe(false);
+      seenSymbols.add(entry.symbol);
+    });
   });
 });

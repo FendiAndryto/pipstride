@@ -30,8 +30,11 @@ sebelum gate fase sebelumnya lulus.** Ini yang membuat tiap tahap mudah diaudit.
 | **012** | `012-public-registration-closure/` | Tutup registrasi publik (UI & API), non-destructive toggle & Discord admin onboarding | 010, 011 | operasional private beta |
 | **013** | `013-mql5-service-and-cashflow/` | MQL5 background service (.ex5), isolasi cashflow withdrawal/deposit, & dynamic market | 009, 011, 012 | stabilitas telemetri & akurasi jurnal |
 | **014** | `014-dashboard-pnl-and-capital-baseline/` | Realized P/L trading murni, baseline modal bersih (net capital), & transparansi kas | 013 | akurasi finansial dashboard & journal |
+| **015** | `015-journal-period-and-history/` | Filter waktu bersama, pagination server, & kalender independen | 014 | analisis jurnal historis |
+| **016** | `016-admin-operator-workflows/` | Alur kerja support session, direktori & audit admin console | 007 | operasional admin & support |
+| **017** | `017-market-technical-analysis-chart/` | Perombakan tab Market: Pair Directory & TradingView Advanced Chart interaktif | 006, 008 | analisis teknikal & workstation |
 
-**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012 → 013 → 014`.
+**Urutan eksekusi yang direkomendasikan:** `002 → 003 → 004 → 005 → 006 → 008 → 009 → 007 → 010 → 011 → 012 → 013 → 014 → 015 → 016 → 017`.
 
 Alasan singkat (detail ada di masing-masing README):
 - **004 (marketing) dikerjakan sebelum 005/006 (refactor)** — tidak memblokir siapa pun, risiko nol
@@ -190,3 +193,13 @@ Fase ini mengikuti `docs/specs/012-admin-operator-workflows.md`.
 - [x] **01-support-session-lifecycle.md** (`done`) menyelaraskan grant, status pencabutan, dan detail privat.
 - [x] **02-directory-accessibility-and-operator-filters.md** (`done`) memperbaiki direktori, akses keyboard, Overview, dan filter Audit.
 
+### Fase 017 · Market Technical Analysis Chart & Pair Directory (Verifikasi browser)
+
+Fase ini mengikuti `docs/specs/013-market-technical-analysis-chart.md`.
+
+- [x] **01-tradingview-symbol-mapping-and-catalog.md** (`done`): Domain layer pemetaan simbol TradingView (`resolveTradingViewSymbol`) & katalog pair terkurasi.
+- [x] **02-pair-picker-directory-ui.md** (`done`): UI State 1 direktori pencarian pair, filter kategori, integrasi watchlist MT5, & empty state custom ticker.
+- [x] **03-tradingview-chart-container-and-embed.md** (`done`): UI State 2 kontainer TradingView Advanced Real-Time Chart, full-height dark theme, header navigasi `← Ganti Pair` beserta badge pair aktif, & sinkronisasi simbol MT5.
+- [x] **04-i18n-dictionary-and-translations.md** (`done`): Paritas bilingual EN/ID di `translations.js`, pembersihan key usang, & verifikasi `check-i18n.cjs`.
+
+> Sisa gate: cek render chart, drawing tools, fokus keyboard, ganti tab, dan pemuatan ulang setelah TradingView gagal. Di build production, cek chart Market dan iframe Replay dengan CSP aktif.

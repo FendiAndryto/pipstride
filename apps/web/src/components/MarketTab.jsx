@@ -1,159 +1,130 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, BarChart2, Compass } from 'lucide-react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { Search, X, ArrowLeft } from 'lucide-react';
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
-import { STRUCTURE, describeWindow, isSameInstrument } from '../domain/market';
+import {
+  MARKET_CATALOG,
+  MARKET_CATEGORIES,
+  filterMarketCatalog,
+  isSameInstrument,
+  normalizeTradingViewSymbol,
+  resolveTradingViewSymbol
+} from '../domain/market';
+import TradingViewChart from './TradingViewChart';
 
-const getSymbolIcon = (sym) => {
-  const s = sym.toUpperCase();
-  if (s.includes('BTC')) return '₿';
-  if (s.includes('XAU') || s.includes('GOLD')) return 'Au';
-  if (s.includes('XAG') || s.includes('SILVER')) return 'Ag';
-  if (s.includes('EUR')) return 'Eu';
-  if (s.includes('GBP')) return 'Gu';
-  if (s.includes('JPY')) return '¥';
-  return s.slice(0, 2);
-};
-
-const getSymbolName = (sym, t) => {
-  const s = sym.toUpperCase();
-  if (s === 'XAUUSD') return t('market_symbol_gold');
-  if (s === 'EURUSD') return t('market_symbol_euro');
-  if (s === 'GBPUSD') return t('market_symbol_pound');
-  if (s === 'USDJPY') return t('market_symbol_yen');
-  if (s === 'BTCUSD') return t('market_symbol_bitcoin');
-  return sym;
-};
-
-const FALLBACK_QUOTE = {
-  symbol: 'XAUUSD',
-  bid: 0,
-  ask: 0,
-  spread: 0,
-  digits: 2,
-  daily_change_pct: 0,
-  high: 0,
-  low: 0
-};
-
-// Market structure timeframes (ticket 09-03). Each entry names the heartbeat
-// field that carries it — the EA sends M15 under `candles` for backward
-// compatibility. `bars` is how many recent candles the structure read uses:
-// fewer for M5 (noise), the full 24 for H1/H4 (that is all the EA sends).
-const TIMEFRAMES = [
-  { id: 'M5', field: 'candles_m5', bars: 16 },
-  { id: 'M15', field: 'candles', bars: 24 },
-  { id: 'H1', field: 'candles_h1', bars: 24 },
-  { id: 'H4', field: 'candles_h4', bars: 24 }
+const CATEGORY_TABS = [
+  { key: MARKET_CATEGORIES.ALL, labelKey: 'market_category_all' },
+  { key: MARKET_CATEGORIES.FOREX, labelKey: 'market_category_forex' },
+  { key: MARKET_CATEGORIES.METALS, labelKey: 'market_category_metals' },
+  { key: MARKET_CATEGORIES.CRYPTO, labelKey: 'market_category_crypto' },
+  { key: MARKET_CATEGORIES.INDICES, labelKey: 'market_category_indices' }
 ];
 
-const STRUCTURE_KEYS = {
-  [STRUCTURE.HIGHER_HIGHS]: 'market_struct_higher_highs',
-  [STRUCTURE.LOWER_LOWS]: 'market_struct_lower_lows',
-  [STRUCTURE.CONSOLIDATION]: 'market_struct_consolidation'
-};
-
-export default function MarketTab({ bridgeStatus, hasConnection = false }) {
-  const { t } = useLanguage();
-  const [fetchedQuotes, setFetchedQuotes] = useState([]);
+export default function MarketTab({ bridgeStatus, hasConnection: _hasConnection = false }) {
+  // ponytail: 16 curated catalog pairs, synchronous filtering, no backend calls.
+  const { t, lang } = useLanguage();
   const [selectedSymbol, setSelectedSymbol] = useState(null);
-  const [activeTf, setActiveTf] = useState('M15');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState(MARKET_CATEGORIES.ALL);
+  const changePairButtonRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const restoreSearchFocus = useRef(false);
 
-  const quotes = (bridgeStatus?.market_quotes && bridgeStatus.market_quotes.length > 0)
-    ? bridgeStatus.market_quotes
-    : fetchedQuotes;
-
-  // A fresh account usually opens on the broker's default chart (often gold
-  // with a suffix). Follow the chart's watchlist entry until the user picks a
-  // symbol explicitly, so the structure card has data without clicking around
-  // (ticket 09-03 follow-up). Derived during render — an effect here would
-  // cascade an extra render on every poll.
-  const chartSymbol = bridgeStatus?.metrics?.chart_symbol;
-  const activeSymbol = useMemo(() => {
-    if (selectedSymbol && quotes.some((quote) => quote.symbol === selectedSymbol)) {
-      return selectedSymbol;
+  useLayoutEffect(() => {
+    if (selectedSymbol !== null) {
+      changePairButtonRef.current?.focus();
+    } else if (restoreSearchFocus.current) {
+      restoreSearchFocus.current = false;
+      searchInputRef.current?.focus();
     }
-    const chartMatch = quotes.find((quote) => isSameInstrument(quote.symbol, chartSymbol));
-    if (chartMatch) return chartMatch.symbol;
-    if (quotes.length > 0) return quotes[0].symbol;
-    return selectedSymbol || 'XAUUSD';
-  }, [selectedSymbol, quotes, chartSymbol]);
+  }, [selectedSymbol]);
 
-  useEffect(() => {
-    if (!bridgeStatus?.market_quotes?.length && hasConnection && bridgeStatus?.is_connected) {
-      let active = true;
-      api.getMarketQuotes().then((data) => {
-        if (active && Array.isArray(data) && data.length > 0) {
-          setFetchedQuotes(data);
-        }
-      }).catch(() => {});
-      return () => {
-        active = false;
-      };
+  const quotes = Array.isArray(bridgeStatus?.market_quotes) ? bridgeStatus.market_quotes : [];
+  const hasAccountQuotes = quotes.length > 0;
+
+  const handleSelectPair = (tvSymbol, baseSymbol) => {
+    setSelectedSymbol(tvSymbol);
+    if (bridgeStatus?.is_connected && baseSymbol) {
+      // Best-effort notify backend so MT5 sensor watchlist syncs (Ticket 13-04)
+      api.setActiveMarketSymbol(baseSymbol).catch(() => {});
     }
-  }, [bridgeStatus?.market_quotes?.length, bridgeStatus?.is_connected, hasConnection]);
-
-  const activeQuote = useMemo(() => {
-    return quotes.find((q) => q.symbol === activeSymbol) || quotes[0] || { ...FALLBACK_QUOTE, symbol: activeSymbol };
-  }, [quotes, activeSymbol]);
-
-  const isPositive = activeQuote.daily_change_pct >= 0;
-
-  // Why each timeframe does or does not have candles right now. The service is
-  // chartless and streams whatever the dashboard selects, so a mismatch is no
-  // longer an error: it only means the next heartbeat has not arrived yet.
-  // `not_streamed` stays for an older build that never sent that timeframe.
-  const tfAvailability = useMemo(() => {
-    const metrics = bridgeStatus?.metrics || {};
-    const isStreamedSymbol = isSameInstrument(activeSymbol, metrics.chart_symbol);
-    const map = {};
-    TIMEFRAMES.forEach(({ id, field }) => {
-      const raw = metrics[field];
-      if (!isStreamedSymbol) map[id] = 'waiting_for_symbol';
-      else if (!Array.isArray(raw) || raw.length === 0) map[id] = 'not_streamed';
-      else map[id] = 'ok';
-    });
-    return map;
-  }, [bridgeStatus, activeSymbol]);
-
-  // Picking a symbol is also a control action: it tells the monitor which
-  // instrument to stream. Fire-and-forget — a failed PUT must not break the
-  // price panel, and the `waiting_for_symbol` state already covers the gap.
-  const selectSymbol = (symbol) => {
-    setSelectedSymbol(symbol);
-    api.setActiveMarketSymbol(symbol).catch(() => {});
   };
 
-  // Market-structure read over the newest `bars` candles (M5, M15, H1, H4).
-  // The domain helper normalises the wire order — the EA sends oldest-first,
-  // and reading that as newest-first was what flipped the bias.
-  const tfMetrics = useMemo(() => {
-    const metrics = bridgeStatus?.metrics || {};
-    const isChartSym = isSameInstrument(activeSymbol, metrics.chart_symbol);
+  if (selectedSymbol !== null) {
+    const catalogMatch = MARKET_CATALOG.find(
+      (p) => p.tvSymbol === selectedSymbol || p.symbol === selectedSymbol
+    );
+    const displaySymbol = catalogMatch
+      ? catalogMatch.symbol
+      : (selectedSymbol.includes(':') ? selectedSymbol.split(':')[1] : selectedSymbol);
+    const displayName = catalogMatch ? t(catalogMatch.nameKey) : null;
+    const providerBadge = selectedSymbol.includes(':') ? selectedSymbol.split(':')[0] : null;
 
-    const spec = TIMEFRAMES.find((tf) => tf.id === activeTf) || TIMEFRAMES[1];
-    const currentCandles = isChartSym && Array.isArray(metrics[spec.field]) ? metrics[spec.field] : [];
-    const read = describeWindow(currentCandles, spec.bars, activeQuote.bid);
+    return (
+      <div className="market-tab-container animate-fade-in">
+        <div className="market-chart-shell">
+          <div className="market-chart-head">
+            <button
+              type="button"
+              className="market-btn-back"
+              ref={changePairButtonRef}
+              onClick={() => {
+                restoreSearchFocus.current = true;
+                setSelectedSymbol(null);
+              }}
+              aria-label={t('market_btn_change_pair')}
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              <span>{t('market_btn_change_pair')}</span>
+            </button>
 
-    const structureKey = STRUCTURE_KEYS[read.structure]
-      || (read.trend === 'BULLISH' ? 'market_struct_bullish_expansion' : 'market_struct_bearish_distribution');
+            <div className="market-chart-info">
+              <span className="market-chart-symbol-text">{displaySymbol}</span>
+              {displayName && <span className="market-chart-desc">{displayName}</span>}
+              {providerBadge && (
+                <span className="market-badge market-badge-cat">{providerBadge}</span>
+              )}
+            </div>
+          </div>
 
-    return {
-      tf: activeTf,
-      hasData: read.hasData,
-      high: read.high,
-      low: read.low,
-      trend: read.trend,
-      trendLabel: read.trend
-        ? t(read.trend === 'BULLISH' ? 'market_trend_bullish' : 'market_trend_bearish')
-        : null,
-      changePct: read.changePct,
-      structureLabel: read.hasData ? t(structureKey) : null,
-      pricePositionPct: read.pricePositionPct,
-      rangeSpan: read.rangeSpan === null ? null : read.rangeSpan.toFixed(activeQuote.digits),
-      avgRange: read.avgRange === null ? null : read.avgRange.toFixed(activeQuote.digits)
-    };
-  }, [activeTf, activeSymbol, activeQuote, bridgeStatus, t]);
+          <TradingViewChart symbol={selectedSymbol} locale={lang} />
+
+          <div className="market-chart-footer">
+            {t('market_chart_powered_by')}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const categories = hasAccountQuotes
+    ? [...CATEGORY_TABS, { key: 'account', labelKey: 'market_category_account' }]
+    : CATEGORY_TABS;
+
+  const currentCategory = activeCategory === 'account' && !hasAccountQuotes
+    ? MARKET_CATEGORIES.ALL
+    : activeCategory;
+
+  const cleanQuery = searchQuery.trim();
+  const showAccountSection = hasAccountQuotes && (currentCategory === MARKET_CATEGORIES.ALL || currentCategory === 'account');
+  const showCuratedGrid = currentCategory !== 'account';
+
+  const filteredAccountQuotes = showAccountSection
+    ? (cleanQuery
+        ? quotes.filter((q) => q.symbol && q.symbol.toUpperCase().includes(cleanQuery.toUpperCase()))
+        : quotes)
+    : [];
+
+  const enrichedCatalog = MARKET_CATALOG.map((p) => ({
+    ...p,
+    name: t(p.nameKey)
+  }));
+
+  const filteredCatalog = showCuratedGrid
+    ? filterMarketCatalog(enrichedCatalog, cleanQuery, currentCategory)
+    : [];
+
+  const isEmpty = filteredAccountQuotes.length === 0 && filteredCatalog.length === 0;
 
   return (
     <div className="market-tab-container animate-fade-in">
@@ -165,264 +136,166 @@ export default function MarketTab({ bridgeStatus, hasConnection = false }) {
         </div>
       </div>
 
-      <div className="grid two" style={{ marginBottom: '20px' }}>
-        {/* Real Watchlist */}
-        <div className="card">
-          <div className="cardhead">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <TrendingUp size={16} style={{ color: 'var(--g)' }} />
-              <h3>{t('market_watchlist')}</h3>
-            </div>
-            <span className="tiny">{t('market_instruments', { count: quotes.length })}</span>
-          </div>
-
-          {quotes.length > 0 ? (
-            quotes.map((item) => {
-              const isItemPos = item.daily_change_pct >= 0;
-              const isSelected = item.symbol === activeQuote.symbol;
-              const formattedPrice = item.bid > 0 ? item.bid.toFixed(item.digits) : '—';
-              const formattedDelta = `${isItemPos ? '+' : ''}${item.daily_change_pct.toFixed(2)}%`;
-
-              return (
-                <div
-                  key={item.symbol}
-                  className="row"
-                  onClick={() => selectSymbol(item.symbol)}
-                  style={{
-                    cursor: 'pointer',
-                    background: isSelected ? '#152b2b' : 'transparent',
-                    borderRadius: '8px',
-                    padding: '8px 10px',
-                    transition: 'background 0.15s ease'
-                  }}
-                  id={`watchlist-item-${item.symbol}`}
-                >
-                  <div className="coin">{getSymbolIcon(item.symbol)}</div>
-                  <div className="grow">
-                    <div className="rowtitle" style={{ fontWeight: isSelected ? 800 : 600 }}>
-                      {item.symbol}
-                    </div>
-                    <div className="rowsub">
-                      {getSymbolName(item.symbol, t)} · {t('home_spread_pts', { spread: item.spread })}
-                    </div>
-                  </div>
-                  <div className="end">
-                    <div style={{ fontFamily: 'monospace', fontWeight: 700 }}>
-                      {item.symbol.includes('XAU') || item.symbol.includes('BTC') ? `$${formattedPrice}` : formattedPrice}
-                    </div>
-                    <small className={isItemPos ? 'positive' : 'negative'}>
-                      {formattedDelta}
-                    </small>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--muted)' }}>
-              {t('market_waiting_feed')}
-            </div>
+      <div className="market-toolbar">
+        <div className="market-search">
+          <Search size={18} className="market-search-icon" aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="market-search-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('market_search_placeholder')}
+            aria-label={t('market_search_placeholder')}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="market-search-clear"
+              onClick={() => setSearchQuery('')}
+              aria-label={t('market_clear_search')}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
           )}
         </div>
 
-        {/* Real Market Context Card */}
-        <div className="card">
-          <div className="cardhead">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Compass size={16} style={{ color: 'var(--blue)' }} />
-              <h3>{t('market_technical_context')}</h3>
-            </div>
-            <span className="tag blue">{activeQuote.symbol}</span>
-          </div>
-
-          <div className="eyebrow" style={{ color: 'var(--blue)' }}>
-            {activeQuote.symbol} · {t('market_real_telemetry')}
-          </div>
-          <h2 style={{ fontSize: '20px', margin: '8px 0', fontWeight: 800 }}>
-            {activeQuote.bid > 0
-              ? `${activeQuote.symbol.includes('XAU') || activeQuote.symbol.includes('BTC') ? '$' : ''}${activeQuote.bid.toFixed(activeQuote.digits)}`
-              : t('market_waiting_price')}
-          </h2>
-          <p className="sub" style={{ lineHeight: 1.5, marginBottom: '14px' }}>
-            {quotes.length > 0
-              ? (isPositive
-                ? t('market_up_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread })
-                : t('market_down_sentence', { pct: activeQuote.daily_change_pct.toFixed(2), spread: activeQuote.spread }))
-              : t('market_waiting_price')}
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--line)', paddingTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: 'var(--muted)' }}>{t('market_live_bid_ask')}</span>
-              <b style={{ fontFamily: 'monospace' }}>
-                {activeQuote.bid > 0
-                  ? `${activeQuote.bid.toFixed(activeQuote.digits)} / ${activeQuote.ask.toFixed(activeQuote.digits)}`
-                  : '—'}
-              </b>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: 'var(--muted)' }}>{t('market_session_range')}</span>
-              <b style={{ fontFamily: 'monospace' }}>
-                {activeQuote.low > 0 ? activeQuote.low.toFixed(activeQuote.digits) : '—'} –{' '}
-                {activeQuote.high > 0 ? activeQuote.high.toFixed(activeQuote.digits) : '—'}
-              </b>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span style={{ color: 'var(--muted)' }}>{t('market_broker_spread')}</span>
-              <b style={{ color: activeQuote.spread <= 35 ? 'var(--g)' : 'var(--amber)' }}>
-                {activeQuote.spread} {t('market_points')}
-              </b>
-            </div>
-          </div>
+        <div className="market-pills">
+          {categories.map((cat) => {
+            const isActive = currentCategory === cat.key;
+            return (
+              <button
+                key={cat.key}
+                type="button"
+                aria-pressed={isActive}
+                className={`market-pill ${isActive ? 'active' : ''}`}
+                onClick={() => setActiveCategory(cat.key)}
+              >
+                {t(cat.labelKey)}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Market Structure Visualizer - Truly Dynamic Timeframe */}
-      <div className="section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <BarChart2 size={16} style={{ color: 'var(--g)' }} />
-          <span>{t('market_structure_title')}</span>
-          <span className="tiny">{t('market_view', { symbol: activeQuote.symbol, tf: tfMetrics.tf })}</span>
-        </div>
-        {tfMetrics.hasData ? (
-          <span className={`tag ${tfMetrics.trend === 'BULLISH' ? 'green' : 'red'}`} style={{ fontSize: '10px', textTransform: 'uppercase' }}>
-            {tfMetrics.trendLabel} ({tfMetrics.changePct >= 0 ? '+' : ''}{tfMetrics.changePct.toFixed(2)}%)
-          </span>
-        ) : (
-          <span className="tag" style={{ fontSize: '10px', textTransform: 'uppercase', background: 'var(--p2)', color: 'var(--muted)' }}>
-            {t('market_no_data')}
-          </span>
-        )}
-      </div>
-
-      <div className="card" id="market-structure-card">
-        <div className="cardhead">
-          <div>
-            <h3>{t('market_price_action_range', { symbol: activeQuote.symbol, tf: tfMetrics.tf })}</h3>
-            {tfMetrics.hasData && <div className="tiny">{tfMetrics.structureLabel}</div>}
+      {filteredAccountQuotes.length > 0 && (
+        <section className="market-section" aria-labelledby="market-watchlist-title">
+          <div className="market-section-head">
+            <h3 id="market-watchlist-title" className="market-section-title">
+              {t('market_watchlist')}
+            </h3>
+            <span className="market-badge market-badge-account">
+              {t('market_category_account')}
+            </span>
           </div>
-          <div style={{ display: 'flex', gap: '4px', background: '#0a1419', padding: '3px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-            {TIMEFRAMES.map(({ id: tf }) => {
-              const state = tfAvailability[tf];
-              const hasTf = state === 'ok';
-              const isActive = activeTf === tf;
-              const hint = state === 'waiting_for_symbol'
-                ? t('market_tf_waiting_symbol', { symbol: activeSymbol })
-                : t('market_tf_needs_new_ea', { tf });
+          <div className="market-grid">
+            {filteredAccountQuotes.map((quote) => {
+              const bid = Number(quote.bid);
+              const hasBid = Number.isFinite(bid) && bid > 0;
+              const formattedBid = hasBid ? bid.toFixed(quote.digits ?? 2) : '—';
+              const change = Number(quote.daily_change_pct) || 0;
+              const isPos = change >= 0;
+              const formattedChange = `${isPos ? '+' : ''}${change.toFixed(2)}%`;
+              const spreadText = quote.spread != null
+                ? t('home_spread_pts', { spread: quote.spread })
+                : null;
+
               return (
                 <button
-                  key={tf}
+                  key={quote.symbol}
                   type="button"
-                  title={hasTf ? undefined : hint}
-                  aria-pressed={isActive}
-                  style={{
-                    border: 0,
-                    background: isActive ? '#205342' : 'transparent',
-                    color: isActive ? '#b8ffe6' : hasTf ? 'var(--muted)' : 'rgba(148,163,184,0.45)',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    padding: '5px 12px',
-                    borderRadius: '6px',
-                    cursor: hasTf ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onClick={() => setActiveTf(tf)}
-                  id={`btn-tf-${tf}`}
+                  className="market-card market-card-account"
+                  onClick={() => handleSelectPair(resolveTradingViewSymbol(quote.symbol), quote.symbol)}
+                  aria-label={`${quote.symbol} - ${t('market_category_account')}`}
                 >
-                  {tf}
+                  <div className="market-card-head">
+                    <span className="market-symbol">{quote.symbol}</span>
+                    <span className={`market-card-change ${isPos ? 'positive' : 'negative'}`}>
+                      {formattedChange}
+                    </span>
+                  </div>
+                  <div className="market-card-quote">
+                    <span className="market-price">{formattedBid}</span>
+                    {spreadText && <span className="market-spread">{spreadText}</span>}
+                  </div>
                 </button>
               );
             })}
           </div>
+        </section>
+      )}
+
+      {filteredCatalog.length > 0 && (
+        <section className="market-section" aria-label={t('market_title')}>
+          {filteredAccountQuotes.length > 0 && (
+            <div className="market-section-head">
+              <h3 className="market-section-title">
+                {t('market_instruments', { count: filteredCatalog.length })}
+              </h3>
+            </div>
+          )}
+          <div className="market-grid">
+            {filteredCatalog.map((pair) => {
+              const match = quotes.find((q) => isSameInstrument(pair.symbol, q.symbol));
+              const bid = match ? Number(match.bid) : null;
+              const hasBid = bid !== null && Number.isFinite(bid) && bid > 0;
+              const formattedBid = hasBid ? bid.toFixed(match.digits ?? 2) : (match ? '—' : null);
+              const change = match ? (Number(match.daily_change_pct) || 0) : null;
+              const isPos = change !== null ? change >= 0 : true;
+              const formattedChange = change !== null ? `${isPos ? '+' : ''}${change.toFixed(2)}%` : null;
+
+              return (
+                <button
+                  key={pair.symbol}
+                  type="button"
+                  className="market-card"
+                  onClick={() => handleSelectPair(pair.tvSymbol, pair.symbol)}
+                  aria-label={`${pair.symbol} - ${pair.name}`}
+                >
+                  <div className="market-card-head">
+                    <span className="market-icon" aria-hidden="true">{pair.icon}</span>
+                    <span className="market-badge market-badge-cat">
+                      {t(`market_category_${pair.category}`)}
+                    </span>
+                  </div>
+                  <div className="market-card-main">
+                    <span className="market-symbol">{pair.symbol}</span>
+                    <span className="market-card-name">{pair.name}</span>
+                  </div>
+                  {match && (
+                    <div className="market-card-quote">
+                      <span className="market-price">{formattedBid}</span>
+                      <span className={`market-card-change ${isPos ? 'positive' : 'negative'}`}>
+                        {formattedChange}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {isEmpty && (
+        <div className="market-empty">
+          <p className="market-empty-text">{t('market_no_pairs_found')}</p>
+          {cleanQuery && (
+            <button
+              type="button"
+              className="market-btn-cta"
+              onClick={() =>
+                handleSelectPair(
+                  normalizeTradingViewSymbol(cleanQuery),
+                  cleanQuery.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                )
+              }
+            >
+              {t('market_custom_symbol_cta', { symbol: cleanQuery })}
+            </button>
+          )}
         </div>
-
-        {tfMetrics.hasData ? (
-          <div style={{ padding: '20px 10px 10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', color: 'var(--muted)', fontFamily: 'monospace' }}>
-              <span>{t('market_low')} ({tfMetrics.tf}): <strong style={{ color: '#ff6e7a' }}>{tfMetrics.low > 0 ? tfMetrics.low.toFixed(activeQuote.digits) : '—'}</strong></span>
-              <span style={{ color: 'var(--text)', fontWeight: 800 }}>{t('market_bid')}: {activeQuote.bid > 0 ? activeQuote.bid.toFixed(activeQuote.digits) : '—'}</span>
-              <span>{t('market_high')} ({tfMetrics.tf}): <strong style={{ color: '#45e0ad' }}>{tfMetrics.high > 0 ? tfMetrics.high.toFixed(activeQuote.digits) : '—'}</strong></span>
-            </div>
-
-            {/* Progress bar representing price position within the timeframe high-low range */}
-            <div style={{ height: '12px', background: '#10222a', borderRadius: '6px', overflow: 'hidden', position: 'relative', border: '1px solid var(--line)' }}>
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: `${tfMetrics.pricePositionPct}%`,
-                  background: tfMetrics.trend === 'BULLISH'
-                    ? 'linear-gradient(90deg, #103328, #45e0ad)'
-                    : 'linear-gradient(90deg, #3d1217, #ff6e7a)',
-                  borderRadius: '5px',
-                  transition: 'width 0.3s ease'
-                }}
-              />
-              {/* Position Marker */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `calc(${tfMetrics.pricePositionPct}% - 4px)`,
-                  top: '1px',
-                  bottom: '1px',
-                  width: '8px',
-                  background: '#ffffff',
-                  borderRadius: '2px',
-                  boxShadow: '0 0 8px rgba(255,255,255,0.8)'
-                }}
-              />
-            </div>
-
-            {/* Dynamic Structure Stats Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginTop: '16px' }}>
-              <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_structure_bias')}</div>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: tfMetrics.trend === 'BULLISH' ? '#45e0ad' : '#ff6e7a' }}>
-                  {tfMetrics.trendLabel}
-                </div>
-              </div>
-
-              <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_range_span', { tf: tfMetrics.tf })}</div>
-                <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace' }}>
-                  {tfMetrics.rangeSpan} pts
-                </div>
-              </div>
-
-              <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_key_support')}</div>
-                <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: '#ff6e7a' }}>
-                  {tfMetrics.low > 0 ? tfMetrics.low.toFixed(activeQuote.digits) : '—'}
-                </div>
-              </div>
-
-              <div style={{ background: '#0a1419', padding: '10px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                <div className="tiny" style={{ color: 'var(--muted)', marginBottom: '4px' }}>{t('market_key_resistance')}</div>
-                <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: '#45e0ad' }}>
-                  {tfMetrics.high > 0 ? tfMetrics.high.toFixed(activeQuote.digits) : '—'}
-                </div>
-              </div>
-            </div>
-
-            <div className="tiny" style={{ color: 'var(--muted)', textAlign: 'center', marginTop: '12px' }}>
-              {t('market_range_note', { tf: tfMetrics.tf })}
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--muted)' }}>
-            <BarChart2 size={28} style={{ margin: '0 auto 10px', opacity: 0.35, display: 'block' }} />
-            <div style={{ fontWeight: 600, fontSize: '13px', color: '#c9d8dc' }}>
-              {t('market_no_candles_title', { tf: tfMetrics.tf, symbol: activeQuote.symbol })}
-            </div>
-            <div style={{ fontSize: '11px', marginTop: '4px', maxWidth: '380px', margin: '4px auto 0', lineHeight: 1.5 }}>
-              {tfAvailability[activeTf] === 'waiting_for_symbol'
-                ? t('market_tf_waiting_symbol', { symbol: activeQuote.symbol })
-                : t('market_tf_unavailable_body', { tf: activeTf })}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

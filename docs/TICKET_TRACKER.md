@@ -30,13 +30,13 @@ Berdasarkan keputusan arsitektur (`docs/adr/0007-marketing-site-and-public-surfa
 ## 2. Inventaris Status Tiket
 
 ### Ringkasan Status
-- **Total Tiket:** 50 tiket
-- **Selesai (`done`):** 47 tiket (Fase 001–012 + 13-03, 13-05, 13-06, 13-07)
+- **Total Tiket:** 54 tiket
+- **Selesai (`done`):** 51 tiket (Fase 001–012 + 13-03, 13-05, 13-06, 13-07, 015, 016 + 17-01, 17-02, 17-03, 17-04)
 - **Sedang Berjalan (`in_progress`):** 3 tiket (Fase 013: 01, 02, 04)
 - **Belum Dikerjakan (`todo`):** 0 tiket
 
 ```
-[========================================================----] 94.0% Selesai (47/50)
+[========================================================----] 94.4% Selesai (51/54)
 ```
 
 ---
@@ -221,3 +221,14 @@ Fase ini mengikuti `docs/specs/012-admin-operator-workflows.md`.
 - [x] **01-support-session-lifecycle.md** (`done`) menyelaraskan grant, status pencabutan, dan detail privat.
 - [x] **02-directory-accessibility-and-operator-filters.md** (`done`) memperbaiki direktori, akses keyboard, Overview, dan filter Audit.
 
+#### Fase 017: Market Technical Analysis Chart & Pair Directory (Verifikasi browser)
+
+Fase ini mengikuti `docs/specs/013-market-technical-analysis-chart.md`.
+Merombak total tab Market menjadi antarmuka analisis teknikal bergaya workstation: Pair Directory di State 1, TradingView Advanced Real-Time Chart di State 2, dan beban server 0%.
+
+- [x] **01-tradingview-symbol-mapping-and-catalog.md** (`done`): Domain layer pemetaan simbol TradingView (`resolveTradingViewSymbol`) & katalog pair terkurasi.
+- [x] **02-pair-picker-directory-ui.md** (`done`): UI State 1 direktori pencarian pair, filter kategori, integrasi watchlist MT5, & empty state custom ticker.
+- [x] **03-tradingview-chart-container-and-embed.md** (`done`): UI State 2 kontainer TradingView Advanced Real-Time Chart, full-height dark theme, header navigasi `← Ganti Pair` beserta badge pair aktif, & sinkronisasi simbol MT5.
+- [x] **04-i18n-dictionary-and-translations.md** (`done`): Paritas bilingual EN/ID di `translations.js`, pembersihan key usang, & verifikasi `check-i18n.cjs`.
+
+> Sisa gate: cek render chart, drawing tools, fokus keyboard, ganti tab, dan pemuatan ulang setelah TradingView gagal. Di build production, cek chart Market dan iframe Replay dengan CSP aktif.
