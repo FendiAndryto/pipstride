@@ -31,3 +31,44 @@ it('keeps unique H1 timestamps across overlapping cache months and clips dates i
   expect(candles.at(-1).time).toBeLessThan(end);
   expect(candles.every((candle, index) => index === 0 || candle.time > candles[index - 1].time)).toBe(true);
 });
+
+it('keeps the legacy monthly session metadata and clips its H1 candles to the selected calendar month', async () => {
+  const { meta, candles } = await window.PipstrideReplayData.getData(new URLSearchParams({
+    timeframe: 'H1',
+    period_mode: 'month',
+    year: '2022',
+    month: '11',
+  }));
+
+  expect(meta).toMatchObject({ period_mode: 'month', year: 2022, month: 11 });
+  expect(candles[0].time).toBe(Date.parse('2022-11-01T00:00:00Z') / 1000);
+  expect(candles.at(-1).time).toBeLessThan(Date.parse('2022-12-01T00:00:00Z') / 1000);
+});
+
+it('loads the complete available M1 range even when it exceeds the former candle cap', async () => {
+  const timeframe = 'M1';
+  const { timeframe_coverage: { M1 } } = await window.PipstrideReplayData.getCoverage();
+  const { meta, candles } = await window.PipstrideReplayData.getData(new URLSearchParams({
+    timeframe,
+    period_mode: 'multi_month',
+    start_date: '2026-01-01',
+    end_date: '2026-11-30',
+  }));
+
+  expect(meta.total_bars).toBe(M1.total_bars);
+  expect(candles.length).toBeGreaterThan(120_000);
+});
+
+it('includes both endpoints in the 12-calendar-month limit across years', async () => {
+  const params = new URLSearchParams({
+    timeframe: 'H1',
+    period_mode: 'multi_month',
+    start_date: '2018-07-01',
+    end_date: '2019-06-30',
+  });
+  const { meta } = await window.PipstrideReplayData.getData(params);
+  expect(meta).toMatchObject({ requested_start_date: '2018-07-01', requested_end_date: '2019-06-30' });
+
+  params.set('end_date', '2019-07-01');
+  await expect(window.PipstrideReplayData.getData(params)).rejects.toThrow('maksimal 12 bulan');
+});

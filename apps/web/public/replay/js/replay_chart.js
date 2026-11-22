@@ -201,6 +201,8 @@
     var indicatorSettings = new Map();
     var paneCount = 0;
     var isFollowing = true;
+    var mobilePlaying = false;
+    var isMobile = options.isMobile || function () { return false; };
     var isProgrammaticScroll = false;
     var lastVisibleSpan = DEFAULT_VISIBLE_BARS;
     var lastBarSpacing = null;
@@ -442,7 +444,6 @@
     chart.timeScale().subscribeVisibleLogicalRangeChange(function (newRange) {
       if (!newRange) return;
       syncIndicatorPanes(newRange);
-      if (isProgrammaticScroll) return;
 
       var currentSpan = newRange.to - newRange.from;
       var tsOptions = chart.timeScale().options();
@@ -457,17 +458,29 @@
       if (typeof curBs === 'number') {
         lastBarSpacing = curBs;
       }
+      if (isProgrammaticScroll) return;
+
+      lastVisibleSpan = currentSpan;
+      if (isMobile()) {
+        if (isZoom || isPriceScaleDrag || latchedAxis === 'vertical') {
+          if (mobilePlaying) keepViewportAtEdge();
+          else if (isZoom) setFollow(false);
+        } else if (latchedAxis === 'horizontal' && watermark >= 0) {
+          if (!mobilePlaying || watermark + RIGHT_OFFSET - newRange.to > 0.5) {
+            setFollow(false);
+          } else {
+            keepViewportAtEdge();
+          }
+        }
+        return;
+      }
 
       if (isZoom) {
-        lastVisibleSpan = currentSpan;
         if (isFollowing && watermark >= 0) {
           keepViewportAtEdge();
         }
         return;
       }
-
-      // Pan action: span is virtually constant
-      lastVisibleSpan = currentSpan;
 
       var isVerticalOrScaleDrag = (latchedAxis === 'vertical') || isPriceScaleDrag;
       if (isVerticalOrScaleDrag) {
@@ -502,6 +515,17 @@
         setTimeout(function () {
           isProgrammaticScroll = false;
         }, 0);
+      }
+    }
+
+    function followPrice(candle) {
+      var scale = chart.priceScale('right');
+      if (scale.options().autoScale || isPriceScaleDrag || latchedAxis === 'vertical') return;
+      var high = series.priceToCoordinate(candle.high);
+      var low = series.priceToCoordinate(candle.low);
+      var height = container.clientHeight - chart.timeScale().height();
+      if (high != null && low != null && (high < 0 || low > height)) {
+        scale.applyOptions({ autoScale: true });
       }
     }
 
@@ -540,7 +564,7 @@
 
       var advanced = target !== watermark;
 
-      if (!isFollowing && advanced && target > watermark) {
+      if (!isMobile() && !isFollowing && advanced && target > watermark) {
         var range = chart.timeScale().getVisibleLogicalRange();
         if (range && watermark >= 0 && watermark >= range.from && watermark <= range.to) {
           if (target >= range.to - 0.5) {
@@ -554,6 +578,7 @@
 
       if (advanced && isFollowing && cfg.follow !== false) {
         keepViewportAtEdge();
+        if (mobilePlaying) followPrice(candles[target]);
       }
       syncIndicatorPanes();
       return watermark;
@@ -590,6 +615,13 @@
       },
       snapToActive: snapToActive,
       setFollow: setFollow,
+      setMobilePlaying: function (playing) {
+        mobilePlaying = playing;
+        if (playing) {
+          chart.priceScale('right').applyOptions({ autoScale: true });
+          snapToActive();
+        }
+      },
       isFollowing: function () { return isFollowing; },
       onFollowChange: function (fn) {
         if (typeof fn === 'function') followChangeCallbacks.push(fn);

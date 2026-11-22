@@ -46,6 +46,7 @@
     var lastPriceSignature = null;
     var redrawCount = 0;
     var isDestroyed = false;
+    var interactive = true;
 
     // ------------------------------------------------------------- tool state
 
@@ -110,6 +111,11 @@
 
     function updateCanvasPointerEvents() {
       if (!canvas) return;
+      if (!interactive) {
+        canvas.style.pointerEvents = 'none';
+        canvas.style.touchAction = '';
+        return;
+      }
       if (activeTool === 'cursor') {
         canvas.classList.remove('is-drawing');
         if (selectionActive) {
@@ -307,7 +313,7 @@
       for (var i = 0; i < types.length; i += 1) {
         (function (type) {
           canvas.addEventListener(type, function (event) {
-            if (activeTool === 'cursor' && !selectionActive) return;
+            if (!interactive || (activeTool === 'cursor' && !selectionActive)) return;
             if (type === 'pointerdown' && event.button != null && event.button !== 0) return;
             if (event.stopPropagation) event.stopPropagation();
             if (event.cancelable && event.preventDefault) {
@@ -326,7 +332,7 @@
       }
 
       var preventTouch = function (event) {
-        if (activeTool !== 'cursor' || selectionActive) {
+        if (interactive && (activeTool !== 'cursor' || selectionActive)) {
           if (event.cancelable && event.preventDefault) {
             event.preventDefault();
           }
@@ -381,6 +387,10 @@
       getContext: function () { return ctx; },
       getActiveTool: getActiveTool,
       setTool: setTool,
+      setInteractive: function (enabled) {
+        interactive = enabled;
+        updateCanvasPointerEvents();
+      },
       onToolChange: onToolChange,
       onPointer: onPointer,
       getRedrawCount: function () { return redrawCount; },

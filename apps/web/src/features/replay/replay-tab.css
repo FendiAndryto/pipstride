@@ -10,3 +10,17 @@
   border-radius: 12px;
   background: var(--bg);
 }
+
+body:has(.replay-terminal-frame.replay-expanded) {
+  overflow: hidden;
+}
+
+.replay-terminal-frame.replay-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  width: 100dvw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}

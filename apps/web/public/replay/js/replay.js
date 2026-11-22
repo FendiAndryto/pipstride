@@ -3,7 +3,7 @@
  *
  * Replaces old benchmark/equity/trade architecture with a pure price action
  * workstation:
- *  - Dynamic period mode & timeframe selector backed by the local data catalog
+ *  - Month range & timeframe selectors backed by the local data catalog
  *  - Responsive candlestick viewport and indicators with smart follow & snap
  *  - Floating HUD with UTC/Local time, OHLC & range
  *  - Transport controls & full-featured scrubber with datetime tooltip
@@ -12,7 +12,7 @@
 (function (global) {
   'use strict';
 
-  var MAX_SAFE_BARS = 120000;
+  var MAX_PERIOD_MONTHS = 12;
 
   var MONTH_NAMES = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -37,12 +37,12 @@
   var loading = false;
   var active = false;
   var storageNamespace;
+  var mobileLayout = global.matchMedia('(pointer: coarse) and (hover: none), (max-width: 640px)');
+  var fullscreenRequest = false;
+  var mobileToolsLocked = false;
 
-  var selectedMode = 'month';
-  var selectedYear = 2026;
-  var selectedMonth = 10;
-  var selectedStartDate = '2026-10-01';
-  var selectedEndDate = '2026-10-30';
+  var selectedStartMonth = '';
+  var selectedEndMonth = '';
   var selectedTimeframe = 'M5';
 
   // ------------------------------------------------------------------ helpers
@@ -97,151 +97,82 @@
 
   // ------------------------------------------------------------- selector logic
 
-  function isTfAvailable(tf) {
-    if (!coverage || !coverage.timeframe_coverage) return false;
-    var cov = coverage.timeframe_coverage[tf];
-    if (!cov) return false;
+  function availableMonths(tf) {
+    return coverage?.timeframe_coverage?.[tf]?.available_months || [];
+  }
 
-    if (selectedMode === 'month') {
-      var key = selectedYear + '-' + pad(selectedMonth);
-      return Array.isArray(cov.available_months) && cov.available_months.indexOf(key) >= 0;
+  function monthIndex(key) {
+    return Number(key.slice(0, 4)) * 12 + Number(key.slice(5));
+  }
+
+  function updatePeriodNotice() {
+    var message = '';
+    if (!selectedStartMonth || !selectedEndMonth) {
+      message = 'Data bulan tidak tersedia untuk timeframe ini.';
+    } else if (selectedStartMonth > selectedEndMonth) {
+      message = 'Bulan selesai harus sama dengan atau setelah bulan mulai.';
+    } else if (monthIndex(selectedEndMonth) - monthIndex(selectedStartMonth) + 1 > MAX_PERIOD_MONTHS) {
+      message = 'Rentang replay maksimal 12 bulan, termasuk bulan mulai dan selesai.';
     }
-
-    if (selectedMode === 'year') {
-      return Array.isArray(cov.years) && cov.years.indexOf(Number(selectedYear)) >= 0;
-    }
-
-    if (selectedMode === 'multi_month' || selectedMode === 'custom') {
-      var start = el.dateStart ? el.dateStart.value : selectedStartDate;
-      var end = el.dateEnd ? el.dateEnd.value : selectedEndDate;
-      if (!start || !end) return true;
-      return start <= cov.end_date && end >= cov.start_date;
-    }
-
-    if (selectedMode === 'all') {
-      return (cov.total_bars || 0) <= MAX_SAFE_BARS;
-    }
-
-    return true; // mode 'all'
+    setText(el.periodNotice, message);
+    show(el.periodNotice, !!message);
+    if (el.btnLoad) el.btnLoad.disabled = loading || !!message;
+    return !message;
   }
 
   function updateTimeframePills() {
     if (!el.timeframes) return;
     var pills = el.timeframes.querySelectorAll('button[data-tf]');
-    var currentValid = false;
-    var firstValid = null;
-
     for (var i = 0; i < pills.length; i += 1) {
       var btn = pills[i];
       var tf = btn.getAttribute('data-tf');
-      var ok = isTfAvailable(tf);
-      var cov = coverage && coverage.timeframe_coverage && coverage.timeframe_coverage[tf];
+      var ok = availableMonths(tf).length > 0;
 
       btn.disabled = !ok;
       btn.classList.toggle('is-disabled', !ok);
-      if (!ok && selectedMode === 'all' && cov && (cov.total_bars || 0) > MAX_SAFE_BARS) {
-        btn.title = tf + ' dinonaktifkan: ' + cov.total_bars.toLocaleString('id-ID') +
-          ' lilin melebihi batas aman (maks 120.000). Gunakan mode Per Bulan.';
-      } else if (!ok) {
-        btn.title = 'Data ' + tf + ' tidak tersedia untuk periode terpilih.';
-      } else {
-        btn.title = tf;
-      }
+      btn.title = ok ? tf : 'Data ' + tf + ' tidak tersedia.';
 
       var isSelected = (tf === selectedTimeframe && ok);
       btn.classList.toggle('is-active', isSelected);
       btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
-
-      if (isSelected) currentValid = true;
-      if (ok && !firstValid) firstValid = tf;
-    }
-
-    // Auto-switch to first available timeframe if current selection was invalidated
-    if (!currentValid && firstValid) {
-      selectedTimeframe = firstValid;
-      for (var j = 0; j < pills.length; j += 1) {
-        var b = pills[j];
-        var isNow = b.getAttribute('data-tf') === selectedTimeframe;
-        b.classList.toggle('is-active', isNow);
-        b.setAttribute('aria-pressed', isNow ? 'true' : 'false');
-      }
     }
   }
 
-  function setMode(mode) {
-    selectedMode = mode;
-    if (el.modeToggle) {
-      var buttons = el.modeToggle.querySelectorAll('button[data-mode]');
-      for (var i = 0; i < buttons.length; i += 1) {
-        var b = buttons[i];
-        var active = b.getAttribute('data-mode') === mode;
-        b.classList.toggle('is-active', active);
-        b.setAttribute('aria-pressed', active ? 'true' : 'false');
-      }
-    }
+  function fillMonthSelect(select, months, value) {
+    if (!select) return;
+    select.innerHTML = '';
+    months.forEach(function (key) {
+      var option = document.createElement('option');
+      option.value = key;
+      option.textContent = MONTH_NAMES[Number(key.slice(5)) - 1] + ' ' + key.slice(0, 4);
+      select.appendChild(option);
+    });
+    select.value = value;
+    select.disabled = !months.length;
+  }
 
-    // Adjust visibility of period inputs
-    if (mode === 'month') {
-      show(el.yearWrap, true);
-      show(el.monthWrap, true);
-      show(el.dateStartWrap, false);
-      show(el.dateEndWrap, false);
-    } else if (mode === 'year') {
-      show(el.yearWrap, true);
-      show(el.monthWrap, false);
-      show(el.dateStartWrap, false);
-      show(el.dateEndWrap, false);
-    } else if (mode === 'multi_month' || mode === 'custom') {
-      show(el.yearWrap, false);
-      show(el.monthWrap, false);
-      show(el.dateStartWrap, true);
-      show(el.dateEndWrap, true);
-    } else { // 'all'
-      show(el.yearWrap, false);
-      show(el.monthWrap, false);
-      show(el.dateStartWrap, false);
-      show(el.dateEndWrap, false);
+  function populateMonthSelectors() {
+    var months = availableMonths(selectedTimeframe).slice().sort();
+    if (!months.includes(selectedStartMonth) || !months.includes(selectedEndMonth)) {
+      var matching = months.filter(function (key) {
+        return key >= selectedStartMonth && key <= selectedEndMonth;
+      });
+      var fallback = months.at(-1) || '';
+      selectedStartMonth = matching[0] || fallback;
+      selectedEndMonth = matching.at(-1) || fallback;
     }
-
-    updateTimeframePills();
+    fillMonthSelect(el.monthStart, months, selectedStartMonth);
+    fillMonthSelect(el.monthEnd, months, selectedEndMonth);
+    updatePeriodNotice();
   }
 
   function populateSelectors() {
-    if (!coverage) return;
-
-    // Years
-    if (el.year) {
-      el.year.innerHTML = '';
-      var years = coverage.available_years || [];
-      for (var y = 0; y < years.length; y += 1) {
-        var optY = document.createElement('option');
-        optY.value = String(years[y]);
-        optY.textContent = String(years[y]);
-        el.year.appendChild(optY);
-      }
-      el.year.value = String(selectedYear);
+    var tfs = coverage.timeframes || [];
+    if (!availableMonths(selectedTimeframe).length) {
+      selectedTimeframe = tfs.find(function (tf) { return availableMonths(tf).length; }) || selectedTimeframe;
     }
-
-    // Months
-    if (el.month) {
-      el.month.innerHTML = '';
-      for (var m = 1; m <= 12; m += 1) {
-        var optM = document.createElement('option');
-        optM.value = String(m);
-        optM.textContent = MONTH_NAMES[m - 1];
-        el.month.appendChild(optM);
-      }
-      el.month.value = String(selectedMonth);
-    }
-
-    // Date inputs
-    if (el.dateStart && selectedStartDate) el.dateStart.value = selectedStartDate;
-    if (el.dateEnd && selectedEndDate) el.dateEnd.value = selectedEndDate;
-
-    // Timeframes
     if (el.timeframes) {
       el.timeframes.innerHTML = '';
-      var tfs = coverage.timeframes || [];
       for (var t = 0; t < tfs.length; t += 1) {
         var pill = document.createElement('button');
         pill.type = 'button';
@@ -252,27 +183,27 @@
       }
     }
 
-    setMode(selectedMode);
+    updateTimeframePills();
+    populateMonthSelectors();
   }
 
   // ------------------------------------------------------------- data loading
 
   function buildDataParams() {
-    var params = new URLSearchParams({
-      period_mode: selectedMode,
-      timeframe: selectedTimeframe
-    });
-
-    if (selectedMode === 'month') {
-      params.set('year', selectedYear);
-      params.set('month', selectedMonth);
-    } else if (selectedMode === 'year') {
-      params.set('year', selectedYear);
-    } else if (selectedMode === 'multi_month' || selectedMode === 'custom') {
-      params.set('start_date', el.dateStart ? el.dateStart.value : selectedStartDate);
-      params.set('end_date', el.dateEnd ? el.dateEnd.value : selectedEndDate);
+    var year = Number(selectedEndMonth.slice(0, 4));
+    var month = Number(selectedEndMonth.slice(5));
+    if (selectedStartMonth === selectedEndMonth) {
+      return new URLSearchParams({
+        period_mode: 'month', timeframe: selectedTimeframe, year: year, month: month
+      });
     }
-    return params;
+    var lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return new URLSearchParams({
+      period_mode: 'multi_month',
+      timeframe: selectedTimeframe,
+      start_date: selectedStartMonth + '-01',
+      end_date: selectedEndMonth + '-' + lastDay
+    });
   }
 
   function setStatus(message, kind) {
@@ -282,7 +213,7 @@
   }
 
   function loadData() {
-    if (loading) return;
+    if (loading || !updatePeriodNotice()) return;
     loading = true;
 
     if (el.btnLoad) {
@@ -295,16 +226,8 @@
     var params = buildDataParams();
 
     return Promise.resolve().then(function () {
-      var timeframe = params.get('timeframe');
-      var details = coverage && coverage.timeframe_coverage && coverage.timeframe_coverage[timeframe];
-      if (params.get('period_mode') === 'all' && details && details.total_bars > MAX_SAFE_BARS) {
-        throw new Error('Pilih periode dengan maksimal 120.000 lilin.');
-      }
       return global.PipstrideReplayData.getData(params);
     }).then(function (payload) {
-      if (payload.candles.length > MAX_SAFE_BARS) {
-        throw new Error('Pilih periode dengan maksimal 120.000 lilin.');
-      }
       mountPayload(payload);
 
       var count = (payload.meta && payload.meta.total_bars) || (payload.candles && payload.candles.length) || 0;
@@ -319,9 +242,9 @@
     }).finally(function () {
       loading = false;
       if (el.btnLoad) {
-        el.btnLoad.disabled = false;
         el.btnLoad.textContent = 'Muat Replay';
       }
+      updatePeriodNotice();
     });
   }
 
@@ -332,15 +255,10 @@
     }).then(function (cov) {
       coverage = cov;
       var def = cov.default_selection || {};
-      if (def.period_mode) selectedMode = def.period_mode;
-      if (def.year) selectedYear = def.year;
-      if (def.month) selectedMonth = def.month;
       if (def.timeframe) selectedTimeframe = def.timeframe;
-
-      var m5Cov = cov.timeframe_coverage && cov.timeframe_coverage.M5;
-      if (m5Cov) {
-        selectedStartDate = m5Cov.usable_start_date || m5Cov.start_date || '2026-10-01';
-        selectedEndDate = m5Cov.end_date || '2026-10-30';
+      if (def.year && def.month) {
+        selectedStartMonth = def.year + '-' + pad(def.month);
+        selectedEndMonth = selectedStartMonth;
       }
 
       populateSelectors();
@@ -480,10 +398,12 @@
     }
   }
 
-  function renderIndicatorSettings() {
+  function renderIndicatorSettings(useDefaults) {
     var key = el.indicatorSelected.value;
     var preferences = indicatorPreferences[key];
-    el.indicatorSize.value = preferences.size;
+    var parameters = useDefaults ? global.ReplayIndicators.normalize(key) : preferences.parameters;
+    el.indicatorSize.value = useDefaults ? 'default' : preferences.size;
+    setText(el.indicatorDescription, el.indicatorSelected.selectedOptions[0].dataset.description);
     el.indicatorError.hidden = true;
     el.indicatorParameters.replaceChildren();
     global.ReplayIndicators.parameters[key].forEach(function (parameter) {
@@ -496,10 +416,53 @@
       input.max = parameter.max;
       input.step = parameter.step;
       input.required = true;
-      input.value = preferences.parameters[parameter.key];
+      input.value = parameters[parameter.key];
       label.appendChild(input);
       el.indicatorParameters.appendChild(label);
     });
+  }
+
+  function setIndicatorEnabled(key, enabled) {
+    indicatorPreferences[key].enabled = enabled;
+    if (chartApi) chartApi.setIndicator(key, enabled);
+    saveIndicatorPreferences();
+  }
+
+  function renderAppliedIndicators() {
+    el.indicatorAppliedList.replaceChildren();
+    Array.from(el.indicatorSelected.options).forEach(function (option) {
+      var key = option.value;
+      var preferences = indicatorPreferences[key];
+      if (!preferences.applied) return;
+
+      var row = document.createElement('li');
+      var label = document.createElement('label');
+      var toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.checked = preferences.enabled;
+      toggle.setAttribute('aria-label', 'Tampilkan ' + option.textContent);
+      toggle.addEventListener('change', function () {
+        setIndicatorEnabled(key, toggle.checked);
+      });
+      label.append(toggle, option.textContent);
+
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = 'Hapus';
+      remove.setAttribute('aria-label', 'Hapus ' + option.textContent);
+      remove.addEventListener('click', function () {
+        preferences.applied = false;
+        preferences.parameters = global.ReplayIndicators.normalize(key);
+        preferences.size = 'default';
+        setIndicatorEnabled(key, false);
+        if (el.indicatorSelected.value === key) renderIndicatorSettings();
+        renderAppliedIndicators();
+        el.indicatorSelected.focus();
+      });
+      row.append(label, remove);
+      el.indicatorAppliedList.appendChild(row);
+    });
+    el.indicatorEmpty.hidden = el.indicatorAppliedList.childElementCount > 0;
   }
 
   function bindIndicatorSettings() {
@@ -511,34 +474,24 @@
     } catch {
       // Use defaults when storage is missing or unreadable.
     }
-    el.indicatorsMenu.querySelectorAll('input[data-indicator]').forEach(function (input) {
-      var key = input.dataset.indicator;
+    Array.from(el.indicatorSelected.options).forEach(function (option) {
+      var key = option.value;
       var stored = (saved && saved[key]) || {};
-      var option = document.createElement('option');
-      option.value = key;
-      option.textContent = input.parentElement.textContent.trim();
-      el.indicatorSelected.appendChild(option);
-      input.checked = stored.enabled === true;
       indicatorPreferences[key] = {
-        enabled: input.checked,
+        applied: stored.applied === true || stored.enabled === true,
+        enabled: stored.enabled === true,
         parameters: api.normalize(key, stored.parameters),
         size: stored.size === 'small' || stored.size === 'large' ? stored.size : 'default'
       };
     });
     renderIndicatorSettings();
-    el.indicatorSelected.addEventListener('change', renderIndicatorSettings);
+    renderAppliedIndicators();
+    el.indicatorSelected.addEventListener('change', function () {
+      renderIndicatorSettings();
+    });
     el.indicatorSettings.addEventListener('input', function () {
       el.indicatorError.hidden = true;
     });
-
-    function apply(key, parameters, size) {
-      var preferences = indicatorPreferences[key];
-      preferences.parameters = parameters;
-      preferences.size = size;
-      if (chartApi) chartApi.configureIndicator(key, preferences);
-      saveIndicatorPreferences();
-      el.indicatorError.hidden = true;
-    }
 
     el.indicatorSettings.addEventListener('submit', function (event) {
       event.preventDefault();
@@ -558,12 +511,17 @@
         el.indicatorError.hidden = false;
         return;
       }
-      apply(key, api.normalize(key, parameters), el.indicatorSize.value);
+      var preferences = indicatorPreferences[key];
+      preferences.applied = true;
+      preferences.parameters = api.normalize(key, parameters);
+      preferences.size = el.indicatorSize.value;
+      if (chartApi) chartApi.configureIndicator(key, preferences);
+      setIndicatorEnabled(key, true);
+      renderAppliedIndicators();
+      el.indicatorError.hidden = true;
     });
     el.indicatorReset.addEventListener('click', function () {
-      var key = el.indicatorSelected.value;
-      apply(key, api.normalize(key), 'default');
-      renderIndicatorSettings();
+      renderIndicatorSettings(true);
     });
   }
 
@@ -574,7 +532,8 @@
     chartApi = global.SmcReplayChart.init({
       container: el.chartContainer,
       indicatorPanes: el.indicatorPanes,
-      indicatorLegend: el.indicatorLegend
+      indicatorLegend: el.indicatorLegend,
+      isMobile: function () { return mobileLayout.matches; }
     });
     if (!chartApi) {
       setStatus('Library chart gagal dimuat.', 'error');
@@ -650,6 +609,7 @@
 
     // When chart follow state changes, update floating button visibility
     chartApi.onFollowChange(function (following) {
+      if (!following && mobileToolsLocked) controller.pause();
       updateFollowButton(following);
     });
 
@@ -659,7 +619,7 @@
   function updateFollowButton(following) {
     if (!el.btnFollow || !controller) return;
     var isPlaying = controller.snapshot().state === 'PLAYING';
-    show(el.btnFollow, isPlaying && !following);
+    show(el.btnFollow, !mobileLayout.matches && isPlaying && !following);
   }
 
   function mountPayload(payload) {
@@ -708,13 +668,15 @@
   function render(snapshot) {
     if (!snapshot) return;
 
+    var isPlaying = snapshot.state === 'PLAYING';
+    setMobileToolsLocked(isPlaying && mobileLayout.matches);
+
     // --- chart update --------------------------------------------------
     if (chartApi) {
       chartApi.seekTo(snapshot.index, { follow: chartApi.isFollowing() });
     }
 
     // --- transport bar -------------------------------------------------
-    var isPlaying = snapshot.state === 'PLAYING';
     if (el.play) {
       el.play.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
       el.play.setAttribute('aria-label', isPlaying ? 'Pause replay' : 'Play replay');
@@ -787,10 +749,10 @@
     if (!active || !controller || !controller.isLoaded()) return;
     var snap = controller.snapshot();
     if (snap.state !== 'PLAYING') {
-      // Snaps back to active candle on starting playback
-      if (chartApi) {
+      if (mobileLayout.matches) {
+        if (!el.chartWrap.classList.contains('is-fullscreen')) enterFullscreen();
+      } else if (chartApi) {
         chartApi.snapToActive();
-        chartApi.setFollow(true);
       }
     }
     render(controller.toggle());
@@ -844,50 +806,89 @@
     }
   }
 
-  function toggleFullscreen() {
-    var target = el.chartWrap || el.chartContainer;
-    if (!target) return;
+  function fullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement;
+  }
 
-    if (!document.fullscreenElement && !target.classList.contains('is-fullscreen')) {
-      if (target.requestFullscreen) {
-        target.requestFullscreen().catch(function () {
-          // Fallback if browser denies native fullscreen without user activation
-          target.classList.add('is-fullscreen');
-          if (el.btnFullscreen) el.btnFullscreen.textContent = '⛶ Normal';
-          if (chartApi) chartApi.resize();
-        });
-      } else if (target.webkitRequestFullscreen) {
-        target.webkitRequestFullscreen();
-      } else {
-        target.classList.add('is-fullscreen');
-        if (el.btnFullscreen) el.btnFullscreen.textContent = '⛶ Normal';
-        if (chartApi) chartApi.resize();
+  function applyFullscreen(expanded, fallback) {
+    var wasExpanded = el.chartWrap.classList.contains('is-fullscreen');
+    el.chartWrap.classList.toggle('is-fullscreen', expanded);
+    document.documentElement.classList.toggle('replay-expanded', expanded);
+    if (global.frameElement) {
+      global.frameElement.classList.toggle('replay-expanded', expanded && fallback);
+    }
+    if (expanded === wasExpanded) return;
+
+    var hadFocus = el.transport.contains(document.activeElement) || document.activeElement === el.btnFullscreen;
+    if (expanded) el.chartStack.prepend(el.transport);
+    else el.timeline.before(el.transport);
+    if (hadFocus) el.play.focus({ preventScroll: true });
+    if (!expanded && mobileLayout.matches && mobileToolsLocked) controller.pause();
+    onResize();
+  }
+
+  async function enterFullscreen() {
+    if (fullscreenRequest || !el.chartWrap) return;
+    fullscreenRequest = true;
+    var target = el.chartWrap;
+    var request = target.requestFullscreen || target.webkitRequestFullscreen;
+    try {
+      if (request) await request.call(target);
+      if (!active) {
+        await exitFullscreen();
+        return;
       }
-    } else {
-      if (document.fullscreenElement) {
-        if (document.exitFullscreen) {
-          document.exitFullscreen().catch(function () {});
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        }
-      }
-      target.classList.remove('is-fullscreen');
-      if (el.btnFullscreen) el.btnFullscreen.textContent = '⛶ Fullscreen';
-      if (chartApi) chartApi.resize();
+      applyFullscreen(true, fullscreenElement() !== target);
+    } catch {
+      if (active) applyFullscreen(true, true);
+    } finally {
+      fullscreenRequest = false;
     }
   }
 
+  async function exitFullscreen() {
+    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit && fullscreenElement() === el.chartWrap) {
+      try {
+        await exit.call(document);
+      } catch {
+        return;
+      }
+    }
+    if (fullscreenElement() !== el.chartWrap) applyFullscreen(false, false);
+  }
+
+  function toggleFullscreen() {
+    if (el.chartWrap.classList.contains('is-fullscreen')) exitFullscreen();
+    else if (!mobileLayout.matches) enterFullscreen();
+  }
+
   function onFullscreenChange() {
-    var isFs = !!document.fullscreenElement;
-    if (el.chartWrap) {
-      el.chartWrap.classList.toggle('is-fullscreen', isFs);
+    if (fullscreenElement() === el.chartWrap) {
+      if (!active) {
+        exitFullscreen();
+        return;
+      }
+      applyFullscreen(true, false);
+      var orientation = global.screen.orientation;
+      if (mobileLayout.matches && orientation && orientation.lock) {
+        orientation.lock('landscape').catch(function () {});
+      }
+    } else if (!fullscreenRequest) {
+      applyFullscreen(false, false);
     }
-    if (el.btnFullscreen) {
-      el.btnFullscreen.textContent = isFs ? '⛶ Normal' : '⛶ Fullscreen';
+  }
+
+  function setMobileToolsLocked(locked) {
+    if (mobileToolsLocked === locked) return;
+    mobileToolsLocked = locked;
+    if (el.dock) el.dock.inert = locked;
+    if (el.indicatorsMenu) {
+      el.indicatorsMenu.inert = locked;
+      if (locked) el.indicatorsMenu.open = false;
     }
-    if (chartApi) {
-      chartApi.resize();
-    }
+    if (canvasApi) canvasApi.setInteractive(!locked);
+    if (chartApi) chartApi.setMobilePlaying(locked);
   }
 
   function onHudToggle() {
@@ -937,9 +938,13 @@
     if (!active || event.defaultPrevented) return;
     if (el.indicatorsMenu && el.indicatorsMenu.contains(event.target)) return;
     if (isTypingTarget(event.target)) return;
+    if (event.key === 'Escape' && el.chartWrap.classList.contains('is-fullscreen')) {
+      exitFullscreen();
+      return;
+    }
 
     // Alt + H -> Horizontal Line tool
-    if (event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (!mobileToolsLocked && event.altKey && !event.ctrlKey && !event.metaKey) {
       if (event.key === 'h' || event.key === 'H') {
         event.preventDefault();
         selectTool('hline');
@@ -973,6 +978,7 @@
         toggleHud();
         return;
       }
+      if (mobileToolsLocked) return;
       if (event.key === 'c' || event.key === 'C') {
         event.preventDefault();
         if (simulatorApi) {
@@ -1061,18 +1067,13 @@
     el.heading = $('heading-replay');
 
     // Selectors
-    el.modeToggle = $('replay-mode-toggle');
-    el.yearWrap = $('replay-year-wrap');
-    el.year = $('replay-year');
-    el.monthWrap = $('replay-month-wrap');
-    el.month = $('replay-month');
-    el.dateStartWrap = $('replay-date-start-wrap');
-    el.dateStart = $('replay-date-start');
-    el.dateEndWrap = $('replay-date-end-wrap');
-    el.dateEnd = $('replay-date-end');
+    el.monthStart = $('replay-month-start');
+    el.monthEnd = $('replay-month-end');
+    el.periodNotice = $('replay-period-notice');
     el.timeframes = $('replay-timeframes');
     el.btnLoad = $('replay-btn-load');
     el.btnFullscreen = $('replay-btn-fullscreen');
+    el.exitFullscreen = $('replay-exit-fullscreen');
 
     // Banners
     el.warningsBanner = $('replay-warnings-banner');
@@ -1081,6 +1082,8 @@
     el.errorText = $('replay-error-text');
 
     // Transport
+    el.transport = $('replay-transport');
+    el.timeline = $('replay-timeline');
     el.stepBack = $('replay-step-back');
     el.play = $('replay-play');
     el.stepForward = $('replay-step-forward');
@@ -1097,6 +1100,7 @@
 
     // Chart & HUD
     el.chartWrap = $('replay-chart-wrap');
+    el.chartStack = $('replay-chart-stack');
     el.dock = $('replay-dock');
     el.canvas = $('replay-drawing-canvas');
     el.chartContainer = $('replay-chart');
@@ -1106,10 +1110,13 @@
     el.indicatorLegend = $('replay-indicator-legend');
     el.indicatorSettings = $('replay-indicator-settings');
     el.indicatorSelected = $('replay-indicator-selected');
+    el.indicatorDescription = $('replay-indicator-description');
     el.indicatorParameters = $('replay-indicator-parameters');
     el.indicatorSize = $('replay-indicator-size');
     el.indicatorError = $('replay-indicator-error');
     el.indicatorReset = $('replay-indicator-reset');
+    el.indicatorAppliedList = $('replay-indicator-applied-list');
+    el.indicatorEmpty = $('replay-indicator-empty');
     el.chartEmpty = $('replay-chart-empty');
     el.btnFollow = $('replay-btn-follow');
     el.hud = $('replay-hud');
@@ -1128,14 +1135,6 @@
   function bindEvents() {
     if (el.indicatorsMenu) {
       bindIndicatorSettings();
-      el.indicatorsMenu.addEventListener('change', function (event) {
-        var input = event.target;
-        var key = input.dataset.indicator;
-        if (!key || !indicatorPreferences[key]) return;
-        indicatorPreferences[key].enabled = input.checked;
-        if (chartApi) chartApi.setIndicator(key, input.checked);
-        saveIndicatorPreferences();
-      });
       el.indicatorsMenu.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape' || !el.indicatorsMenu.open) return;
         event.preventDefault();
@@ -1149,39 +1148,17 @@
       });
     }
 
-    if (el.modeToggle) {
-      el.modeToggle.addEventListener('click', function (e) {
-        var btn = e.target.closest('button[data-mode]');
-        if (!btn) return;
-        setMode(btn.getAttribute('data-mode'));
+    if (el.monthStart) {
+      el.monthStart.addEventListener('change', function () {
+        selectedStartMonth = el.monthStart.value;
+        updatePeriodNotice();
       });
     }
 
-    if (el.year) {
-      el.year.addEventListener('change', function () {
-        selectedYear = Number(el.year.value);
-        updateTimeframePills();
-      });
-    }
-
-    if (el.month) {
-      el.month.addEventListener('change', function () {
-        selectedMonth = Number(el.month.value);
-        updateTimeframePills();
-      });
-    }
-
-    if (el.dateStart) {
-      el.dateStart.addEventListener('change', function () {
-        selectedStartDate = el.dateStart.value;
-        updateTimeframePills();
-      });
-    }
-
-    if (el.dateEnd) {
-      el.dateEnd.addEventListener('change', function () {
-        selectedEndDate = el.dateEnd.value;
-        updateTimeframePills();
+    if (el.monthEnd) {
+      el.monthEnd.addEventListener('change', function () {
+        selectedEndMonth = el.monthEnd.value;
+        updatePeriodNotice();
       });
     }
 
@@ -1191,11 +1168,13 @@
         if (!btn || btn.disabled) return;
         selectedTimeframe = btn.getAttribute('data-tf');
         updateTimeframePills();
+        populateMonthSelectors();
       });
     }
 
     if (el.btnLoad) el.btnLoad.addEventListener('click', loadData);
     if (el.btnFullscreen) el.btnFullscreen.addEventListener('click', toggleFullscreen);
+    if (el.exitFullscreen) el.exitFullscreen.addEventListener('click', exitFullscreen);
     if (el.btnFollow) el.btnFollow.addEventListener('click', onSnapFollow);
     if (el.hudToggle) el.hudToggle.addEventListener('click', onHudToggle);
 
@@ -1237,6 +1216,10 @@
 
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    mobileLayout.addEventListener('change', function () {
+      if (controller.isLoaded()) render(controller.snapshot());
+    });
     global.addEventListener('resize', onResize);
   }
 
@@ -1260,6 +1243,7 @@
       global.requestAnimationFrame(onResize);
     } else {
       controller.pause();
+      if (el.chartWrap.classList.contains('is-fullscreen')) exitFullscreen();
       syncStorage();
     }
   }

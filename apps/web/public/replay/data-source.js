@@ -5,6 +5,7 @@
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
   ];
   const DAY_SECONDS = 86_400;
+  const MAX_PERIOD_MONTHS = 12;
   const PARALLEL_REQUESTS = 6;
   let manifestRequest;
 
@@ -36,6 +37,10 @@
     return `${MONTH_NAMES[month - 1]} ${year}`;
   }
 
+  function monthIndex(date) {
+    return Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7));
+  }
+
   async function getMonth(file) {
     const response = await request(file);
     const body = response.body.pipeThrough(new DecompressionStream('gzip'));
@@ -51,19 +56,33 @@
     const startDate = params.get('start_date');
     const endDate = params.get('end_date');
     const isDateRange = mode === 'custom' || mode === 'multi_month';
-    const start = isDateRange ? parseDate(startDate) : -Infinity;
-    const end = isDateRange ? parseDate(endDate) + DAY_SECONDS : Infinity;
     const available = manifest.months[timeframe];
 
     if (!Object.hasOwn(manifest.months, timeframe) || !manifest.coverage.period_modes.includes(mode)) {
       throw new Error('Timeframe atau mode periode tidak dikenal.');
     }
-    if (isDateRange && !(start < end)) throw new Error('Rentang tanggal tidak valid.');
+    let start = -Infinity;
+    let end = Infinity;
+    if (isDateRange) {
+      start = parseDate(startDate);
+      end = parseDate(endDate) + DAY_SECONDS;
+      if (!(start < end)) throw new Error('Rentang tanggal tidak valid.');
+      if (mode === 'multi_month' && monthIndex(endDate) - monthIndex(startDate) + 1 > MAX_PERIOD_MONTHS) {
+        throw new Error('Rentang replay maksimal 12 bulan, termasuk bulan mulai dan selesai.');
+      }
+    } else if (mode === 'month') {
+      if (!available.some((entry) => entry.year === year && entry.month === month)) {
+        throw new Error(`Tidak ada candle ${timeframe} pada periode yang dipilih.`);
+      }
+      start = Date.UTC(year, month - 1, 1) / 1000;
+      end = Date.UTC(year, month, 1) / 1000;
+    }
 
+    const firstDate = Number.isFinite(start) ? isoDate(start) : null;
+    const lastDate = Number.isFinite(end) ? isoDate(end - 1) : null;
     const months = available.filter((entry) => {
-      if (mode === 'month') return entry.year === year && entry.month === month;
       if (mode === 'year') return entry.year === year;
-      if (isDateRange) return entry.startDate <= endDate && entry.endDate >= startDate;
+      if (firstDate) return entry.startDate <= lastDate && entry.endDate >= firstDate;
       return true;
     });
     const rows = [];
@@ -87,7 +106,8 @@
     const last = candles.at(-1).time;
     const warning = months.find((entry) => entry.warning)?.warning;
     let label = monthLabel(firstMonth);
-    if (mode === 'year') label = `Tahun ${year}`;
+    if (mode === 'month') label = monthLabel({ year, month });
+    else if (mode === 'year') label = `Tahun ${year}`;
     else if (isDateRange) label = `${startDate} s/d ${endDate}`;
     else if (firstMonth !== lastMonth) label += ` - ${monthLabel(lastMonth)}`;
 

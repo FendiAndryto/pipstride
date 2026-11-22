@@ -19,36 +19,17 @@
 
         <!-- Toolbar Selector (T-PAR-08) -->
         <div class="replay-toolbar" role="toolbar" aria-label="Konfigurasi Replay">
-          <!-- Group 1: Mode & Periode -->
-          <div class="replay-group replay-mode-group">
-            <span class="replay-group-label">Mode:</span>
-            <div id="replay-mode-toggle" class="replay-toggle-group" role="group" aria-label="Pilih mode periode">
-              <button type="button" id="replay-mode-month" class="replay-pill is-active" data-mode="month">Per Bulan</button>
-              <button type="button" id="replay-mode-multi-month" class="replay-pill" data-mode="multi_month">Rentang Bulan</button>
-              <button type="button" id="replay-mode-year" class="replay-pill" data-mode="year">Tahunan</button>
-              <button type="button" id="replay-mode-custom" class="replay-pill" data-mode="custom">Kustom</button>
-              <button type="button" id="replay-mode-all" class="replay-pill" data-mode="all">Semua Data</button>
-            </div>
-
+          <!-- Group 1: Periode -->
+          <div class="replay-group replay-period-group">
             <div class="replay-period-inputs">
-              <label id="replay-year-wrap" class="replay-field">
-                <span class="replay-field-label">Tahun</span>
-                <select id="replay-year" class="replay-select" aria-label="Pilih tahun"></select>
-              </label>
-
-              <label id="replay-month-wrap" class="replay-field">
-                <span class="replay-field-label">Bulan</span>
-                <select id="replay-month" class="replay-select" aria-label="Pilih bulan"></select>
-              </label>
-
-              <label id="replay-date-start-wrap" class="replay-field hidden">
+              <label class="replay-field">
                 <span class="replay-field-label">Dari</span>
-                <input type="date" id="replay-date-start" class="replay-input" aria-label="Tanggal mulai" />
+                <select id="replay-month-start" class="replay-select" aria-label="Bulan mulai" aria-describedby="replay-period-notice" disabled></select>
               </label>
 
-              <label id="replay-date-end-wrap" class="replay-field hidden">
+              <label class="replay-field">
                 <span class="replay-field-label">Sampai</span>
-                <input type="date" id="replay-date-end" class="replay-input" aria-label="Tanggal selesai" />
+                <select id="replay-month-end" class="replay-select" aria-label="Bulan selesai" aria-describedby="replay-period-notice" disabled></select>
               </label>
             </div>
           </div>
@@ -63,7 +44,7 @@
 
           <!-- Actions: Muat Replay + Fullscreen -->
           <div class="replay-group replay-actions-group">
-            <button type="button" id="replay-btn-load" class="replay-btn replay-btn-primary" aria-label="Muat Replay">
+            <button type="button" id="replay-btn-load" class="replay-btn replay-btn-primary" aria-label="Muat Replay" disabled>
               Muat Replay
             </button>
             <button type="button" id="replay-btn-fullscreen" class="replay-btn" title="Layar Penuh (F)" aria-label="Layar Penuh">
@@ -73,6 +54,7 @@
         </div>
 
         <!-- Warning & Error Banners -->
+        <div id="replay-period-notice" class="replay-banner replay-banner-warning hidden" role="alert"></div>
         <div id="replay-warnings-banner" class="replay-banner replay-banner-warning hidden" role="alert">
           <span class="replay-banner-icon">⚠️</span>
           <span id="replay-warnings-text" class="replay-banner-text"></span>
@@ -84,13 +66,14 @@
         </div>
 
         <!-- Transport Bar (T-PAR-10) -->
-        <div class="replay-transport-bar">
+        <div id="replay-transport" class="replay-transport-bar">
           <div class="replay-transport-cluster">
             <button type="button" id="replay-step-back" class="replay-btn" title="Mundur 1 bar (←)" aria-label="Mundur satu bar">⏮</button>
             <button type="button" id="replay-play" class="replay-btn replay-btn-transport" title="Putar / Jeda (Space)" aria-label="Putar replay">▶ Play</button>
             <button type="button" id="replay-step-forward" class="replay-btn" title="Maju 1 bar (→)" aria-label="Maju satu bar">⏭</button>
             <span id="replay-state" class="replay-state is-stopped">STOPPED</span>
             <span id="replay-position" class="replay-position">0 / 0</span>
+            <button type="button" id="replay-exit-fullscreen" class="replay-btn" aria-label="Keluar dari layar penuh">Keluar</button>
           </div>
 
           <div class="replay-speed-cluster">
@@ -109,7 +92,7 @@
         </div>
 
         <!-- Scrubber & Timeline -->
-        <div class="replay-timeline">
+        <div id="replay-timeline" class="replay-timeline">
           <div class="replay-scrubber-wrap" id="replay-scrubber-wrap">
             <div id="replay-scrubber-fill" class="replay-scrubber-fill" aria-hidden="true"></div>
             <input type="range" id="replay-scrubber" class="replay-scrubber" min="0" max="0" step="1" value="0" aria-label="Timeline replay" />
@@ -158,7 +141,8 @@
               </div>
             </nav>
 
-            <div class="replay-chart-stack">
+            <div id="replay-chart-stack" class="replay-chart-stack">
+              <p class="replay-rotate-hint" role="status">Putar perangkat untuk tampilan landscape.</p>
               <div class="replay-price-view">
                 <div id="replay-chart" class="replay-chart">
                   <canvas id="replay-drawing-canvas" class="replay-drawing-canvas" aria-hidden="true"></canvas>
@@ -225,20 +209,20 @@
                 <details id="replay-indicators-menu" class="replay-indicators-menu">
                   <summary>Indikator</summary>
                   <div class="replay-indicators-options">
-                    <div class="replay-indicator-toggles">
-                      <label><input type="checkbox" data-indicator="sma"> SMA</label>
-                      <label><input type="checkbox" data-indicator="ema"> EMA</label>
-                      <label><input type="checkbox" data-indicator="supertrend"> Supertrend</label>
-                      <label><input type="checkbox" data-indicator="bollinger"> Bollinger Bands</label>
-                      <label><input type="checkbox" data-indicator="vwap"> VWAP</label>
-                      <label><input type="checkbox" data-indicator="rsi"> RSI</label>
-                      <label><input type="checkbox" data-indicator="macd"> MACD</label>
-                      <label><input type="checkbox" data-indicator="atr"> ATR</label>
-                    </div>
                     <form id="replay-indicator-settings" class="replay-indicator-settings">
-                      <label>Pengaturan indikator
-                        <select id="replay-indicator-selected"></select>
+                      <label>Pilih indikator
+                        <select id="replay-indicator-selected" aria-describedby="replay-indicator-description">
+                          <option value="sma" data-description="Simple Moving Average menghitung rata-rata harga penutupan dengan bobot yang sama.">SMA</option>
+                          <option value="ema" data-description="Exponential Moving Average memberi bobot lebih besar pada harga penutupan terbaru.">EMA</option>
+                          <option value="supertrend" data-description="Supertrend menggunakan ATR untuk menandai arah tren dan perubahan arahnya.">Supertrend</option>
+                          <option value="bollinger" data-description="Bollinger Bands menampilkan pita di sekitar rata-rata harga yang melebar atau menyempit mengikuti volatilitas.">Bollinger Bands</option>
+                          <option value="vwap" data-description="Volume Weighted Average Price menghitung rata-rata harga berbobot volume sejak jam reset.">VWAP</option>
+                          <option value="rsi" data-description="Relative Strength Index mengukur momentum perubahan harga pada skala 0–100.">RSI</option>
+                          <option value="macd" data-description="Moving Average Convergence Divergence membandingkan dua EMA untuk menunjukkan arah dan momentum tren.">MACD</option>
+                          <option value="atr" data-description="Average True Range mengukur volatilitas berdasarkan rentang harga dan selisih dari penutupan sebelumnya.">ATR</option>
+                        </select>
                       </label>
+                      <p id="replay-indicator-description" class="replay-indicator-description"></p>
                       <div id="replay-indicator-parameters" class="replay-indicator-parameters"></div>
                       <label>Ukuran tampilan
                         <select id="replay-indicator-size">
@@ -253,6 +237,11 @@
                         <button type="button" id="replay-indicator-reset">Reset ke default</button>
                       </div>
                     </form>
+                    <section class="replay-indicator-applied" aria-labelledby="replay-indicator-applied-title">
+                      <h3 id="replay-indicator-applied-title">Indikator yang diterapkan</h3>
+                      <p id="replay-indicator-empty">Belum ada indikator yang diterapkan.</p>
+                      <ul id="replay-indicator-applied-list"></ul>
+                    </section>
                   </div>
                 </details>
               </div>
