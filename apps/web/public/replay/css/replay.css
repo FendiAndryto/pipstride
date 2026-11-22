@@ -898,20 +898,16 @@ body {
 }
 
 .replay-delete-selected {
-  display: none;
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 11;
+  display: grid;
+  place-items: center;
+  width: 44px;
   height: 44px;
-  padding-inline: 0.75rem;
+  padding: 0;
   color: var(--badge-red-text);
-}
-
-@media (pointer: coarse) and (hover: none), (max-width: 640px) {
-  .replay-delete-selected {
-    display: block;
-  }
 }
 
 /* ------------------------------------------------------------- Floating HUD */

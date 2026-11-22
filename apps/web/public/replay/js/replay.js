@@ -614,6 +614,17 @@
       });
     }
 
+    if (drawingsApi && simulatorApi) {
+      canvasApi.onPointer(function (pointer) {
+        // The overlay consumes this click while a different object is selected.
+        // Reuse the chart's hit testing if the active object just yielded selection.
+        if (pointer.type !== 'pointerdown' || pointer.tool !== 'cursor' || getSelectedObjectApi()) return;
+        var click = { point: { x: pointer.x, y: pointer.y } };
+        drawingsApi.handleChartClick(click);
+        simulatorApi.handleChartClick(click);
+      });
+    }
+
     chartApi.onFollowChange(function (following) {
       if (!following && toolsLocked) controller.pause();
     });

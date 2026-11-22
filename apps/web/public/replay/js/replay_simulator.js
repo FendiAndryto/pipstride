@@ -76,35 +76,47 @@
       return snapToRevealedBar(x);
     }
 
-    // coordinateToTime() returns null to the right of the newest revealed bar.
-    // A position's targetTime is entry + 20 bars (already in that whitespace),
-    // so dragging the right handle needed a forward projection rather than a
-    // snap back onto the last candle.
-    function extrapolateTime(x) {
+    function getRevealedIndex(candles) {
+      if (!Array.isArray(candles)) return -1;
+      var watermark = chartApi && chartApi.getWatermark ? chartApi.getWatermark() : null;
+      return watermark == null ? candles.length - 1 : Math.min(watermark, candles.length - 1);
+    }
+
+    function getBarSpan(candles, index) {
+      if (index < 0) return 300;
+      var candle = candles[index];
+      var configuredSpan = barEnd ? barEnd(candle) - candle.time : null;
+      if (configuredSpan > 0) return configuredSpan;
+      return index > 0 ? Math.max(60, candle.time - candles[index - 1].time) : 300;
+    }
+
+    // Project into blank space from the last revealed candle using the chart's
+    // bar spacing and timeframe. This also works when only one bar is visible.
+    function getTimeProjection() {
       var candles = getCandles();
-      if (!Array.isArray(candles) || candles.length < 2 || x == null || isNaN(x)) return null;
+      var lastIndex = getRevealedIndex(candles);
+      if (lastIndex < 0) return null;
 
-      var lastIdx = candles.length - 1;
-      if (chartApi && chartApi.getWatermark) {
-        var wm = chartApi.getWatermark();
-        if (wm != null && wm >= 0) lastIdx = Math.min(wm, lastIdx);
+      var x = logicalCoord(lastIndex);
+      if (x == null) return null;
+      var scale = chartApi && chartApi.timeScale ? chartApi.timeScale() : null;
+      var options = scale && scale.options ? scale.options() : null;
+      var step = options && options.barSpacing;
+      if (!(step > 0) && lastIndex > 0) {
+        var previousX = logicalCoord(lastIndex - 1);
+        if (previousX != null) step = x - previousX;
       }
-      if (lastIdx < 1) return null;
+      if (!(step > 0)) return null;
 
-      var lastX = logicalCoord(lastIdx);
-      var prevX = logicalCoord(lastIdx - 1);
-      if (lastX == null || prevX == null) return null;
+      return { x: x, time: candles[lastIndex].time, step: step, span: getBarSpan(candles, lastIndex) };
+    }
 
-      var stepPx = lastX - prevX;
-      if (!(stepPx > 0)) return null;
-
-      var barsAhead = (x - lastX) / stepPx;
-      if (!(barsAhead > 0)) return null;
-
-      var span = candles[lastIdx].time - candles[lastIdx - 1].time;
-      if (!(span > 0)) return null;
-
-      return candles[lastIdx].time + Math.round(barsAhead) * span;
+    function extrapolateTime(x) {
+      if (x == null || isNaN(x)) return null;
+      var projection = getTimeProjection();
+      if (!projection || x <= projection.x) return null;
+      var barsAhead = (x - projection.x) / projection.step;
+      return projection.time + Math.round(barsAhead) * projection.span;
     }
 
     // coordinateToTime() returns null for whitespace and data gaps. Falling back
@@ -155,36 +167,10 @@
       return extrapolateCoord(t);
     }
 
-    // A freshly placed position gets targetTime = entry + 20 bars, which is
-    // past the newest revealed bar. timeToCoordinate() returns null there, so
-    // the box was drawn with the +180px fallback but findPositionAt() skipped
-    // it (x2 == null) — the R:R handles could not be grabbed at all right after
-    // placing. Project forward from the last bar instead.
     function extrapolateCoord(t) {
-      var candles = getCandles();
-      if (!Array.isArray(candles) || candles.length < 2) return null;
-
-      var lastIdx = candles.length - 1;
-      if (chartApi && chartApi.getWatermark) {
-        var wm = chartApi.getWatermark();
-        if (wm != null && wm >= 0) lastIdx = Math.min(wm, lastIdx);
-      }
-      if (lastIdx < 1) return null;
-
-      var lastBar = candles[lastIdx];
-      if (!(t > lastBar.time)) return null;
-
-      var span = lastBar.time - candles[lastIdx - 1].time;
-      if (!(span > 0)) return null;
-
-      var lastX = logicalCoord(lastIdx);
-      var prevX = logicalCoord(lastIdx - 1);
-      if (lastX == null || prevX == null) return null;
-
-      var stepPx = lastX - prevX;
-      if (!(stepPx > 0)) return null;
-
-      return lastX + ((t - lastBar.time) / span) * stepPx;
+      var projection = getTimeProjection();
+      if (!projection || t <= projection.time) return null;
+      return projection.x + ((t - projection.time) / projection.span) * projection.step;
     }
 
     // timeToCoordinate() only accepts exact bar times of the active series. A
@@ -586,10 +572,8 @@
       var tpDist = 4.0; // $4.00 = 40 pips (R:R 2.0)
 
       var candles = getCandles();
-      var barSpanSeconds = 300; // default 5m
-      if (Array.isArray(candles) && candles.length >= 2) {
-        barSpanSeconds = Math.max(60, candles[1].time - candles[0].time);
-      }
+      var lastIndex = getRevealedIndex(candles);
+      var barSpanSeconds = getBarSpan(candles, lastIndex);
       var targetTime = t + (20 * barSpanSeconds);
 
       var currBar = getCurrentBar();
@@ -598,8 +582,8 @@
 
       if (currBar && currBar.index != null) {
         entryBarIndex = currBar.index;
-      } else if (Array.isArray(candles) && candles.length > 0) {
-        entryBarIndex = Math.max(0, candles.length - 1);
+      } else if (lastIndex >= 0) {
+        entryBarIndex = lastIndex;
       }
 
       if (currBar) {
@@ -669,56 +653,54 @@
 
     // ------------------------------------------------------------- Selection & Drag Manipulation
 
+    function getPositionBox(pos) {
+      var display = pos.display || pos;
+      var x1 = timeToCoord(display.entryTime);
+      var x2 = timeToCoord(display.targetTime);
+      var yEntry = priceToCoord(display.entryPrice);
+      var ySl = priceToCoord(display.sl);
+      var yTp = priceToCoord(display.tp);
+      if (x1 == null || yEntry == null || ySl == null || yTp == null) return null;
+      if (x2 == null) x2 = x1 + 180;
+
+      var left = Math.min(x1, x2);
+      return { left: left, right: Math.max(x1, x2, left + 30), yEntry: yEntry, ySl: ySl, yTp: yTp };
+    }
+
+    function getPositionHandles(box) {
+      var priceX = box.right >= 5 ? Math.max(5, box.left) : box.left;
+      return [
+        { x: priceX, y: box.yTp, part: 'tp_handle' },
+        { x: priceX, y: box.ySl, part: 'sl_handle' },
+        { x: priceX, y: box.yEntry, part: 'entry_handle' },
+        { x: box.right, y: (box.yTp + box.ySl) / 2, part: 'right_handle' }
+      ];
+    }
+
     function findPositionAt(px, py) {
       for (var i = positions.length - 1; i >= 0; i -= 1) {
         var pos = positions[i];
-        var x1 = timeToCoord(pos.entryTime);
-        var x2 = timeToCoord(pos.targetTime);
-        var yEntry = priceToCoord(pos.entryPrice);
-        var ySl = priceToCoord(pos.sl);
-        var yTp = priceToCoord(pos.tp);
+        var box = getPositionBox(pos);
+        if (!box) continue;
 
-        if (x1 == null || x2 == null || yEntry == null || ySl == null || yTp == null) continue;
-
-        var minX = Math.min(x1, x2);
-        var maxX = Math.max(x1, x2);
-        var minY = Math.min(yEntry, ySl, yTp);
-        var maxY = Math.max(yEntry, ySl, yTp);
-        var midX = (minX + maxX) / 2;
-
-        // Handles are tested first and with a generous radius: they are the
-        // reason the user reaches for the box at all (R:R / TP / SL are set by
-        // dragging them), and an 18px circle gives accurate touch hit-testing.
-        if (Math.hypot(px - midX, py - yTp) <= 18) {
-          return { pos: pos, part: 'tp_handle' };
-        }
-        if (Math.hypot(px - midX, py - ySl) <= 18) {
-          return { pos: pos, part: 'sl_handle' };
-        }
-        if (Math.hypot(px - midX, py - yEntry) <= 18) {
-          return { pos: pos, part: 'entry_handle' };
-        }
-        var midY = (minY + maxY) / 2;
-        if (Math.hypot(px - maxX, py - midY) <= 18) {
-          return { pos: pos, part: 'right_handle' };
+        if (pos.id === selectedId) {
+          var handles = getPositionHandles(box);
+          var closestPart = null;
+          var closestDistance = 10;
+          for (var h = 0; h < handles.length; h += 1) {
+            var handle = handles[h];
+            var distance = Math.hypot(px - handle.x, py - handle.y);
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestPart = handle.part;
+            }
+          }
+          if (closestPart) return { pos: pos, part: closestPart };
         }
 
-        // Check if inside box bounds
-        if (px >= minX - 10 && px <= maxX + 10 && py >= minY - 10 && py <= maxY + 10) {
-          // A horizontal band is only claimed away from the box edges so the
-          // right-edge handle keeps priority.
-          if (Math.abs(py - yTp) <= 6 && px >= minX && px <= maxX - 8) {
-            return { pos: pos, part: 'tp_handle' };
-          }
-          if (Math.abs(py - ySl) <= 6 && px >= minX && px <= maxX - 8) {
-            return { pos: pos, part: 'sl_handle' };
-          }
-          if (Math.abs(py - yEntry) <= 6 && px >= minX && px <= maxX - 8) {
-            return { pos: pos, part: 'entry_handle' };
-          }
-          if (Math.abs(px - maxX) <= 10) {
-            return { pos: pos, part: 'right_handle' };
-          }
+        var minY = Math.min(box.yEntry, box.ySl, box.yTp);
+        var maxY = Math.max(box.yEntry, box.ySl, box.yTp);
+        if (px >= box.left - 10 && px <= box.right + 10 && py >= minY - 10 && py <= maxY + 10) {
           return { pos: pos, part: 'body' };
         }
       }
@@ -743,6 +725,7 @@
     function handleSelectionPointer(type, x, y, time, price, _payload) {
       var sel = getPositionById(selectedId);
       if (!sel) return;
+      var display = sel.display || sel;
 
       if (type === 'pointerdown') {
         var hit = findPositionAt(x, y);
@@ -753,16 +736,18 @@
             part: hit.part,
             origX: x,
             origY: y,
-            origEntryX: timeToCoord(sel.entryTime),
-            origEntry: sel.entryPrice,
-            origSl: sel.sl,
-            origTp: sel.tp,
-            origTime: sel.entryTime,
-            origTargetTime: sel.targetTime,
+            origEntryX: timeToCoord(display.entryTime),
+            origEntry: display.entryPrice,
+            origSl: display.sl,
+            origTp: display.tp,
+            origTime: display.entryTime,
+            origTargetTime: display.targetTime,
             origFilled: sel.filled,
             origFillTime: sel.fillTime
           };
-        } else if (!hit) {
+        } else if (hit) {
+          selectPosition(hit.pos.id);
+        } else {
           deselect();
         }
       } else if (type === 'pointermove') {
@@ -785,43 +770,50 @@
         // Active dragging
         var currPrice = price != null ? price : (chartApi && chartApi.coordinateToPrice ? chartApi.coordinateToPrice(y) : null);
         var currTime = resolveTime(time, x);
+        // Closed positions keep execution data. Replace their annotation so
+        // earlier rewind snapshots retain the display at the time of the edit.
+        var edited = sel.status === 'ACTIVE' ? sel : {
+          entryTime: display.entryTime, targetTime: display.targetTime,
+          entryPrice: display.entryPrice, sl: display.sl, tp: display.tp
+        };
 
         if (dragState.part === 'tp_handle' && currPrice != null) {
           if (sel.side === 'BUY') {
-            sel.tp = Math.max(Number((sel.entryPrice + 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
+            edited.tp = Math.max(Number((edited.entryPrice + 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
           } else {
-            sel.tp = Math.min(Number((sel.entryPrice - 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
+            edited.tp = Math.min(Number((edited.entryPrice - 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
           }
         } else if (dragState.part === 'sl_handle' && currPrice != null) {
           if (sel.side === 'BUY') {
-            sel.sl = Math.min(Number((sel.entryPrice - 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
+            edited.sl = Math.min(Number((edited.entryPrice - 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
           } else {
-            sel.sl = Math.max(Number((sel.entryPrice + 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
+            edited.sl = Math.max(Number((edited.entryPrice + 0.1).toFixed(3)), Number(currPrice.toFixed(3)));
           }
         } else if (dragState.part === 'entry_handle' && currPrice != null) {
           var deltaP = currPrice - dragState.origEntry;
-          sel.entryPrice = Number(currPrice.toFixed(3));
-          sel.sl = Number((dragState.origSl + deltaP).toFixed(3));
-          sel.tp = Number((dragState.origTp + deltaP).toFixed(3));
+          edited.entryPrice = Number(currPrice.toFixed(3));
+          edited.sl = Number((dragState.origSl + deltaP).toFixed(3));
+          edited.tp = Number((dragState.origTp + deltaP).toFixed(3));
           updateDraggedEntry(sel);
         } else if (dragState.part === 'right_handle' && currTime != null) {
-          if (currTime > sel.entryTime) {
-            sel.targetTime = currTime;
+          if (currTime > edited.entryTime) {
+            edited.targetTime = currTime;
           }
         } else if (dragState.part === 'body' && currPrice != null) {
-          if (sel.status === 'ACTIVE' && dragState.origEntryX != null) {
+          if (dragState.origEntryX != null) {
             var deltaX = x - dragState.origX;
             var entryTime = deltaX === 0 ? dragState.origTime : resolveTime(null, dragState.origEntryX + deltaX);
-            sel.entryTime = entryTime;
-            sel.targetTime = dragState.origTargetTime + (entryTime - dragState.origTime);
+            edited.entryTime = entryTime;
+            edited.targetTime = dragState.origTargetTime + (entryTime - dragState.origTime);
           }
           var origPrice = chartApi ? chartApi.coordinateToPrice(dragState.origY) : null;
           var deltaPrice = (origPrice != null) ? (currPrice - origPrice) : 0;
-          sel.entryPrice = Number((dragState.origEntry + deltaPrice).toFixed(3));
-          sel.sl = Number((dragState.origSl + deltaPrice).toFixed(3));
-          sel.tp = Number((dragState.origTp + deltaPrice).toFixed(3));
+          edited.entryPrice = Number((dragState.origEntry + deltaPrice).toFixed(3));
+          edited.sl = Number((dragState.origSl + deltaPrice).toFixed(3));
+          edited.tp = Number((dragState.origTp + deltaPrice).toFixed(3));
           updateDraggedEntry(sel);
         }
+        if (edited !== sel) sel.display = edited;
         canvasApi.requestRedraw();
       } else if (type === 'pointerup' || type === 'pointercancel') {
         if (dragState) {
@@ -876,24 +868,21 @@
     }
 
     function drawPositionBox(ctx, pos, isSelected, isGhost, width, height) {
-      var x1 = timeToCoord(pos.entryTime);
-      var x2 = timeToCoord(pos.targetTime);
-      var yEntry = priceToCoord(pos.entryPrice);
-      var ySl = priceToCoord(pos.sl);
-      var yTp = priceToCoord(pos.tp);
+      var box = getPositionBox(pos);
+      if (!box) return;
+      var left = box.left;
+      var right = box.right;
+      var yEntry = box.yEntry;
+      var ySl = box.ySl;
+      var yTp = box.yTp;
+      var boxWidth = right - left;
 
-      if (x1 == null || yEntry == null || ySl == null || yTp == null) return;
-      if (x2 == null) x2 = x1 + 180; // fallback width
-
-      var left = Math.min(x1, x2);
-      var right = Math.max(x1, x2);
-      var boxWidth = Math.max(30, right - left);
-
+      var display = pos.display || pos;
       var rr = Ledger ? Ledger.calculateRiskReward({
         side: pos.side,
-        entryPrice: pos.entryPrice,
-        sl: pos.sl,
-        tp: pos.tp,
+        entryPrice: display.entryPrice,
+        sl: display.sl,
+        tp: display.tp,
         lot: pos.lot
       }) : { riskUsd: 20, rewardUsd: 40, ratio: 2.0, riskPips: 20, rewardPips: 40 };
 
@@ -1005,18 +994,9 @@
 
       // 5. Anchor handles when selected
       if (isSelected && !isGhost) {
-        var midX = left + boxWidth / 2;
-        var handleColor = '#0284c7';
-        var handleFill = '#ffffff';
-
-        // TP Handle
-        drawHandle(ctx, midX, yTp, handleFill, handleColor);
-        // SL Handle
-        drawHandle(ctx, midX, ySl, handleFill, handleColor);
-        // Entry Handle
-        drawHandle(ctx, midX, yEntry, handleFill, handleColor);
-        // Right Edge Handle
-        drawHandle(ctx, right, (yTp + ySl) / 2, handleFill, handleColor);
+        getPositionHandles(box).forEach(function (handle) {
+          drawHandle(ctx, handle.x, handle.y, '#ffffff', '#0284c7');
+        });
       }
 
       ctx.restore();
@@ -1057,6 +1037,7 @@
       selectPosition: selectPosition,
       deselect: deselect,
       deleteSelected: deleteSelected,
+      handleChartClick: handleChartClick,
       getSelectedId: function () { return selectedId; },
       setLot: setLot,
       getLot: getLot,

@@ -288,6 +288,7 @@
       var y = (event.clientY || 0) - rect.top;
       var payload = {
         type: type,
+        tool: activeTool,
         x: x,
         y: y,
         time: coordinateToTime(x),
