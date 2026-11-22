@@ -246,9 +246,11 @@ body {
   line-height: 1.35;
 }
 
-.replay-banner-icon {
-  font-size: 0.9rem;
-  flex-shrink: 0;
+.replay-control-icon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
 }
 
 .replay-banner-text {
@@ -895,6 +897,23 @@ body {
   cursor: crosshair;
 }
 
+.replay-delete-selected {
+  display: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 11;
+  height: 44px;
+  padding-inline: 0.75rem;
+  color: var(--badge-red-text);
+}
+
+@media (pointer: coarse) and (hover: none), (max-width: 640px) {
+  .replay-delete-selected {
+    display: block;
+  }
+}
+
 /* ------------------------------------------------------------- Floating HUD */
 
 .replay-hud-floating {
@@ -966,6 +985,15 @@ body {
   color: var(--text-primary);
   border-color: rgba(255, 255, 255, 0.35);
   background-color: rgba(255, 255, 255, 0.08);
+}
+
+.replay-hud-btn-toggle .replay-control-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.is-minimized .replay-hud-btn-toggle .replay-control-icon {
+  transform: rotate(180deg);
 }
 
 .replay-hud-body {
@@ -1072,39 +1100,6 @@ body {
   color: #fbbf24;
 }
 
-/* ---------------------------------------------------- Floating Follow Button */
-
-.replay-btn-follow {
-  position: absolute;
-  bottom: 24px;
-  right: 24px;
-  z-index: 15;
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #ffffff;
-  background-color: #2563eb;
-  border: 1px solid #3b82f6;
-  border-radius: 9999px;
-  padding: 0.45rem 0.9rem;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
-  transition: all var(--transition-normal);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.replay-btn-follow:hover {
-  background-color: #1d4ed8;
-  border-color: #60a5fa;
-  transform: translateY(-1px);
-}
-
-.replay-btn-follow:active {
-  transform: translateY(0);
-}
-
 /* ---------------------------------------------------------------- Fullscreen */
 
 html.replay-expanded,
@@ -1127,18 +1122,48 @@ html.replay-expanded body {
   background-color: var(--bg-main) !important;
 }
 
-#replay-exit-fullscreen,
+.replay-fullscreen-exit,
 .replay-rotate-hint {
   display: none;
 }
 
-.is-fullscreen #replay-exit-fullscreen {
+.is-fullscreen .replay-fullscreen-exit {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .is-fullscreen .replay-transport-bar {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 0.3rem 0.6rem;
+  padding: 0.3rem 0.5rem;
+}
+
+@media (max-width: 680px) {
+  .is-fullscreen .replay-transport-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .is-fullscreen .replay-fullscreen-exit {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .is-fullscreen .replay-speed-cluster {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: auto;
+  }
 }
 
 .replay-dock[inert],
@@ -1152,13 +1177,12 @@ html.replay-expanded body {
     display: none;
   }
 
-  .is-fullscreen :is(.replay-btn, .replay-speed) {
+  .is-fullscreen :is(.replay-btn, .replay-speed):not(.replay-fullscreen-exit) {
     min-height: 32px;
   }
 
   .is-fullscreen .replay-speed,
-  .is-fullscreen #replay-play,
-  .is-fullscreen #replay-exit-fullscreen {
+  .is-fullscreen #replay-play {
     font-size: 0.75rem;
   }
 }

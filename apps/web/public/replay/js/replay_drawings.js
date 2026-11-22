@@ -43,6 +43,7 @@
     var chartApi = options.chartApi;
     var onCommit = options.onCommit || function () {};
     var onChange = options.onChange || function () {};
+    var onSelectionChange = options.onSelectionChange || function () {};
     var getCandles = options.getCandles || function () { return []; };
 
     var drawings = [];
@@ -280,13 +281,10 @@
       if (idx !== -1) {
         var removed = drawings.splice(idx, 1)[0];
         if (selectedId === id) {
-          selectedId = null;
-          if (canvasApi) {
-            canvasApi.setSelectionActive(false);
-            canvasApi.setCursor('default');
-          }
+          deselect();
+        } else if (canvasApi) {
+          canvasApi.requestRedraw();
         }
-        if (canvasApi) canvasApi.requestRedraw();
         return removed;
       }
       return null;
@@ -297,24 +295,14 @@
       drawings = [];
       draft = null;
       rulerState = null;
-      selectedId = null;
       dragState = null;
-      if (canvasApi) {
-        canvasApi.setSelectionActive(false);
-        canvasApi.setCursor('default');
-        canvasApi.requestRedraw();
-      }
+      selectDrawing(null);
       return count;
     }
 
     function setDrawings(list) {
       drawings = Array.isArray(list) ? list.slice() : [];
-      selectedId = null;
-      if (canvasApi) {
-        canvasApi.setSelectionActive(false);
-        canvasApi.setCursor('default');
-        canvasApi.requestRedraw();
-      }
+      selectDrawing(null);
     }
 
     function getSelectedId() {
@@ -322,22 +310,18 @@
     }
 
     function selectDrawing(id) {
+      var changed = selectedId !== id;
       selectedId = id;
+      if (changed) onSelectionChange(id);
       if (canvasApi) {
-        canvasApi.setSelectionActive(Boolean(id));
+        if (changed || id != null) canvasApi.setSelectionActive(id != null);
+        if (changed && id == null) canvasApi.setCursor('default');
         canvasApi.requestRedraw();
       }
     }
 
     function deselect() {
-      if (selectedId != null) {
-        selectedId = null;
-        if (canvasApi) {
-          canvasApi.setSelectionActive(false);
-          canvasApi.setCursor('default');
-          canvasApi.requestRedraw();
-        }
-      }
+      if (selectedId != null) selectDrawing(null);
     }
 
     function deleteSelected() {
@@ -1380,8 +1364,8 @@
       draft = null;
       rulerState = null;
       hoverPos = null;
-      selectedId = null;
       dragState = null;
+      deselect();
     }
 
     return {

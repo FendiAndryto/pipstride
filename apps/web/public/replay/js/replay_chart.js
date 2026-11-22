@@ -5,7 +5,7 @@
  * Viewport interaction:
  *  - When PLAYING: pins right edge to active bar (follow mode).
  *  - Zooming (barSpacing) does not break follow mode.
- *  - Dragging to past pauses follow mode and notifies listeners (floating button).
+ *  - Panning to the past releases follow mode and notifies the replay controller.
  *  - When PAUSED: user has free pan/zoom without forced movement.
  *  - Step forward/backward steps viewport precisely by one bar when following.
  */
@@ -201,8 +201,7 @@
     var indicatorSettings = new Map();
     var paneCount = 0;
     var isFollowing = true;
-    var mobilePlaying = false;
-    var isMobile = options.isMobile || function () { return false; };
+    var playing = false;
     var isProgrammaticScroll = false;
     var lastVisibleSpan = DEFAULT_VISIBLE_BARS;
     var lastBarSpacing = null;
@@ -211,6 +210,7 @@
     var dragOrigin = null;
     var isPriceScaleDrag = false;
     var latchedAxis = null;
+    var horizontalPanUntil = 0;
 
     function syncIndicatorPanes(range) {
       if (!paneCount) return;
@@ -375,15 +375,20 @@
         dragOrigin = { x: e.clientX, y: e.clientY };
         isPriceScaleDrag = e.clientX >= rect.left + tsWidth;
         latchedAxis = null;
+        horizontalPanUntil = 0;
       });
 
       var onPointerMove = function (e) {
         if (!dragOrigin) return;
-        if (latchedAxis !== null) return;
-        var dx = e.clientX - dragOrigin.x;
-        var dy = e.clientY - dragOrigin.y;
-        if (Math.abs(dx) >= 4 || Math.abs(dy) >= 4) {
-          latchedAxis = Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
+        if (latchedAxis === null) {
+          var dx = e.clientX - dragOrigin.x;
+          var dy = e.clientY - dragOrigin.y;
+          if (Math.abs(dx) >= 4 || Math.abs(dy) >= 4) {
+            latchedAxis = Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
+          }
+        }
+        if (latchedAxis === 'horizontal' && !isPriceScaleDrag) {
+          horizontalPanUntil = global.performance.now() + 100;
         }
       };
 
@@ -394,10 +399,16 @@
         isPriceScaleDrag = false;
         latchedAxis = null;
 
-        if ((wasVertical || wasPriceScale) && isFollowing && watermark >= 0) {
+        if ((wasVertical || wasPriceScale) && playing) {
           keepViewportAtEdge();
         }
       };
+
+      container.addEventListener('wheel', function (e) {
+        horizontalPanUntil = Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey
+          ? global.performance.now() + 100
+          : 0;
+      }, { capture: true, passive: true });
 
       if (typeof window !== 'undefined' && window.addEventListener) {
         window.addEventListener('pointermove', onPointerMove);
@@ -461,43 +472,17 @@
       if (isProgrammaticScroll) return;
 
       lastVisibleSpan = currentSpan;
-      if (isMobile()) {
-        if (isZoom || isPriceScaleDrag || latchedAxis === 'vertical') {
-          if (mobilePlaying) keepViewportAtEdge();
-          else if (isZoom) setFollow(false);
-        } else if (latchedAxis === 'horizontal' && watermark >= 0) {
-          if (!mobilePlaying || watermark + RIGHT_OFFSET - newRange.to > 0.5) {
-            setFollow(false);
-          } else {
-            keepViewportAtEdge();
-          }
-        }
+      if (isZoom || isPriceScaleDrag || latchedAxis === 'vertical') {
+        if (playing) keepViewportAtEdge();
+        else if (isZoom) setFollow(false);
         return;
       }
 
-      if (isZoom) {
-        if (isFollowing && watermark >= 0) {
-          keepViewportAtEdge();
-        }
-        return;
-      }
-
-      var isVerticalOrScaleDrag = (latchedAxis === 'vertical') || isPriceScaleDrag;
-      if (isVerticalOrScaleDrag) {
-        if (isFollowing && watermark >= 0) {
-          keepViewportAtEdge();
-        }
-        return;
-      }
-
-      if (watermark >= 0) {
-        var expectedTo = watermark + RIGHT_OFFSET;
-        if (expectedTo - newRange.to > 2.5) {
-          // User dragged backward to inspect past bars
+      if (watermark >= 0 && (latchedAxis === 'horizontal' || horizontalPanUntil > global.performance.now())) {
+        if (!playing || watermark + RIGHT_OFFSET - newRange.to > 0.5) {
           setFollow(false);
-        } else if (newRange.to >= expectedTo - 0.5) {
-          // User dragged back to latest bars
-          setFollow(true);
+        } else {
+          keepViewportAtEdge();
         }
       }
     });
@@ -562,23 +547,11 @@
         paintIndicator(key, indicator, target, incremental);
       });
 
-      var advanced = target !== watermark;
-
-      if (!isMobile() && !isFollowing && advanced && target > watermark) {
-        var range = chart.timeScale().getVisibleLogicalRange();
-        if (range && watermark >= 0 && watermark >= range.from && watermark <= range.to) {
-          if (target >= range.to - 0.5) {
-            setFollow(true);
-            cfg.follow = true;
-          }
-        }
-      }
-
       watermark = target;
 
-      if (advanced && isFollowing && cfg.follow !== false) {
+      if (isFollowing && cfg.follow !== false) {
         keepViewportAtEdge();
-        if (mobilePlaying) followPrice(candles[target]);
+        if (playing) followPrice(candles[target]);
       }
       syncIndicatorPanes();
       return watermark;
@@ -614,10 +587,10 @@
         if (watermark >= 0) chart.timeScale().fitContent();
       },
       snapToActive: snapToActive,
-      setFollow: setFollow,
-      setMobilePlaying: function (playing) {
-        mobilePlaying = playing;
-        if (playing) {
+      setPlaying: function (next) {
+        playing = next;
+        if (next) {
+          horizontalPanUntil = 0;
           chart.priceScale('right').applyOptions({ autoScale: true });
           snapToActive();
         }
@@ -670,7 +643,9 @@
       },
       subscribeClick: function (fn) {
         if (typeof fn === 'function') {
-          chart.subscribeClick(fn);
+          chart.subscribeClick(function (param) {
+            if (!playing) fn(param);
+          });
         }
       }
     };

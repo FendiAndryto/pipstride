@@ -30,18 +30,13 @@ const ANCHOR_SOURCE_KEYS = {
   current_fallback: 'journal_drawdown_source_current_fallback'
 };
 
-function Gauge({ label, value, limit, used, alert, tone, subline, id }) {
-  const { t } = useLanguage();
+function Gauge({ label, value, used, alert, tone, subline, id }) {
   const shown = value === null ? '—' : `${value.toFixed(2)}%`;
-  const limitText = limit === null ? '—' : t('journal_drawdown_limit', { pct: limit.toFixed(1) });
 
   return (
     <div id={id}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
-        <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {label}
-        </div>
-        <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px' }}>{limitText}</div>
+      <div className="tiny" style={{ color: 'var(--muted)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        {label}
       </div>
 
       <div className={`metric ${alert ? 'negative' : ''}`} style={{ marginTop: '2px' }}>
@@ -130,7 +125,6 @@ export default function DrawdownCard({ bridgeStatus, riskStatus }) {
           id="journal-drawdown-overall"
           label={t('journal_drawdown_overall')}
           value={view.maxOverall}
-          limit={view.overallLimit}
           used={view.overallUsed}
           alert={view.overallAlert}
           tone={drawdownTone(view.overallUsed, view.overallAlert)}
@@ -140,7 +134,6 @@ export default function DrawdownCard({ bridgeStatus, riskStatus }) {
           id="journal-drawdown-daily"
           label={t('journal_drawdown_daily')}
           value={view.dailyMax}
-          limit={view.dailyLimit}
           used={view.dailyUsed}
           alert={view.dailyAlert}
           tone={drawdownTone(view.dailyUsed, view.dailyAlert)}

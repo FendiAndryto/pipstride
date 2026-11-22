@@ -32,15 +32,7 @@
 
   /** Bars per second at 1x. 1x = one M5 bar per second, as specified. */
   var BASE_BARS_PER_SECOND = 1;
-  var SPEED_PRESETS = [0.5, 1, 2, 5, 10, 25, 50, 'max'];
-  var MAX_STEPS_PER_FRAME = 400;
-  /**
-   * Max speed aims to sweep the whole session in about this long, whatever the
-   * display refresh rate. Deriving the per-frame chunk from wall-clock time
-   * (instead of a fixed 1/300th of the session per frame) keeps Max honest on
-   * slow/headless renderers where rAF only fires ~8 times per second.
-   */
-  var MAX_SWEEP_SECONDS = 4;
+  var SPEED_PRESETS = [0.5, 1, 2, 5, 10, 25, 50];
   var CONTRACT_SIZE = 100; // XAUUSD: 100 oz per lot
   var SPREAD_COST_USD = 0.2; // must match replay_engine.SPREAD_COST_USD
 
@@ -337,25 +329,13 @@
       return snap;
     }
 
-    function stepsPerSecond() {
-      if (speed === 'max') return Infinity;
-      return BASE_BARS_PER_SECOND * speed;
-    }
-
-    /**
-     * Bars to advance in one Max-speed tick. Shared by the rAF `loop()` and the
-     * deterministic `pump()` so headless tests exercise the exact pacing the
-     * browser uses (these two used to carry independent copies that drifted).
-     */
-    function maxStepsForFrame(deltaMs) {
-      if (!index) return 0;
-      var remaining = index.totalBars - 1 - index.cursor;
-      if (remaining <= 0) return 0;
-      var perSecond = index.totalBars / MAX_SWEEP_SECONDS;
-      var steps = Math.ceil((perSecond * Math.max(deltaMs, 0)) / 1000);
-      if (steps < 1) steps = 1;
-      steps = clamp(steps, 1, MAX_STEPS_PER_FRAME);
-      return Math.min(steps, remaining);
+    function advanceClock(deltaMs) {
+      accumulator += (deltaMs / 1000) * BASE_BARS_PER_SECOND * speed;
+      var whole = Math.floor(accumulator);
+      if (whole > 0) {
+        accumulator -= whole;
+        setIndex(index.cursor + whole, 'play');
+      }
     }
 
     function stopClock() {
@@ -376,20 +356,7 @@
       var delta = stamp - lastTs;
       lastTs = stamp;
 
-      if (speed === 'max') {
-        // Bounded per frame so the tab stays responsive on 100k-bar sessions:
-        // the whole session sweeps in ~MAX_SWEEP_SECONDS regardless of frame
-        // rate, and never more than MAX_STEPS_PER_FRAME bars in one frame.
-        var steps = maxStepsForFrame(delta);
-        if (steps > 0) setIndex(index.cursor + steps, 'play');
-      } else {
-        accumulator += (delta / 1000) * stepsPerSecond();
-        var whole = Math.floor(accumulator);
-        if (whole > 0) {
-          accumulator -= whole;
-          setIndex(index.cursor + whole, 'play');
-        }
-      }
+      advanceClock(delta);
 
       if (state === STATES.PLAYING) frameHandle = raf(loop);
     }
@@ -522,8 +489,8 @@
     }
 
     function setSpeed(next) {
-      var value = next === 'max' || next === 'Max' || next === Infinity ? 'max' : Number(next);
-      if (value !== 'max' && (!isFinite(value) || value <= 0)) return speed;
+      var value = Number(next);
+      if (!isFinite(value) || value <= 0) return speed;
       speed = value;
       accumulator = 0;
       emit('speed', { speed: speed });
@@ -533,18 +500,7 @@
     /** Deterministic clock advance for headless tests (bypasses rAF). */
     function pump(deltaMs) {
       if (state !== STATES.PLAYING || !index) return snapshot();
-      var delta = typeof deltaMs === 'number' ? deltaMs : 16;
-      if (speed === 'max') {
-        var steps = maxStepsForFrame(delta);
-        if (steps > 0) setIndex(index.cursor + steps, 'play');
-      } else {
-        accumulator += (delta / 1000) * stepsPerSecond();
-        var whole = Math.floor(accumulator);
-        if (whole > 0) {
-          accumulator -= whole;
-          setIndex(index.cursor + whole, 'play');
-        }
-      }
+      advanceClock(typeof deltaMs === 'number' ? deltaMs : 16);
       return snapshot();
     }
 

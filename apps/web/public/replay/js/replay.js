@@ -39,7 +39,7 @@
   var storageNamespace;
   var mobileLayout = global.matchMedia('(pointer: coarse) and (hover: none), (max-width: 640px)');
   var fullscreenRequest = false;
-  var mobileToolsLocked = false;
+  var toolsLocked = false;
 
   var selectedStartMonth = '';
   var selectedEndMonth = '';
@@ -532,8 +532,7 @@
     chartApi = global.SmcReplayChart.init({
       container: el.chartContainer,
       indicatorPanes: el.indicatorPanes,
-      indicatorLegend: el.indicatorLegend,
-      isMobile: function () { return mobileLayout.matches; }
+      indicatorLegend: el.indicatorLegend
     });
     if (!chartApi) {
       setStatus('Library chart gagal dimuat.', 'error');
@@ -568,6 +567,10 @@
         },
         onChange: function () {
           syncStorage();
+        },
+        onSelectionChange: function (id) {
+          if (id != null && simulatorApi) simulatorApi.deselect();
+          updateDeleteSelectedButton();
         }
       });
     }
@@ -603,23 +606,19 @@
           selectTool('cursor');
           persistSimulationChange();
         },
-        onChange: persistSimulationChange
+        onChange: persistSimulationChange,
+        onSelectionChange: function (id) {
+          if (id != null && drawingsApi) drawingsApi.deselect();
+          updateDeleteSelectedButton();
+        }
       });
     }
 
-    // When chart follow state changes, update floating button visibility
     chartApi.onFollowChange(function (following) {
-      if (!following && mobileToolsLocked) controller.pause();
-      updateFollowButton(following);
+      if (!following && toolsLocked) controller.pause();
     });
 
     return chartApi;
-  }
-
-  function updateFollowButton(following) {
-    if (!el.btnFollow || !controller) return;
-    var isPlaying = controller.snapshot().state === 'PLAYING';
-    show(el.btnFollow, !mobileLayout.matches && isPlaying && !following);
   }
 
   function mountPayload(payload) {
@@ -669,7 +668,7 @@
     if (!snapshot) return;
 
     var isPlaying = snapshot.state === 'PLAYING';
-    setMobileToolsLocked(isPlaying && mobileLayout.matches);
+    setToolsLocked(isPlaying);
 
     // --- chart update --------------------------------------------------
     if (chartApi) {
@@ -678,8 +677,8 @@
 
     // --- transport bar -------------------------------------------------
     if (el.play) {
-      el.play.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
-      el.play.setAttribute('aria-label', isPlaying ? 'Pause replay' : 'Play replay');
+      el.play.textContent = isPlaying ? 'Pause' : 'Play';
+      el.play.setAttribute('aria-label', isPlaying ? 'Jeda replay' : 'Putar replay');
       el.play.classList.toggle('is-playing', isPlaying);
     }
 
@@ -700,7 +699,6 @@
     }
 
     renderSpeedPills(snapshot.speed);
-    updateFollowButton(chartApi ? chartApi.isFollowing() : true);
 
     // --- floating HUD --------------------------------------------------
     setText(el.hudStatus, snapshot.state);
@@ -735,9 +733,7 @@
     if (!el.speeds) return;
     var pills = el.speeds.querySelectorAll('[data-speed]');
     for (var i = 0; i < pills.length; i += 1) {
-      var raw = pills[i].getAttribute('data-speed');
-      var val = raw === 'max' ? 'max' : Number(raw);
-      var active = val === speed;
+      var active = Number(pills[i].getAttribute('data-speed')) === speed;
       pills[i].classList.toggle('is-active', active);
       pills[i].setAttribute('aria-pressed', active ? 'true' : 'false');
     }
@@ -748,12 +744,8 @@
   function onPlayToggle() {
     if (!active || !controller || !controller.isLoaded()) return;
     var snap = controller.snapshot();
-    if (snap.state !== 'PLAYING') {
-      if (mobileLayout.matches) {
-        if (!el.chartWrap.classList.contains('is-fullscreen')) enterFullscreen();
-      } else if (chartApi) {
-        chartApi.snapToActive();
-      }
+    if (snap.state !== 'PLAYING' && mobileLayout.matches && !el.chartWrap.classList.contains('is-fullscreen')) {
+      enterFullscreen();
     }
     render(controller.toggle());
     if (snap.state === 'PLAYING') syncSimulation();
@@ -766,8 +758,7 @@
 
   function onSpeedClick(event) {
     if (!controller) return;
-    var raw = event.currentTarget.getAttribute('data-speed');
-    controller.setSpeed(raw === 'max' ? 'max' : Number(raw));
+    controller.setSpeed(Number(event.currentTarget.getAttribute('data-speed')));
     render(controller.snapshot());
   }
 
@@ -798,14 +789,6 @@
     show(el.scrubberTooltip, false);
   }
 
-  function onSnapFollow() {
-    if (chartApi) {
-      chartApi.snapToActive();
-      chartApi.setFollow(true);
-      show(el.btnFollow, false);
-    }
-  }
-
   function fullscreenElement() {
     return document.fullscreenElement || document.webkitFullscreenElement;
   }
@@ -823,7 +806,7 @@
     if (expanded) el.chartStack.prepend(el.transport);
     else el.timeline.before(el.transport);
     if (hadFocus) el.play.focus({ preventScroll: true });
-    if (!expanded && mobileLayout.matches && mobileToolsLocked) controller.pause();
+    if (!expanded && mobileLayout.matches && toolsLocked) controller.pause();
     onResize();
   }
 
@@ -879,23 +862,24 @@
     }
   }
 
-  function setMobileToolsLocked(locked) {
-    if (mobileToolsLocked === locked) return;
-    mobileToolsLocked = locked;
+  function setToolsLocked(locked) {
+    if (toolsLocked === locked) return;
+    toolsLocked = locked;
     if (el.dock) el.dock.inert = locked;
     if (el.indicatorsMenu) {
       el.indicatorsMenu.inert = locked;
       if (locked) el.indicatorsMenu.open = false;
     }
     if (canvasApi) canvasApi.setInteractive(!locked);
-    if (chartApi) chartApi.setMobilePlaying(locked);
+    if (chartApi) chartApi.setPlaying(locked);
+    updateDeleteSelectedButton();
   }
 
   function onHudToggle() {
     if (!el.hud) return;
     var minimized = el.hud.classList.toggle('is-minimized');
     if (el.hudToggle) {
-      el.hudToggle.textContent = minimized ? '+' : '—';
+      el.hudToggle.setAttribute('aria-expanded', String(!minimized));
       el.hudToggle.setAttribute('title', minimized ? 'Bentangkan HUD (H)' : 'Ciutkan HUD (H)');
       el.hudToggle.setAttribute('aria-label', minimized ? 'Bentangkan HUD' : 'Ciutkan HUD');
     }
@@ -919,6 +903,26 @@
     if (canvasApi) {
       canvasApi.setTool(currentTool);
     }
+    updateDeleteSelectedButton();
+  }
+
+  function getSelectedObjectApi() {
+    if (simulatorApi && simulatorApi.getSelectedId() != null) return simulatorApi;
+    if (drawingsApi && drawingsApi.getSelectedId() != null) return drawingsApi;
+    return null;
+  }
+
+  function updateDeleteSelectedButton() {
+    show(el.deleteSelected, !toolsLocked && currentTool === 'cursor' && Boolean(getSelectedObjectApi()));
+  }
+
+  function deleteSelectedObject() {
+    if (toolsLocked) return false;
+    var selectedApi = getSelectedObjectApi();
+    if (!selectedApi || !selectedApi.deleteSelected()) return false;
+    if (selectedApi === simulatorApi) persistSimulationChange();
+    else syncStorage();
+    return true;
   }
 
   function onClearDrawings() {
@@ -944,7 +948,7 @@
     }
 
     // Alt + H -> Horizontal Line tool
-    if (!mobileToolsLocked && event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (!toolsLocked && event.altKey && !event.ctrlKey && !event.metaKey) {
       if (event.key === 'h' || event.key === 'H') {
         event.preventDefault();
         selectTool('hline');
@@ -954,6 +958,7 @@
 
     if (!event.altKey && !event.ctrlKey && !event.metaKey) {
       if (event.code === 'Space' || event.key === ' ') {
+        if (event.target === el.deleteSelected) return;
         event.preventDefault();
         onPlayToggle();
         return;
@@ -978,7 +983,7 @@
         toggleHud();
         return;
       }
-      if (mobileToolsLocked) return;
+      if (toolsLocked) return;
       if (event.key === 'c' || event.key === 'C') {
         event.preventDefault();
         if (simulatorApi) {
@@ -1042,14 +1047,7 @@
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
-        if (simulatorApi && simulatorApi.getSelectedId()) {
-          if (simulatorApi.deleteSelected()) persistSimulationChange();
-        } else if (drawingsApi && drawingsApi.getSelectedId()) {
-          drawingsApi.deleteSelected();
-          syncStorage();
-        } else {
-          onClearDrawings();
-        }
+        if (!deleteSelectedObject()) onClearDrawings();
         return;
       }
     }
@@ -1102,6 +1100,7 @@
     el.chartWrap = $('replay-chart-wrap');
     el.chartStack = $('replay-chart-stack');
     el.dock = $('replay-dock');
+    el.deleteSelected = $('replay-delete-selected');
     el.canvas = $('replay-drawing-canvas');
     el.chartContainer = $('replay-chart');
     el.loadedTimeframe = $('replay-loaded-timeframe');
@@ -1118,7 +1117,6 @@
     el.indicatorAppliedList = $('replay-indicator-applied-list');
     el.indicatorEmpty = $('replay-indicator-empty');
     el.chartEmpty = $('replay-chart-empty');
-    el.btnFollow = $('replay-btn-follow');
     el.hud = $('replay-hud');
     el.hudToggle = $('replay-hud-toggle');
     el.hudStatus = $('replay-hud-status');
@@ -1175,7 +1173,6 @@
     if (el.btnLoad) el.btnLoad.addEventListener('click', loadData);
     if (el.btnFullscreen) el.btnFullscreen.addEventListener('click', toggleFullscreen);
     if (el.exitFullscreen) el.exitFullscreen.addEventListener('click', exitFullscreen);
-    if (el.btnFollow) el.btnFollow.addEventListener('click', onSnapFollow);
     if (el.hudToggle) el.hudToggle.addEventListener('click', onHudToggle);
 
     if (el.dock) {
@@ -1196,6 +1193,7 @@
       });
     }
 
+    if (el.deleteSelected) el.deleteSelected.addEventListener('click', deleteSelectedObject);
     if (el.play) el.play.addEventListener('click', onPlayToggle);
     if (el.stepBack) el.stepBack.addEventListener('click', function () { onStep(-1); });
     if (el.stepForward) el.stepForward.addEventListener('click', function () { onStep(1); });
@@ -1217,9 +1215,6 @@
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-    mobileLayout.addEventListener('change', function () {
-      if (controller.isLoaded()) render(controller.snapshot());
-    });
     global.addEventListener('resize', onResize);
   }
 

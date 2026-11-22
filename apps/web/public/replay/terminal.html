@@ -48,7 +48,7 @@
               Muat Replay
             </button>
             <button type="button" id="replay-btn-fullscreen" class="replay-btn" title="Layar Penuh (F)" aria-label="Layar Penuh">
-              ⛶ Fullscreen
+              Layar penuh
             </button>
           </div>
         </div>
@@ -56,24 +56,27 @@
         <!-- Warning & Error Banners -->
         <div id="replay-period-notice" class="replay-banner replay-banner-warning hidden" role="alert"></div>
         <div id="replay-warnings-banner" class="replay-banner replay-banner-warning hidden" role="alert">
-          <span class="replay-banner-icon">⚠️</span>
+          <svg class="replay-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z M12 9v5m0 3v1"/></svg>
           <span id="replay-warnings-text" class="replay-banner-text"></span>
         </div>
 
         <div id="replay-error-banner" class="replay-banner replay-banner-error hidden" role="alert">
-          <span class="replay-banner-icon">❌</span>
+          <svg class="replay-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg>
           <span id="replay-error-text" class="replay-banner-text"></span>
         </div>
 
         <!-- Transport Bar (T-PAR-10) -->
         <div id="replay-transport" class="replay-transport-bar">
           <div class="replay-transport-cluster">
-            <button type="button" id="replay-step-back" class="replay-btn" title="Mundur 1 bar (←)" aria-label="Mundur satu bar">⏮</button>
-            <button type="button" id="replay-play" class="replay-btn replay-btn-transport" title="Putar / Jeda (Space)" aria-label="Putar replay">▶ Play</button>
-            <button type="button" id="replay-step-forward" class="replay-btn" title="Maju 1 bar (→)" aria-label="Maju satu bar">⏭</button>
+            <button type="button" id="replay-step-back" class="replay-btn" title="Mundur 1 bar (←)" aria-label="Mundur satu bar">
+              <svg class="replay-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5v14m13-14L8 12l10 7V5Z"/></svg>
+            </button>
+            <button type="button" id="replay-play" class="replay-btn replay-btn-transport" title="Putar / Jeda (Space)" aria-label="Putar replay">Play</button>
+            <button type="button" id="replay-step-forward" class="replay-btn" title="Maju 1 bar (→)" aria-label="Maju satu bar">
+              <svg class="replay-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 5v14M6 5l10 7-10 7V5Z"/></svg>
+            </button>
             <span id="replay-state" class="replay-state is-stopped">STOPPED</span>
             <span id="replay-position" class="replay-position">0 / 0</span>
-            <button type="button" id="replay-exit-fullscreen" class="replay-btn" aria-label="Keluar dari layar penuh">Keluar</button>
           </div>
 
           <div class="replay-speed-cluster">
@@ -86,9 +89,12 @@
               <button type="button" class="replay-speed" data-speed="10" aria-pressed="false">10x</button>
               <button type="button" class="replay-speed" data-speed="25" aria-pressed="false">25x</button>
               <button type="button" class="replay-speed" data-speed="50" aria-pressed="false">50x</button>
-              <button type="button" class="replay-speed" data-speed="max" aria-pressed="false">Max</button>
             </div>
           </div>
+          <button type="button" id="replay-exit-fullscreen" class="replay-btn replay-fullscreen-exit" aria-label="Keluar dari layar penuh">
+            <svg class="replay-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3v5H3m13-5v5h5M3 16h5v5m13-5h-5v5"/></svg>
+            Keluar
+          </button>
         </div>
 
         <!-- Scrubber & Timeline -->
@@ -149,10 +155,7 @@
                   <p class="chart-empty" id="replay-chart-empty">Memuat data replay…</p>
                 </div>
 
-                <!-- Floating Follow Button (Saat user pan ke masa lalu) -->
-                <button type="button" id="replay-btn-follow" class="replay-btn-follow hidden" aria-label="Ikuti lilin terbaru">
-                  ⬇ Ikuti Lilin Terbaru
-                </button>
+                <button type="button" id="replay-delete-selected" class="replay-btn replay-delete-selected hidden">Hapus pilihan</button>
 
                 <!-- Floating HUD (Pojok Kiri Atas - Top-Left) -->
                 <div id="replay-hud" class="replay-hud-floating" aria-label="Live replay HUD">
@@ -162,9 +165,11 @@
                       <span id="replay-hud-progress" class="replay-hud-progress">0.0%</span>
                       <span id="replay-loaded-timeframe" class="replay-loaded-timeframe" hidden></span>
                     </div>
-                    <button type="button" id="replay-hud-toggle" class="replay-hud-btn-toggle" title="Ciutkan / Bentangkan HUD (H)" aria-label="Ciutkan HUD">—</button>
+                    <button type="button" id="replay-hud-toggle" class="replay-hud-btn-toggle" title="Ciutkan / Bentangkan HUD (H)" aria-label="Ciutkan HUD" aria-expanded="true" aria-controls="replay-hud-body">
+                      <svg class="replay-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+                    </button>
                   </div>
-                  <div class="replay-hud-body">
+                  <div id="replay-hud-body" class="replay-hud-body">
                     <div class="replay-hud-time">
                       <div class="replay-hud-time-row">
                         <span class="replay-hud-time-label">UTC:</span>

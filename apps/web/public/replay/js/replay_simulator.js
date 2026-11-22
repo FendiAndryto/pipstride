@@ -27,6 +27,7 @@
     var onCommit = options.onCommit || function () {};
     var onChange = options.onChange || function () {};
     var onEditStart = options.onEditStart || function () {};
+    var onSelectionChange = options.onSelectionChange || function () {};
     var barEnd = options.barEnd;
 
     var ledger = (options.ledger) || (Ledger ? Ledger.create(options.ledgerOptions) : null);
@@ -196,6 +197,11 @@
 
       var lo = 0;
       var hi = candles.length - 1;
+      if (chartApi && chartApi.getWatermark) {
+        var wm = chartApi.getWatermark();
+        if (wm != null) hi = Math.min(wm, hi);
+      }
+      if (hi < 1 || t > candles[hi].time) return null;
       while (lo < hi) {
         var mid = (lo + hi) >> 1;
         if (candles[mid].time < t) lo = mid + 1;
@@ -320,11 +326,7 @@
       if (pos.status === 'ACTIVE') {
         activePosition = pos;
       }
-      selectedId = pos.id;
-      if (canvasApi) {
-        canvasApi.setSelectionActive(true);
-        canvasApi.requestRedraw();
-      }
+      selectPosition(pos.id);
       return pos;
     }
 
@@ -344,13 +346,10 @@
           if (ledger) ledger.updateFloating(null);
         }
         if (selectedId === id) {
-          selectedId = null;
-          if (canvasApi) {
-            canvasApi.setSelectionActive(false);
-            canvasApi.setCursor('default');
-          }
+          deselect();
+        } else if (canvasApi) {
+          canvasApi.requestRedraw();
         }
-        if (canvasApi) canvasApi.requestRedraw();
         return removed;
       }
       return null;
@@ -362,14 +361,9 @@
       positions = [];
       if (ledger) ledger.updateFloating(null);
       activePosition = null;
-      selectedId = null;
       draft = null;
       dragState = null;
-      if (canvasApi) {
-        canvasApi.setSelectionActive(false);
-        canvasApi.setCursor('default');
-        canvasApi.requestRedraw();
-      }
+      selectPosition(null);
       return count;
     }
 
@@ -382,12 +376,7 @@
           break;
         }
       }
-      selectedId = null;
-      if (canvasApi) {
-        canvasApi.setSelectionActive(false);
-        canvasApi.setCursor('default');
-        canvasApi.requestRedraw();
-      }
+      selectPosition(null);
     }
 
     function restoreLedger(summary) {
@@ -398,22 +387,18 @@
     }
 
     function selectPosition(id) {
+      var changed = selectedId !== id;
       selectedId = id;
+      if (changed) onSelectionChange(id);
       if (canvasApi) {
-        canvasApi.setSelectionActive(Boolean(id));
+        if (changed || id != null) canvasApi.setSelectionActive(id != null);
+        if (changed && id == null) canvasApi.setCursor('default');
         canvasApi.requestRedraw();
       }
     }
 
     function deselect() {
-      if (selectedId != null) {
-        selectedId = null;
-        if (canvasApi) {
-          canvasApi.setSelectionActive(false);
-          canvasApi.setCursor('default');
-          canvasApi.requestRedraw();
-        }
-      }
+      if (selectedId != null) selectPosition(null);
     }
 
     function deleteSelected() {
@@ -740,6 +725,21 @@
       return null;
     }
 
+    function updateDraggedEntry(position) {
+      if (position.status !== 'ACTIVE') return;
+      if (position.entryTime === dragState.origTime && position.entryPrice === dragState.origEntry) {
+        position.filled = dragState.origFilled;
+        position.fillTime = dragState.origFillTime;
+        return;
+      }
+
+      var candle = getCurrentBar();
+      if (!candle || candle.low == null || candle.high == null) return;
+      position.filled = position.entryTime <= candle.time &&
+        position.entryPrice >= candle.low - 1e-4 && position.entryPrice <= candle.high + 1e-4;
+      delete position.fillTime;
+    }
+
     function handleSelectionPointer(type, x, y, time, price, _payload) {
       var sel = getPositionById(selectedId);
       if (!sel) return;
@@ -753,11 +753,14 @@
             part: hit.part,
             origX: x,
             origY: y,
+            origEntryX: timeToCoord(sel.entryTime),
             origEntry: sel.entryPrice,
             origSl: sel.sl,
             origTp: sel.tp,
             origTime: sel.entryTime,
-            origTargetTime: sel.targetTime
+            origTargetTime: sel.targetTime,
+            origFilled: sel.filled,
+            origFillTime: sel.fillTime
           };
         } else if (!hit) {
           deselect();
@@ -800,26 +803,24 @@
           sel.entryPrice = Number(currPrice.toFixed(3));
           sel.sl = Number((dragState.origSl + deltaP).toFixed(3));
           sel.tp = Number((dragState.origTp + deltaP).toFixed(3));
-          var currBar = getCurrentBar();
-          if (currBar && currBar.low != null && currBar.high != null) {
-            sel.filled = sel.entryTime <= currBar.time &&
-              sel.entryPrice >= currBar.low - 1e-4 && sel.entryPrice <= currBar.high + 1e-4;
-          }
+          updateDraggedEntry(sel);
         } else if (dragState.part === 'right_handle' && currTime != null) {
           if (currTime > sel.entryTime) {
             sel.targetTime = currTime;
           }
-        } else if (dragState.part === 'body' && currPrice != null && currTime != null) {
+        } else if (dragState.part === 'body' && currPrice != null) {
+          if (sel.status === 'ACTIVE' && dragState.origEntryX != null) {
+            var deltaX = x - dragState.origX;
+            var entryTime = deltaX === 0 ? dragState.origTime : resolveTime(null, dragState.origEntryX + deltaX);
+            sel.entryTime = entryTime;
+            sel.targetTime = dragState.origTargetTime + (entryTime - dragState.origTime);
+          }
           var origPrice = chartApi ? chartApi.coordinateToPrice(dragState.origY) : null;
           var deltaPrice = (origPrice != null) ? (currPrice - origPrice) : 0;
           sel.entryPrice = Number((dragState.origEntry + deltaPrice).toFixed(3));
           sel.sl = Number((dragState.origSl + deltaPrice).toFixed(3));
           sel.tp = Number((dragState.origTp + deltaPrice).toFixed(3));
-          var currBar = getCurrentBar();
-          if (currBar && currBar.low != null && currBar.high != null) {
-            sel.filled = sel.entryTime <= currBar.time &&
-              sel.entryPrice >= currBar.low - 1e-4 && sel.entryPrice <= currBar.high + 1e-4;
-          }
+          updateDraggedEntry(sel);
         }
         canvasApi.requestRedraw();
       } else if (type === 'pointerup' || type === 'pointercancel') {
