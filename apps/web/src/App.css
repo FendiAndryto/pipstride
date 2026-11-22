@@ -2766,10 +2766,38 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  flex-wrap: wrap;
   padding: 0.75rem 1rem;
   background: var(--p);
   border-bottom: 1px solid var(--line);
+}
+
+.market-chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.market-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem;
+  border-radius: var(--radius-sm);
+  background: var(--p2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.market-btn-icon:hover {
+  border-color: var(--g);
+  color: var(--g);
+}
+
+.market-btn-icon:focus-visible {
+  outline: 2px solid var(--g);
+  outline-offset: 2px;
 }
 
 .market-btn-back {
@@ -2856,6 +2884,40 @@
   background: var(--bg);
 }
 
+/* Fullscreen mode (Fase 017) */
+body:has(.market-chart-fullscreen) {
+  overflow: hidden;
+}
+
+.market-chart-shell.market-chart-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  border-radius: 0;
+  border: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+.market-chart-shell.market-chart-fullscreen .market-chart-head {
+  padding: 0.5rem 1rem;
+}
+
+.market-chart-shell.market-chart-fullscreen .market-chart-frame {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.market-chart-shell.market-chart-fullscreen .market-chart-footer {
+  padding: 0.4rem 1rem;
+  font-size: 0.7rem;
+}
+
 @media (max-width: 640px) {
   .market-grid {
     grid-template-columns: 1fr;
@@ -2863,12 +2925,19 @@
   }
 
   .market-chart-head {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.65rem;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .market-chart-desc {
+    display: none;
   }
 
   .market-chart-frame {
     min-height: 70vh;
+  }
+
+  .market-chart-shell.market-chart-fullscreen .market-chart-head {
+    padding: 0.4rem 0.65rem;
   }
 }

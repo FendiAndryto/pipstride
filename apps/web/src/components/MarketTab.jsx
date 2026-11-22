@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Search, X, ArrowLeft } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Search, X, ArrowLeft, Maximize2, Minimize2 } from 'lucide-react';
 import { api } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -24,6 +24,7 @@ export default function MarketTab({ bridgeStatus, hasConnection: _hasConnection 
   // ponytail: 16 curated catalog pairs, synchronous filtering, no backend calls.
   const { t, lang } = useLanguage();
   const [selectedSymbol, setSelectedSymbol] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(MARKET_CATEGORIES.ALL);
   const changePairButtonRef = useRef(null);
@@ -39,11 +40,23 @@ export default function MarketTab({ bridgeStatus, hasConnection: _hasConnection 
     }
   }, [selectedSymbol]);
 
+  useEffect(() => {
+    if (!isFullscreen || selectedSymbol === null) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen, selectedSymbol]);
+
   const quotes = Array.isArray(bridgeStatus?.market_quotes) ? bridgeStatus.market_quotes : [];
   const hasAccountQuotes = quotes.length > 0;
 
   const handleSelectPair = (tvSymbol, baseSymbol) => {
     setSelectedSymbol(tvSymbol);
+    setIsFullscreen(true);
     if (bridgeStatus?.is_connected && baseSymbol) {
       // Best-effort notify backend so MT5 sensor watchlist syncs (Ticket 13-04)
       api.setActiveMarketSymbol(baseSymbol).catch(() => {});
@@ -62,7 +75,7 @@ export default function MarketTab({ bridgeStatus, hasConnection: _hasConnection 
 
     return (
       <div className="market-tab-container animate-fade-in">
-        <div className="market-chart-shell">
+        <div className={`market-chart-shell ${isFullscreen ? 'market-chart-fullscreen' : ''}`}>
           <div className="market-chart-head">
             <button
               type="button"
@@ -71,6 +84,7 @@ export default function MarketTab({ bridgeStatus, hasConnection: _hasConnection 
               onClick={() => {
                 restoreSearchFocus.current = true;
                 setSelectedSymbol(null);
+                setIsFullscreen(false);
               }}
               aria-label={t('market_btn_change_pair')}
             >
@@ -84,6 +98,22 @@ export default function MarketTab({ bridgeStatus, hasConnection: _hasConnection 
               {providerBadge && (
                 <span className="market-badge market-badge-cat">{providerBadge}</span>
               )}
+            </div>
+
+            <div className="market-chart-actions">
+              <button
+                type="button"
+                className="market-btn-icon"
+                onClick={() => setIsFullscreen((prev) => !prev)}
+                aria-label={isFullscreen ? t('market_btn_exit_fullscreen') : t('market_btn_fullscreen')}
+                title={isFullscreen ? t('market_btn_exit_fullscreen') : t('market_btn_fullscreen')}
+              >
+                {isFullscreen ? (
+                  <Minimize2 size={16} aria-hidden="true" />
+                ) : (
+                  <Maximize2 size={16} aria-hidden="true" />
+                )}
+              </button>
             </div>
           </div>
 
