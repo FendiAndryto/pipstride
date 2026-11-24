@@ -5,7 +5,7 @@
  * workstation:
  *  - Month range & timeframe selectors backed by the local data catalog
  *  - Responsive candlestick viewport and indicators with smart follow & snap
- *  - Floating HUD with UTC/Local time, OHLC & range
+ *  - Optional candle details with UTC/local time, OHLC and range
  *  - Transport controls & full-featured scrubber with datetime tooltip
  *  - Seamless native Fullscreen (F / Esc)
  */
@@ -41,7 +41,6 @@
   var loading = false;
   var active = false;
   var storageNamespace;
-  var mobileLayout = global.matchMedia('(pointer: coarse) and (hover: none), (max-width: 640px)');
   var fullscreenRequest = false;
   var playbackActive = false;
   var drawingSnapshot = '[]';
@@ -241,8 +240,9 @@
     el.status.className = 'replay-status' + (kind ? ' is-' + kind : '');
   }
 
-  function loadData() {
+  function loadData(event) {
     if (loading || !updatePeriodNotice()) return;
+    var fromSettings = event?.currentTarget === el.btnLoad;
     loading = true;
     el.chartTimeframe.disabled = true;
     el.chartNotice.hidden = true;
@@ -251,7 +251,6 @@
       el.btnLoad.disabled = true;
       el.btnLoad.textContent = 'Memuat…';
     }
-    show(el.errorBanner, false);
     setStatus('Memuat data replay…', 'loading');
 
     var params = buildDataParams();
@@ -265,14 +264,14 @@
       var label = (payload.meta && payload.meta.period_label) || '';
       setStatus('Siap. ' + count.toLocaleString('id-ID') + ' lilin ' +
         payload.meta.timeframe + ' termuat (' + label + ').', 'ready');
+      if (fromSettings && el.chartOptions.open) {
+        el.chartOptions.open = false;
+        el.chartOptions.querySelector('summary').focus();
+      }
     }).catch(function (err) {
       var msg = (err && err.message) ? err.message : String(err);
-      if (el.errorText) el.errorText.textContent = msg;
-      show(el.errorBanner, true);
-      if (currentPayload && el.chartWrap.classList.contains('is-fullscreen')) {
-        setText(el.chartNotice, msg);
-        el.chartNotice.hidden = false;
-      }
+      setText(el.chartNotice, msg);
+      el.chartNotice.hidden = false;
       setStatus('Gagal memuat: ' + msg, 'error');
     }).finally(function () {
       loading = false;
@@ -300,7 +299,10 @@
       populateSelectors();
       return loadData();
     }).catch(function (err) {
-      setStatus('Gagal memuat cakupan data: ' + (err && err.message ? err.message : err), 'error');
+      var message = 'Gagal memuat cakupan data: ' + (err && err.message ? err.message : err);
+      setStatus(message, 'error');
+      setText(el.chartNotice, message);
+      el.chartNotice.hidden = false;
     });
   }
 
@@ -524,7 +526,7 @@
       toggle.setAttribute('aria-label', 'Tampilkan ' + title);
       toggle.addEventListener('change', function () {
         preferences.enabled = toggle.checked;
-        if (chartApi) chartApi.setIndicator(preferences.id, preferences.enabled);
+        applyIndicatorVisibility(preferences);
         saveIndicatorPreferences();
       });
       label.append(toggle, title);
@@ -565,6 +567,10 @@
       el.indicatorAppliedList.appendChild(row);
     });
     el.indicatorEmpty.hidden = el.indicatorAppliedList.childElementCount > 0;
+  }
+
+  function applyIndicatorVisibility(preferences) {
+    if (chartApi) chartApi.setIndicator(preferences.id, preferences.enabled && el.showIndicators.checked);
   }
 
   function bindIndicatorSettings() {
@@ -631,7 +637,7 @@
       preferences.placement = el.indicatorPlacement.value;
       if (chartApi) {
         chartApi.configureIndicator(preferences.id, preferences);
-        chartApi.setIndicator(preferences.id, preferences.enabled);
+        applyIndicatorVisibility(preferences);
       }
       saveIndicatorPreferences();
       editingIndicator = null;
@@ -664,7 +670,7 @@
 
     indicatorPreferences.forEach(function (preferences) {
       chartApi.configureIndicator(preferences.id, preferences);
-      if (preferences.enabled) chartApi.setIndicator(preferences.id, true);
+      applyIndicatorVisibility(preferences);
     });
 
     if (global.SmcReplayCanvas && el.canvas && !canvasApi) {
@@ -688,6 +694,7 @@
           rememberDrawings();
           if (item && item.type === 'text') {
             drawingsApi.selectDrawing(item.id);
+            openChartMenu(el.chartOptions);
             el.drawingObjects.open = true;
             el.drawingText.focus();
             el.drawingText.select();
@@ -807,10 +814,6 @@
     renderScrubberLimits(payload.candles);
     render(controller.snapshot());
     api.snapToActive();
-    if (el.loadedTimeframe) {
-      setText(el.loadedTimeframe, 'Timeframe ' + payload.meta.timeframe);
-      el.loadedTimeframe.hidden = false;
-    }
     api.resize();
   }
 
@@ -843,11 +846,6 @@
       el.play.classList.toggle('is-playing', isPlaying);
     }
 
-    setText(el.state, snapshot.state);
-    if (el.state) {
-      el.state.className = 'replay-state is-' + String(snapshot.state).toLowerCase();
-    }
-
     var posText = (snapshot.index + 1).toLocaleString('id-ID') + ' / ' +
       snapshot.totalBars.toLocaleString('id-ID');
     setText(el.position, posText);
@@ -859,17 +857,11 @@
       el.scrubberFill.style.width = (snapshot.progress * 100).toFixed(3) + '%';
     }
 
-    renderSpeedPills(snapshot.speed);
+    el.speeds.value = String(snapshot.speed);
+    if (el.chartOptions.open && el.candleDetails.open) renderCandleDetails(snapshot.candle);
+  }
 
-    // --- floating HUD --------------------------------------------------
-    setText(el.hudStatus, snapshot.state);
-    if (el.hudStatus) {
-      el.hudStatus.className = 'replay-hud-status is-' + String(snapshot.state).toLowerCase();
-    }
-
-    setText(el.hudProgress, (snapshot.progress * 100).toFixed(1) + '%');
-
-    var candle = snapshot.candle;
+  function renderCandleDetails(candle) {
     if (candle) {
       setText(el.hudTimeUtc, formatUtc(candle.time));
       setText(el.hudTimeLocal, formatLocal(candle.time));
@@ -901,24 +893,11 @@
     }
   }
 
-  function renderSpeedPills(speed) {
-    if (!el.speeds) return;
-    var pills = el.speeds.querySelectorAll('[data-speed]');
-    for (var i = 0; i < pills.length; i += 1) {
-      var active = Number(pills[i].getAttribute('data-speed')) === speed;
-      pills[i].classList.toggle('is-active', active);
-      pills[i].setAttribute('aria-pressed', active ? 'true' : 'false');
-    }
-  }
-
   // ------------------------------------------------------------- user actions
 
   function onPlayToggle() {
     if (!active || !controller || !controller.isLoaded()) return;
     var snap = controller.snapshot();
-    if (snap.state !== 'PLAYING' && mobileLayout.matches && !el.chartWrap.classList.contains('is-fullscreen')) {
-      enterFullscreen();
-    }
     render(controller.toggle());
     if (snap.state === 'PLAYING') syncSimulation();
   }
@@ -928,9 +907,9 @@
     render(controller.step(delta));
   }
 
-  function onSpeedClick(event) {
+  function onSpeedChange() {
     if (!controller) return;
-    controller.setSpeed(Number(event.currentTarget.getAttribute('data-speed')));
+    controller.setSpeed(Number(el.speeds.value));
     render(controller.snapshot());
   }
 
@@ -966,19 +945,15 @@
   }
 
   function applyFullscreen(expanded, fallback) {
-    var wasExpanded = el.chartWrap.classList.contains('is-fullscreen');
     el.chartWrap.classList.toggle('is-fullscreen', expanded);
     document.documentElement.classList.toggle('replay-expanded', expanded);
     if (global.frameElement) {
       global.frameElement.classList.toggle('replay-expanded', expanded && fallback);
     }
-    if (expanded === wasExpanded) return;
-
-    var hadFocus = el.transport.contains(document.activeElement) || document.activeElement === el.btnFullscreen;
-    if (expanded) el.chartStack.prepend(el.transport);
-    else el.timeline.before(el.transport);
-    if (hadFocus) el.play.focus({ preventScroll: true });
-    if (!expanded && mobileLayout.matches && playbackActive) controller.pause();
+    var label = expanded ? 'Keluar dari layar penuh' : 'Layar penuh';
+    el.btnFullscreen.setAttribute('aria-pressed', String(expanded));
+    el.btnFullscreen.setAttribute('aria-label', label);
+    el.btnFullscreen.title = label + ' (F)';
     onResize();
   }
 
@@ -1015,7 +990,7 @@
 
   function toggleFullscreen() {
     if (el.chartWrap.classList.contains('is-fullscreen')) exitFullscreen();
-    else if (!mobileLayout.matches) enterFullscreen();
+    else enterFullscreen();
   }
 
   function onFullscreenChange() {
@@ -1025,10 +1000,6 @@
         return;
       }
       applyFullscreen(true, false);
-      var orientation = global.screen.orientation;
-      if (mobileLayout.matches && orientation && orientation.lock) {
-        orientation.lock('landscape').catch(function () {});
-      }
     } else if (!fullscreenRequest) {
       applyFullscreen(false, false);
     }
@@ -1040,32 +1011,25 @@
     if (chartApi) chartApi.setPlaying(playing);
   }
 
-  function onHudToggle() {
-    if (!el.hud) return;
-    var minimized = el.hud.classList.toggle('is-minimized');
-    if (el.hudToggle) {
-      el.hudToggle.setAttribute('aria-expanded', String(!minimized));
-      el.hudToggle.setAttribute('title', minimized ? 'Bentangkan HUD (H)' : 'Ciutkan HUD (H)');
-      el.hudToggle.setAttribute('aria-label', minimized ? 'Bentangkan HUD' : 'Ciutkan HUD');
+  function toggleCandleDetails() {
+    if (el.chartOptions.open && el.candleDetails.open) {
+      el.chartOptions.open = false;
+      return;
     }
-  }
-
-  function toggleHud() {
-    if (!el.hud) return;
-    el.hud.classList.toggle('is-hidden');
+    openChartMenu(el.chartOptions);
+    el.candleDetails.open = true;
+    el.candleDetails.querySelector('summary').focus();
   }
 
   function selectTool(toolName) {
     currentTool = toolName || 'cursor';
-    el.drawingTool.value = currentTool === 'long_pos' || currentTool === 'short_pos' ? 'cursor' : currentTool;
-    if (el.dock) {
-      var buttons = el.dock.querySelectorAll('[data-tool]');
-      for (var i = 0; i < buttons.length; i += 1) {
-        var isCurrent = buttons[i].getAttribute('data-tool') === currentTool;
-        buttons[i].classList.toggle('is-active', isCurrent);
-        buttons[i].setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
-      }
-    }
+    el.toolButtons.forEach(function (button, tool) {
+      button.setAttribute('aria-pressed', String(tool === currentTool));
+    });
+    var label = currentTool === 'cursor' ? 'Alat gambar dan simulasi' : 'Alat aktif: ' + el.toolButtons.get(currentTool).textContent;
+    el.toolsToggle.toggleAttribute('data-tool-active', currentTool !== 'cursor');
+    el.toolsToggle.title = label;
+    el.toolsToggle.setAttribute('aria-label', label);
     if (canvasApi) {
       canvasApi.setTool(currentTool);
     }
@@ -1101,7 +1065,7 @@
     if (!drawingsApi) return;
     var selected = drawingsApi.getSelectedId();
     var options = drawingsApi.getDrawings().map(function (drawing, index) {
-      var tool = Array.from(el.drawingTool.options).find(function (option) { return option.value === drawing.type; });
+      var tool = el.toolButtons.get(drawing.type);
       var name = drawing.type === 'text' && drawing.text ? drawing.text : (tool?.textContent || drawing.type);
       return new Option((index + 1) + '. ' + name + (drawing.hidden ? ' (tersembunyi)' : ''), drawing.id);
     });
@@ -1185,7 +1149,19 @@
     });
     $('replay-chart-reset').addEventListener('click', function () { if (chartApi) chartApi.resetView(); });
     $('replay-chart-export').addEventListener('click', exportChart);
-    el.drawingTool.addEventListener('change', function () { selectTool(el.drawingTool.value); });
+    el.toolsMenu.addEventListener('click', function (event) {
+      var tool = event.target.closest('[data-tool]');
+      if (tool) {
+        selectTool(tool.dataset.tool);
+        el.toolsMenu.open = false;
+        el.toolsToggle.focus();
+      } else if (event.target.closest('[data-action="clear"]')) {
+        onClearDrawings();
+      }
+    });
+    el.showIndicators.addEventListener('change', function () {
+      indicatorPreferences.forEach(applyIndicatorVisibility);
+    });
     el.drawingSnap.addEventListener('change', function () { if (drawingsApi) drawingsApi.setSnapEnabled(el.drawingSnap.checked); });
     el.drawingList.addEventListener('change', function () { if (drawingsApi) drawingsApi.selectDrawing(el.drawingList.value); });
     el.drawingUndo.addEventListener('click', function () { restoreDrawings(drawingUndo, drawingRedo); });
@@ -1204,22 +1180,31 @@
         drawingsApi.updateDrawing(drawingsApi.getSelectedId(), { [field]: value });
       });
     });
-    var menus = [el.drawingObjects, $('replay-chart-options')];
     document.addEventListener('click', function (event) {
-      menus.forEach(function (menu) {
+      el.chartMenus.forEach(function (menu) {
         if (menu.contains(event.target)) return;
-        if (menu === el.drawingObjects && document.activeElement === el.drawingText && el.chartContainer.contains(event.target)) return;
+        if (menu === el.chartOptions && document.activeElement === el.drawingText && el.chartContainer.contains(event.target)) return;
         menu.open = false;
       });
     });
-    menus.forEach(function (menu) {
+    el.chartMenus.forEach(function (menu) {
       menu.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape' || !menu.open) return;
         event.preventDefault();
-        menu.open = false;
-        menu.querySelector('summary').focus();
+        var details = event.target.closest('details[open]') || menu;
+        details.open = false;
+        details.querySelector('summary').focus();
       });
     });
+    [el.chartOptions, el.candleDetails].forEach(function (details) {
+      details.addEventListener('toggle', function () {
+        if (el.chartOptions.open && el.candleDetails.open) renderCandleDetails(controller.snapshot().candle);
+      });
+    });
+  }
+
+  function openChartMenu(target) {
+    el.chartMenus.forEach(function (menu) { menu.open = menu === target; });
   }
 
   function onKeyDown(event) {
@@ -1270,7 +1255,7 @@
       }
       if (event.key === 'h' || event.key === 'H') {
         event.preventDefault();
-        toggleHud();
+        toggleCandleDetails();
         return;
       }
       if (event.key === 'c' || event.key === 'C') {
@@ -1351,7 +1336,6 @@
 
   function cacheElements() {
     el.root = $('pane-replay');
-    el.heading = $('heading-replay');
 
     // Selectors
     el.monthStart = $('replay-month-start');
@@ -1360,21 +1344,15 @@
     el.timeframes = $('replay-timeframes');
     el.btnLoad = $('replay-btn-load');
     el.btnFullscreen = $('replay-btn-fullscreen');
-    el.exitFullscreen = $('replay-exit-fullscreen');
 
     // Banners
     el.warningsBanner = $('replay-warnings-banner');
     el.warningsText = $('replay-warnings-text');
-    el.errorBanner = $('replay-error-banner');
-    el.errorText = $('replay-error-text');
 
     // Transport
-    el.transport = $('replay-transport');
-    el.timeline = $('replay-timeline');
     el.stepBack = $('replay-step-back');
     el.play = $('replay-play');
     el.stepForward = $('replay-step-forward');
-    el.state = $('replay-state');
     el.position = $('replay-position');
     el.speeds = $('replay-speeds');
 
@@ -1385,13 +1363,20 @@
     el.scrubberTooltip = $('replay-scrubber-tooltip');
     el.status = $('replay-status');
 
-    // Chart & HUD
+    // Chart controls and data
     el.chartWrap = $('replay-chart-wrap');
-    el.chartStack = $('replay-chart-stack');
     el.chartTimeframe = $('replay-chart-timeframe');
     el.chartNotice = $('replay-chart-notice');
-    el.dock = $('replay-dock');
-    el.drawingTool = $('replay-drawing-tool');
+    el.toolsMenu = $('replay-tools-menu');
+    el.toolsToggle = $('replay-tools-toggle');
+    el.chartOptions = $('replay-chart-options');
+    el.candleDetails = $('replay-candle-details');
+    el.indicatorsMenu = $('replay-indicators-menu');
+    el.showIndicators = $('replay-show-indicators');
+    el.chartMenus = [el.toolsMenu, el.indicatorsMenu, el.chartOptions];
+    el.toolButtons = new Map(Array.from(el.toolsMenu.querySelectorAll('[data-tool]'), function (button) {
+      return [button.dataset.tool, button];
+    }));
     el.drawingSnap = $('replay-drawing-snap');
     el.drawingObjects = $('replay-drawing-objects');
     el.drawingList = $('replay-drawing-list');
@@ -1408,8 +1393,6 @@
     el.deleteSelected = $('replay-delete-selected');
     el.canvas = $('replay-drawing-canvas');
     el.chartContainer = $('replay-chart');
-    el.loadedTimeframe = $('replay-loaded-timeframe');
-    el.indicatorsMenu = $('replay-indicators-menu');
     el.indicatorPanes = $('replay-indicator-panes');
     el.indicatorLegend = $('replay-indicator-legend');
     el.indicatorSettings = $('replay-indicator-settings');
@@ -1425,10 +1408,6 @@
     el.indicatorAppliedList = $('replay-indicator-applied-list');
     el.indicatorEmpty = $('replay-indicator-empty');
     el.chartEmpty = $('replay-chart-empty');
-    el.hud = $('replay-hud');
-    el.hudToggle = $('replay-hud-toggle');
-    el.hudStatus = $('replay-hud-status');
-    el.hudProgress = $('replay-hud-progress');
     el.hudTimeUtc = $('replay-hud-time-utc');
     el.hudTimeLocal = $('replay-hud-time-local');
     el.hudOpen = $('replay-hud-open');
@@ -1440,21 +1419,7 @@
 
   function bindEvents() {
     bindAnalysisControls();
-    if (el.indicatorsMenu) {
-      $('replay-analysis-toolbar').appendChild(el.indicatorsMenu);
-      bindIndicatorSettings();
-      el.indicatorsMenu.addEventListener('keydown', function (event) {
-        if (event.key !== 'Escape' || !el.indicatorsMenu.open) return;
-        event.preventDefault();
-        el.indicatorsMenu.open = false;
-        el.indicatorsMenu.querySelector('summary').focus();
-      });
-      document.addEventListener('click', function (event) {
-        if (el.indicatorsMenu.open && !el.indicatorsMenu.contains(event.target)) {
-          el.indicatorsMenu.open = false;
-        }
-      });
-    }
+    bindIndicatorSettings();
 
     if (el.monthStart) {
       el.monthStart.addEventListener('change', function () {
@@ -1482,38 +1447,13 @@
 
     if (el.btnLoad) el.btnLoad.addEventListener('click', loadData);
     if (el.btnFullscreen) el.btnFullscreen.addEventListener('click', toggleFullscreen);
-    if (el.exitFullscreen) el.exitFullscreen.addEventListener('click', exitFullscreen);
-    if (el.hudToggle) el.hudToggle.addEventListener('click', onHudToggle);
-
-    if (el.dock) {
-      el.dock.addEventListener('click', function (e) {
-        var btn = e.target.closest('[data-tool]');
-        if (btn) {
-          var tool = btn.getAttribute('data-tool');
-          selectTool(tool);
-          return;
-        }
-        var actionBtn = e.target.closest('[data-action]');
-        if (actionBtn) {
-          var action = actionBtn.getAttribute('data-action');
-          if (action === 'clear') {
-            onClearDrawings();
-          }
-        }
-      });
-    }
 
     if (el.deleteSelected) el.deleteSelected.addEventListener('click', deleteSelectedObject);
     if (el.play) el.play.addEventListener('click', onPlayToggle);
     if (el.stepBack) el.stepBack.addEventListener('click', function () { onStep(-1); });
     if (el.stepForward) el.stepForward.addEventListener('click', function () { onStep(1); });
 
-    if (el.speeds) {
-      var pills = el.speeds.querySelectorAll('[data-speed]');
-      for (var i = 0; i < pills.length; i += 1) {
-        pills[i].addEventListener('click', onSpeedClick);
-      }
-    }
+    el.speeds.addEventListener('change', onSpeedChange);
 
     if (el.scrubber) {
       el.scrubber.addEventListener('input', onScrubInput);

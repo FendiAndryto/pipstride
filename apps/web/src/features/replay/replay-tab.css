@@ -1,11 +1,42 @@
+body:has(#tab-replay.active) {
+  min-height: 100dvh;
+}
+
+.dashboard-container:has(#tab-replay.active) {
+  height: 100dvh;
+  min-height: 0;
+}
+
+.dashboard-container:has(#tab-replay.active) > :is(.pipstride-header, .bottom) {
+  flex: none;
+}
+
+.dashboard-container:has(#tab-replay.active) > .bottom {
+  position: static;
+}
+
 .app-shell:has(#tab-replay.active) {
   max-width: none;
+  min-height: 0;
+  padding-bottom: 0;
+}
+
+.app-main:has(#tab-replay.active) {
+  display: flex;
+  min-height: 0;
+  padding: 8px;
+}
+
+#tab-replay.active {
+  flex: 1;
+  min-width: 0;
+  animation: none;
 }
 
 .replay-terminal-frame {
   display: block;
   width: 100%;
-  height: max(42rem, calc(100dvh - 9rem));
+  height: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
