@@ -1,12 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import { gunzipSync } from 'node:zlib';
 import { beforeAll, expect, it } from 'vitest';
 
 const publicRoot = new URL('../public/', import.meta.url);
 const window = {};
+let source;
 
 beforeAll(async () => {
-  const source = await readFile(new URL('replay/data-source.js', publicRoot), 'utf8');
+  source = await readFile(new URL('replay/data-source.js', publicRoot), 'utf8');
   runInNewContext(source, {
     window,
     AbortSignal,
@@ -14,6 +16,26 @@ beforeAll(async () => {
     Response,
     fetch: async (url) => new Response(await readFile(new URL(url.slice(1), publicRoot))),
   });
+});
+
+it('loads candle archives when the browser has already decoded the gzip transport', async () => {
+  const decodedWindow = {};
+  runInNewContext(source, {
+    window: decodedWindow,
+    AbortSignal,
+    DecompressionStream,
+    Response,
+    fetch: async (url) => {
+      const data = await readFile(new URL(url.slice(1), publicRoot));
+      return url.endsWith('.gz')
+        ? new Response(gunzipSync(data), { headers: { 'Content-Encoding': 'gzip' } })
+        : new Response(data);
+    },
+  });
+  const params = new URLSearchParams({ timeframe: 'M5', period_mode: 'month', year: '2026', month: '10' });
+  const raw = await window.PipstrideReplayData.getData(params);
+  const decoded = await decodedWindow.PipstrideReplayData.getData(params);
+  expect(decoded).toEqual(raw);
 });
 
 it('keeps unique H1 timestamps across overlapping cache months and clips dates in UTC', async () => {

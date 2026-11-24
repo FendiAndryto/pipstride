@@ -22,13 +22,17 @@
   var el = {};
   var controller = null;
   var chartApi = null;
-  var indicatorPreferences = {};
+  var indicatorPreferences = [];
+  var indicatorCatalog = new Map();
+  var editingIndicator = null;
   var canvasApi = null;
   var drawingsApi = null;
   var simulatorApi = null;
   var currentTool = 'cursor';
   var coverage = null;
   var currentPayload = null;
+  var currentPayloadPeriod = '';
+  var hoveredCandle = null;
   var periodStorage = null;
   var simulationIndex = -1;
   var processedUntil = null;
@@ -39,7 +43,10 @@
   var storageNamespace;
   var mobileLayout = global.matchMedia('(pointer: coarse) and (hover: none), (max-width: 640px)');
   var fullscreenRequest = false;
-  var toolsLocked = false;
+  var playbackActive = false;
+  var drawingSnapshot = '[]';
+  var drawingUndo = [];
+  var drawingRedo = [];
 
   var selectedStartMonth = '';
   var selectedEndMonth = '';
@@ -187,6 +194,28 @@
     populateMonthSelectors();
   }
 
+  function loadedPeriodMonths() {
+    var meta = currentPayload.meta;
+    if (meta.period_mode === 'month') {
+      var month = meta.year + '-' + pad(meta.month);
+      return [month, month];
+    }
+    return [meta.requested_start_date.slice(0, 7), meta.requested_end_date.slice(0, 7)];
+  }
+
+  function updateChartTimeframe() {
+    if (!currentPayload) return;
+    var months = loadedPeriodMonths();
+    var options = coverage.timeframes.map(function (timeframe) {
+      var option = new Option(timeframe, timeframe);
+      option.disabled = months.some(function (month) { return !availableMonths(timeframe).includes(month); });
+      return option;
+    });
+    el.chartTimeframe.replaceChildren.apply(el.chartTimeframe, options);
+    el.chartTimeframe.value = currentPayload.meta.timeframe;
+    el.chartTimeframe.disabled = loading;
+  }
+
   // ------------------------------------------------------------- data loading
 
   function buildDataParams() {
@@ -215,6 +244,8 @@
   function loadData() {
     if (loading || !updatePeriodNotice()) return;
     loading = true;
+    el.chartTimeframe.disabled = true;
+    el.chartNotice.hidden = true;
 
     if (el.btnLoad) {
       el.btnLoad.disabled = true;
@@ -238,6 +269,10 @@
       var msg = (err && err.message) ? err.message : String(err);
       if (el.errorText) el.errorText.textContent = msg;
       show(el.errorBanner, true);
+      if (currentPayload && el.chartWrap.classList.contains('is-fullscreen')) {
+        setText(el.chartNotice, msg);
+        el.chartNotice.hidden = false;
+      }
       setStatus('Gagal memuat: ' + msg, 'error');
     }).finally(function () {
       loading = false;
@@ -245,6 +280,7 @@
         el.btnLoad.textContent = 'Muat Replay';
       }
       updatePeriodNotice();
+      updateChartTimeframe();
     });
   }
 
@@ -270,8 +306,8 @@
 
   // ------------------------------------------------------------- chart & HUD
 
-  function barEnd(candle) {
-    var timeframe = currentPayload.meta.timeframe;
+  function barEnd(candle, timeframe) {
+    timeframe = timeframe || currentPayload.meta.timeframe;
     return candle.time + Number(timeframe.slice(1)) * (timeframe[0] === 'H' ? 3600 : 60);
   }
 
@@ -297,6 +333,26 @@
     syncSimulation();
   }
 
+  function rememberDrawings() {
+    var next = JSON.stringify(drawingsApi.getDrawings());
+    if (next === drawingSnapshot) return;
+    drawingUndo.push(drawingSnapshot);
+    if (drawingUndo.length > 100) drawingUndo.shift();
+    drawingRedo.length = 0;
+    drawingSnapshot = next;
+    syncStorage();
+    updateDrawingObjects();
+  }
+
+  function restoreDrawings(from, to) {
+    if (!drawingsApi || !from.length) return;
+    to.push(drawingSnapshot);
+    drawingSnapshot = from.pop();
+    drawingsApi.setDrawings(JSON.parse(drawingSnapshot));
+    syncStorage();
+    updateDrawingObjects();
+  }
+
   function resumeIndex(candles, time) {
     var lo = 0;
     var hi = candles.length - 1;
@@ -308,7 +364,7 @@
     return lo;
   }
 
-  function restoreSimulation(candles) {
+  function restoreSimulation(candles, switchPoint) {
     processedUntil = null;
     legacyUntil = null;
     projectedSimulation = false;
@@ -342,10 +398,10 @@
         processedUntil = legacyUntil;
       }
     }
-    simulationIndex = processedUntil == null ? 0 : resumeIndex(candles, processedUntil);
+    simulationIndex = switchPoint ? switchPoint.index : processedUntil == null ? 0 : resumeIndex(candles, processedUntil);
     var cursor = candles[simulationIndex];
     var end = barEnd(cursor);
-    if (processedUntil > end) {
+    if ((switchPoint ? switchPoint.cutoff : processedUntil) > end) {
       // This timeframe ends earlier. Keep the saved session intact while
       // projecting the ledger onto the last available candle.
       rewindSimulation(cursor);
@@ -392,21 +448,36 @@
 
   function saveIndicatorPreferences() {
     try {
-      global.localStorage.setItem(storageNamespace + 'indicators:v1', JSON.stringify(indicatorPreferences));
+      global.localStorage.setItem(storageNamespace + 'indicators:v2', JSON.stringify(indicatorPreferences));
     } catch {
       // Settings still work for this session if browser storage is unavailable.
     }
   }
 
+  function loadIndicatorPreferences(version) {
+    try {
+      return JSON.parse(global.localStorage.getItem(storageNamespace + 'indicators:' + version));
+    } catch {
+      return null;
+    }
+  }
+
   function renderIndicatorSettings(useDefaults) {
-    var key = el.indicatorSelected.value;
-    var preferences = indicatorPreferences[key];
-    var parameters = useDefaults ? global.ReplayIndicators.normalize(key) : preferences.parameters;
-    el.indicatorSize.value = useDefaults ? 'default' : preferences.size;
-    setText(el.indicatorDescription, el.indicatorSelected.selectedOptions[0].dataset.description);
+    var api = global.ReplayIndicators;
+    var type = el.indicatorSelected.value;
+    var option = indicatorCatalog.get(type);
+    var preferences = useDefaults ? null : editingIndicator;
+    var parameters = preferences ? preferences.parameters : api.normalize(type);
+    el.indicatorSize.value = preferences ? preferences.size : 'default';
+    el.indicatorPlacement.value = preferences ? preferences.placement : api.placement(type);
+    el.indicatorApply.disabled = !option;
+    el.indicatorReset.disabled = !option;
+    el.indicatorCancel.hidden = !editingIndicator;
+    setText(el.indicatorApply, editingIndicator ? 'Simpan' : 'Tambah');
+    setText(el.indicatorDescription, option ? option.dataset.description : 'Indikator tidak ditemukan.');
     el.indicatorError.hidden = true;
     el.indicatorParameters.replaceChildren();
-    global.ReplayIndicators.parameters[key].forEach(function (parameter) {
+    (api.parameters[type] || []).forEach(function (parameter) {
       var label = document.createElement('label');
       var input = document.createElement('input');
       label.textContent = parameter.label;
@@ -422,44 +493,75 @@
     });
   }
 
-  function setIndicatorEnabled(key, enabled) {
-    indicatorPreferences[key].enabled = enabled;
-    if (chartApi) chartApi.setIndicator(key, enabled);
-    saveIndicatorPreferences();
+  function filterIndicatorCatalog() {
+    var query = el.indicatorSearch.value.trim().toLowerCase();
+    var selected = el.indicatorSelected.value;
+    var matches = Array.from(indicatorCatalog.values()).filter(function (option) {
+      return (option.textContent + ' ' + option.dataset.description).toLowerCase().includes(query);
+    });
+    el.indicatorSelected.replaceChildren.apply(el.indicatorSelected, matches);
+    if (matches.some(function (option) { return option.value === selected; })) el.indicatorSelected.value = selected;
+  }
+
+  function newIndicatorId() {
+    var index = 1;
+    while (indicatorPreferences.some(function (instance) { return instance.id === 'instance-' + index; })) index += 1;
+    return 'instance-' + index;
   }
 
   function renderAppliedIndicators() {
     el.indicatorAppliedList.replaceChildren();
-    Array.from(el.indicatorSelected.options).forEach(function (option) {
-      var key = option.value;
-      var preferences = indicatorPreferences[key];
-      if (!preferences.applied) return;
+    indicatorPreferences.forEach(function (preferences) {
+      var option = indicatorCatalog.get(preferences.type);
+      var values = Object.values(preferences.parameters);
+      var title = option.textContent + (values.length ? ' (' + values.join(', ') + ')' : '');
 
       var row = document.createElement('li');
       var label = document.createElement('label');
       var toggle = document.createElement('input');
       toggle.type = 'checkbox';
       toggle.checked = preferences.enabled;
-      toggle.setAttribute('aria-label', 'Tampilkan ' + option.textContent);
+      toggle.setAttribute('aria-label', 'Tampilkan ' + title);
       toggle.addEventListener('change', function () {
-        setIndicatorEnabled(key, toggle.checked);
+        preferences.enabled = toggle.checked;
+        if (chartApi) chartApi.setIndicator(preferences.id, preferences.enabled);
+        saveIndicatorPreferences();
       });
-      label.append(toggle, option.textContent);
+      label.append(toggle, title);
+
+      var actions = document.createElement('span');
+      actions.className = 'replay-indicator-row-actions';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'Edit';
+      edit.setAttribute('aria-label', 'Edit ' + title);
+      edit.addEventListener('click', function () {
+        editingIndicator = preferences;
+        el.indicatorSearch.value = '';
+        filterIndicatorCatalog();
+        el.indicatorSelected.value = preferences.type;
+        renderIndicatorSettings();
+        var input = el.indicatorParameters.querySelector('input') || el.indicatorSize;
+        input.focus();
+      });
 
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = 'Hapus';
-      remove.setAttribute('aria-label', 'Hapus ' + option.textContent);
+      remove.setAttribute('aria-label', 'Hapus ' + title);
       remove.addEventListener('click', function () {
-        preferences.applied = false;
-        preferences.parameters = global.ReplayIndicators.normalize(key);
-        preferences.size = 'default';
-        setIndicatorEnabled(key, false);
-        if (el.indicatorSelected.value === key) renderIndicatorSettings();
+        indicatorPreferences = indicatorPreferences.filter(function (instance) { return instance !== preferences; });
+        if (chartApi) chartApi.removeIndicator(preferences.id);
+        if (editingIndicator === preferences) {
+          editingIndicator = null;
+          renderIndicatorSettings();
+        }
+        saveIndicatorPreferences();
         renderAppliedIndicators();
         el.indicatorSelected.focus();
       });
-      row.append(label, remove);
+      actions.append(edit, remove);
+      row.append(label, actions);
       el.indicatorAppliedList.appendChild(row);
     });
     el.indicatorEmpty.hidden = el.indicatorAppliedList.childElementCount > 0;
@@ -468,25 +570,32 @@
   function bindIndicatorSettings() {
     var api = global.ReplayIndicators;
     if (!api || !el.indicatorSettings) return;
-    var saved;
-    try {
-      saved = JSON.parse(global.localStorage.getItem(storageNamespace + 'indicators:v1'));
-    } catch {
-      // Use defaults when storage is missing or unreadable.
-    }
     Array.from(el.indicatorSelected.options).forEach(function (option) {
-      var key = option.value;
-      var stored = (saved && saved[key]) || {};
-      indicatorPreferences[key] = {
-        applied: stored.applied === true || stored.enabled === true,
-        enabled: stored.enabled === true,
-        parameters: api.normalize(key, stored.parameters),
-        size: stored.size === 'small' || stored.size === 'large' ? stored.size : 'default'
-      };
+      indicatorCatalog.set(option.value, option);
     });
+    var saved = loadIndicatorPreferences('v2');
+    indicatorPreferences = api.preferences(saved, Array.isArray(saved) ? null : loadIndicatorPreferences('v1'))
+      .filter(function (instance) { return indicatorCatalog.has(instance.type); });
+    if (!Array.isArray(saved) && indicatorPreferences.length) saveIndicatorPreferences();
+
+    el.indicatorCancel = document.createElement('button');
+    el.indicatorCancel.type = 'button';
+    el.indicatorCancel.textContent = 'Batal';
+    el.indicatorReset.after(el.indicatorCancel);
     renderIndicatorSettings();
     renderAppliedIndicators();
+    el.indicatorCancel.addEventListener('click', function () {
+      editingIndicator = null;
+      renderIndicatorSettings();
+      el.indicatorSelected.focus();
+    });
     el.indicatorSelected.addEventListener('change', function () {
+      editingIndicator = null;
+      renderIndicatorSettings();
+    });
+    el.indicatorSearch.addEventListener('input', function () {
+      editingIndicator = null;
+      filterIndicatorCatalog();
       renderIndicatorSettings();
     });
     el.indicatorSettings.addEventListener('input', function () {
@@ -496,6 +605,7 @@
     el.indicatorSettings.addEventListener('submit', function (event) {
       event.preventDefault();
       var key = el.indicatorSelected.value;
+      if (!indicatorCatalog.has(key)) return;
       var parameters = {};
       el.indicatorParameters.querySelectorAll('input').forEach(function (input) {
         parameters[input.name] = input.valueAsNumber;
@@ -511,14 +621,22 @@
         el.indicatorError.hidden = false;
         return;
       }
-      var preferences = indicatorPreferences[key];
-      preferences.applied = true;
+      var preferences = editingIndicator;
+      if (!preferences) {
+        preferences = { id: newIndicatorId(), type: key, enabled: true };
+        indicatorPreferences.push(preferences);
+      }
       preferences.parameters = api.normalize(key, parameters);
       preferences.size = el.indicatorSize.value;
-      if (chartApi) chartApi.configureIndicator(key, preferences);
-      setIndicatorEnabled(key, true);
+      preferences.placement = el.indicatorPlacement.value;
+      if (chartApi) {
+        chartApi.configureIndicator(preferences.id, preferences);
+        chartApi.setIndicator(preferences.id, preferences.enabled);
+      }
+      saveIndicatorPreferences();
+      editingIndicator = null;
       renderAppliedIndicators();
-      el.indicatorError.hidden = true;
+      renderIndicatorSettings();
     });
     el.indicatorReset.addEventListener('click', function () {
       renderIndicatorSettings(true);
@@ -538,11 +656,15 @@
       setStatus('Library chart gagal dimuat.', 'error');
       return null;
     }
+    chartApi.setChartType($('replay-chart-type').value);
+    chartApi.onCandleHover(function (candle) {
+      hoveredCandle = candle;
+      renderCrosshairValues(controller.snapshot().candle);
+    });
 
-    Object.keys(indicatorPreferences).forEach(function (key) {
-      var preferences = indicatorPreferences[key];
-      chartApi.configureIndicator(key, preferences);
-      if (preferences.enabled) chartApi.setIndicator(key, true);
+    indicatorPreferences.forEach(function (preferences) {
+      chartApi.configureIndicator(preferences.id, preferences);
+      if (preferences.enabled) chartApi.setIndicator(preferences.id, true);
     });
 
     if (global.SmcReplayCanvas && el.canvas && !canvasApi) {
@@ -561,18 +683,24 @@
         getCandles: function () {
           return (currentPayload && currentPayload.candles) || [];
         },
-        onCommit: function () {
+        onCommit: function (item) {
           selectTool('cursor');
-          syncStorage();
+          rememberDrawings();
+          if (item && item.type === 'text') {
+            drawingsApi.selectDrawing(item.id);
+            el.drawingObjects.open = true;
+            el.drawingText.focus();
+            el.drawingText.select();
+          }
         },
-        onChange: function () {
-          syncStorage();
-        },
+        onChange: rememberDrawings,
         onSelectionChange: function (id) {
           if (id != null && simulatorApi) simulatorApi.deselect();
           updateDeleteSelectedButton();
+          updateDrawingObjects();
         }
       });
+      drawingsApi.setSnapEnabled(el.drawingSnap.checked);
     }
 
     if (global.SmcReplaySimulator && canvasApi && !simulatorApi) {
@@ -626,7 +754,7 @@
     }
 
     chartApi.onFollowChange(function (following) {
-      if (!following && toolsLocked) controller.pause();
+      if (!following && playbackActive) controller.pause();
     });
 
     return chartApi;
@@ -635,6 +763,19 @@
   function mountPayload(payload) {
     var api = ensureChart();
     if (!api) return;
+
+    var meta = payload.meta;
+    var period = meta.period_mode === 'month'
+      ? [meta.symbol, meta.period_mode, meta.year, meta.month].join('/')
+      : [meta.symbol, meta.period_mode, meta.requested_start_date, meta.requested_end_date].join('/');
+    var switchPoint = null;
+    var previousCandle = controller.snapshot().candle;
+    if (currentPayloadPeriod === period && previousCandle && currentPayload.meta.timeframe !== meta.timeframe) {
+      var cutoff = barEnd(previousCandle);
+      var index = payload.candles.findIndex(function (candle) { return barEnd(candle, meta.timeframe) > cutoff; });
+      if (index === 0) throw new Error('Jalankan replay sampai satu candle ' + meta.timeframe + ' selesai sebelum mengganti timeframe.');
+      switchPoint = { index: index < 0 ? payload.candles.length - 1 : index - 1, cutoff: cutoff };
+    }
 
     show(el.chartEmpty, false);
 
@@ -649,9 +790,17 @@
 
     syncSimulation();
     currentPayload = payload;
+    hoveredCandle = null;
     periodStorage = global.SmcReplayStorage ? global.SmcReplayStorage.forPeriod(payload.meta, storageNamespace) : null;
-    if (drawingsApi && periodStorage) drawingsApi.setDrawings(periodStorage.loadDrawings());
-    var startIndex = restoreSimulation(payload.candles);
+    if (drawingsApi && currentPayloadPeriod !== period) {
+      if (periodStorage) drawingsApi.setDrawings(periodStorage.loadDrawings());
+      drawingSnapshot = JSON.stringify(drawingsApi.getDrawings());
+      drawingUndo.length = 0;
+      drawingRedo.length = 0;
+      updateDrawingObjects();
+    }
+    currentPayloadPeriod = period;
+    var startIndex = restoreSimulation(payload.candles, switchPoint);
     api.setData(payload.candles);
     controller.load(payload, startIndex);
 
@@ -679,12 +828,13 @@
     if (!snapshot) return;
 
     var isPlaying = snapshot.state === 'PLAYING';
-    setToolsLocked(isPlaying);
+    setPlaybackActive(isPlaying);
 
     // --- chart update --------------------------------------------------
     if (chartApi) {
       chartApi.seekTo(snapshot.index, { follow: chartApi.isFollowing() });
     }
+    renderCrosshairValues(snapshot.candle);
 
     // --- transport bar -------------------------------------------------
     if (el.play) {
@@ -737,6 +887,17 @@
       setText(el.hudLow, '—');
       setText(el.hudClose, '—');
       setText(el.hudRange, '—');
+    }
+  }
+
+  function renderCrosshairValues(activeCandle) {
+    var candle = activeCandle && hoveredCandle && hoveredCandle.time <= activeCandle.time ? hoveredCandle : activeCandle;
+    var output = $('replay-crosshair-values');
+    output.hidden = !candle;
+    if (candle) {
+      setText(output, ['open', 'high', 'low', 'close'].map(function (key) {
+        return key[0].toUpperCase() + ' ' + formatPrice(candle[key]);
+      }).join('   ·   '));
     }
   }
 
@@ -817,7 +978,7 @@
     if (expanded) el.chartStack.prepend(el.transport);
     else el.timeline.before(el.transport);
     if (hadFocus) el.play.focus({ preventScroll: true });
-    if (!expanded && mobileLayout.matches && toolsLocked) controller.pause();
+    if (!expanded && mobileLayout.matches && playbackActive) controller.pause();
     onResize();
   }
 
@@ -873,17 +1034,10 @@
     }
   }
 
-  function setToolsLocked(locked) {
-    if (toolsLocked === locked) return;
-    toolsLocked = locked;
-    if (el.dock) el.dock.inert = locked;
-    if (el.indicatorsMenu) {
-      el.indicatorsMenu.inert = locked;
-      if (locked) el.indicatorsMenu.open = false;
-    }
-    if (canvasApi) canvasApi.setInteractive(!locked);
-    if (chartApi) chartApi.setPlaying(locked);
-    updateDeleteSelectedButton();
+  function setPlaybackActive(playing) {
+    if (playbackActive === playing) return;
+    playbackActive = playing;
+    if (chartApi) chartApi.setPlaying(playing);
   }
 
   function onHudToggle() {
@@ -903,6 +1057,7 @@
 
   function selectTool(toolName) {
     currentTool = toolName || 'cursor';
+    el.drawingTool.value = currentTool === 'long_pos' || currentTool === 'short_pos' ? 'cursor' : currentTool;
     if (el.dock) {
       var buttons = el.dock.querySelectorAll('[data-tool]');
       for (var i = 0; i < buttons.length; i += 1) {
@@ -924,42 +1079,166 @@
   }
 
   function updateDeleteSelectedButton() {
-    show(el.deleteSelected, !toolsLocked && currentTool === 'cursor' && Boolean(getSelectedObjectApi()));
+    show(el.deleteSelected, currentTool === 'cursor' && Boolean(getSelectedObjectApi()));
   }
 
   function deleteSelectedObject() {
-    if (toolsLocked) return false;
     var selectedApi = getSelectedObjectApi();
     if (!selectedApi || !selectedApi.deleteSelected()) return false;
     if (selectedApi === simulatorApi) persistSimulationChange();
-    else syncStorage();
+    else rememberDrawings();
     return true;
   }
 
   function onClearDrawings() {
-    if (drawingsApi) {
-      drawingsApi.clearDrawings();
-    }
-    if (simulatorApi && simulatorApi.clearPositions()) {
-      projectedSimulation = false;
-    }
-    if (canvasApi) {
-      canvasApi.requestRedraw();
-    }
-    syncStorage();
+    if (!drawingsApi) return;
+    drawingsApi.clearDrawings();
+    if (canvasApi) canvasApi.requestRedraw();
+    rememberDrawings();
+  }
+
+  function updateDrawingObjects() {
+    if (!drawingsApi) return;
+    var selected = drawingsApi.getSelectedId();
+    var options = drawingsApi.getDrawings().map(function (drawing, index) {
+      var tool = Array.from(el.drawingTool.options).find(function (option) { return option.value === drawing.type; });
+      var name = drawing.type === 'text' && drawing.text ? drawing.text : (tool?.textContent || drawing.type);
+      return new Option((index + 1) + '. ' + name + (drawing.hidden ? ' (tersembunyi)' : ''), drawing.id);
+    });
+    el.drawingList.replaceChildren.apply(el.drawingList, options);
+    el.drawingList.value = selected || '';
+    var drawing = drawingsApi.getDrawings().find(function (item) { return item.id === selected; });
+    el.drawingProperties.disabled = !drawing;
+    el.drawingUndo.disabled = !drawingUndo.length;
+    el.drawingRedo.disabled = !drawingRedo.length;
+    if (!drawing) return;
+    el.drawingColor.value = /^#[\da-f]{6}$/i.test(drawing.color) ? drawing.color : '#45e0ad';
+    el.drawingWidth.value = drawing.lineWidth || 2;
+    el.drawingStyle.value = drawing.lineStyle || 'solid';
+    el.drawingTextField.hidden = drawing.type !== 'text';
+    el.drawingText.value = drawing.text || '';
+    el.drawingHidden.checked = Boolean(drawing.hidden);
+    el.drawingLocked.checked = Boolean(drawing.locked);
+  }
+
+  function exportChart() {
+    if (!chartApi || chartApi.getWatermark() < 0) return;
+    var status = $('replay-chart-export-status');
+    status.hidden = false;
+    status.textContent = 'Menyiapkan gambar…';
+    if (canvasApi) canvasApi.requestRedraw();
+    global.requestAnimationFrame(function () {
+      try {
+        var main = chartApi.getChart().takeScreenshot();
+        var panes = chartApi.getIndicatorScreenshots();
+        var output = document.createElement('canvas');
+        output.width = main.width;
+        output.height = main.height + panes.reduce(function (sum, pane) { return sum + pane.height; }, 0);
+        var context = output.getContext('2d');
+        context.drawImage(main, 0, 0);
+        if (el.canvas.width && el.canvas.height) context.drawImage(el.canvas, 0, 0, main.width, main.height);
+        var y = main.height;
+        panes.forEach(function (pane) {
+          context.drawImage(pane, 0, y, output.width, pane.height);
+          y += pane.height;
+        });
+        output.toBlob(function (blob) {
+          if (!blob) {
+            status.textContent = 'Gambar chart gagal dibuat.';
+            return;
+          }
+          var url = URL.createObjectURL(blob);
+          var link = document.createElement('a');
+          link.href = url;
+          link.download = 'pipstride-xauusd-' + currentPayload.meta.timeframe + '.png';
+          link.click();
+          global.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          status.textContent = 'Gambar chart siap diunduh.';
+        }, 'image/png');
+      } catch {
+        status.textContent = 'Gambar chart gagal dibuat.';
+      }
+    });
+  }
+
+  function bindAnalysisControls() {
+    el.chartTimeframe.addEventListener('change', function () {
+      var months = loadedPeriodMonths();
+      selectedStartMonth = months[0];
+      selectedEndMonth = months[1];
+      selectedTimeframe = el.chartTimeframe.value;
+      updateTimeframePills();
+      populateMonthSelectors();
+      loadData();
+    });
+    $('replay-chart-type').addEventListener('change', function (event) {
+      if (!chartApi) return;
+      chartApi.setChartType(event.target.value);
+      if (canvasApi) canvasApi.requestRedraw();
+    });
+    $('replay-chart-grid').addEventListener('change', function (event) {
+      if (chartApi) chartApi.setGridVisible(event.target.checked);
+    });
+    $('replay-chart-scale').addEventListener('change', function (event) {
+      if (chartApi) chartApi.setScaleMode(event.target.value);
+      if (canvasApi) canvasApi.requestRedraw();
+    });
+    $('replay-chart-reset').addEventListener('click', function () { if (chartApi) chartApi.resetView(); });
+    $('replay-chart-export').addEventListener('click', exportChart);
+    el.drawingTool.addEventListener('change', function () { selectTool(el.drawingTool.value); });
+    el.drawingSnap.addEventListener('change', function () { if (drawingsApi) drawingsApi.setSnapEnabled(el.drawingSnap.checked); });
+    el.drawingList.addEventListener('change', function () { if (drawingsApi) drawingsApi.selectDrawing(el.drawingList.value); });
+    el.drawingUndo.addEventListener('click', function () { restoreDrawings(drawingUndo, drawingRedo); });
+    el.drawingRedo.addEventListener('click', function () { restoreDrawings(drawingRedo, drawingUndo); });
+    $('replay-drawing-duplicate').addEventListener('click', function () { drawingsApi.duplicateDrawing(drawingsApi.getSelectedId()); });
+    $('replay-drawing-remove').addEventListener('click', deleteSelectedObject);
+    [
+      [el.drawingColor, 'color'], [el.drawingWidth, 'lineWidth'], [el.drawingStyle, 'lineStyle'],
+      [el.drawingText, 'text'], [el.drawingHidden, 'hidden'], [el.drawingLocked, 'locked']
+    ].forEach(function (binding) {
+      var input = binding[0];
+      var field = binding[1];
+      input.addEventListener('change', function () {
+        if (!input.reportValidity()) return;
+        var value = input.type === 'checkbox' ? input.checked : input.type === 'number' ? input.valueAsNumber : input.value;
+        drawingsApi.updateDrawing(drawingsApi.getSelectedId(), { [field]: value });
+      });
+    });
+    var menus = [el.drawingObjects, $('replay-chart-options')];
+    document.addEventListener('click', function (event) {
+      menus.forEach(function (menu) {
+        if (menu.contains(event.target)) return;
+        if (menu === el.drawingObjects && document.activeElement === el.drawingText && el.chartContainer.contains(event.target)) return;
+        menu.open = false;
+      });
+    });
+    menus.forEach(function (menu) {
+      menu.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || !menu.open) return;
+        event.preventDefault();
+        menu.open = false;
+        menu.querySelector('summary').focus();
+      });
+    });
   }
 
   function onKeyDown(event) {
     if (!active || event.defaultPrevented) return;
     if (el.indicatorsMenu && el.indicatorsMenu.contains(event.target)) return;
     if (isTypingTarget(event.target)) return;
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) restoreDrawings(drawingRedo, drawingUndo);
+      else restoreDrawings(drawingUndo, drawingRedo);
+      return;
+    }
     if (event.key === 'Escape' && el.chartWrap.classList.contains('is-fullscreen')) {
       exitFullscreen();
       return;
     }
 
     // Alt + H -> Horizontal Line tool
-    if (!toolsLocked && event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.altKey && !event.ctrlKey && !event.metaKey) {
       if (event.key === 'h' || event.key === 'H') {
         event.preventDefault();
         selectTool('hline');
@@ -969,7 +1248,7 @@
 
     if (!event.altKey && !event.ctrlKey && !event.metaKey) {
       if (event.code === 'Space' || event.key === ' ') {
-        if (event.target === el.deleteSelected) return;
+        if (event.target.closest?.('button, summary')) return;
         event.preventDefault();
         onPlayToggle();
         return;
@@ -994,7 +1273,6 @@
         toggleHud();
         return;
       }
-      if (toolsLocked) return;
       if (event.key === 'c' || event.key === 'C') {
         event.preventDefault();
         if (simulatorApi) {
@@ -1058,7 +1336,7 @@
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
-        if (!deleteSelectedObject()) onClearDrawings();
+        deleteSelectedObject();
         return;
       }
     }
@@ -1110,7 +1388,23 @@
     // Chart & HUD
     el.chartWrap = $('replay-chart-wrap');
     el.chartStack = $('replay-chart-stack');
+    el.chartTimeframe = $('replay-chart-timeframe');
+    el.chartNotice = $('replay-chart-notice');
     el.dock = $('replay-dock');
+    el.drawingTool = $('replay-drawing-tool');
+    el.drawingSnap = $('replay-drawing-snap');
+    el.drawingObjects = $('replay-drawing-objects');
+    el.drawingList = $('replay-drawing-list');
+    el.drawingProperties = $('replay-drawing-properties');
+    el.drawingUndo = $('replay-drawing-undo');
+    el.drawingRedo = $('replay-drawing-redo');
+    el.drawingColor = $('replay-drawing-color');
+    el.drawingWidth = $('replay-drawing-width');
+    el.drawingStyle = $('replay-drawing-style');
+    el.drawingTextField = $('replay-drawing-text-field');
+    el.drawingText = $('replay-drawing-text');
+    el.drawingHidden = $('replay-drawing-hidden');
+    el.drawingLocked = $('replay-drawing-locked');
     el.deleteSelected = $('replay-delete-selected');
     el.canvas = $('replay-drawing-canvas');
     el.chartContainer = $('replay-chart');
@@ -1119,10 +1413,13 @@
     el.indicatorPanes = $('replay-indicator-panes');
     el.indicatorLegend = $('replay-indicator-legend');
     el.indicatorSettings = $('replay-indicator-settings');
+    el.indicatorSearch = $('replay-indicator-search');
     el.indicatorSelected = $('replay-indicator-selected');
     el.indicatorDescription = $('replay-indicator-description');
     el.indicatorParameters = $('replay-indicator-parameters');
     el.indicatorSize = $('replay-indicator-size');
+    el.indicatorPlacement = $('replay-indicator-placement');
+    el.indicatorApply = $('replay-indicator-apply');
     el.indicatorError = $('replay-indicator-error');
     el.indicatorReset = $('replay-indicator-reset');
     el.indicatorAppliedList = $('replay-indicator-applied-list');
@@ -1142,7 +1439,9 @@
   }
 
   function bindEvents() {
+    bindAnalysisControls();
     if (el.indicatorsMenu) {
+      $('replay-analysis-toolbar').appendChild(el.indicatorsMenu);
       bindIndicatorSettings();
       el.indicatorsMenu.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape' || !el.indicatorsMenu.open) return;

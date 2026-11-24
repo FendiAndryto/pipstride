@@ -43,7 +43,11 @@
 
   async function getMonth(file) {
     const response = await request(file);
-    const body = response.body.pipeThrough(new DecompressionStream('gzip'));
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const archive = new Response(bytes);
+    // Some servers send Content-Encoding: gzip, which fetch decodes for us.
+    if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return archive.json();
+    const body = archive.body.pipeThrough(new DecompressionStream('gzip'));
     return new Response(body).json();
   }
 

@@ -1,21 +1,15 @@
 /**
- * Price Action Drawing Tools Engine for Replay Terminal (Fase 3: T-SIM-05A, T-SIM-05B, T-SIM-05C).
+ * Replay drawing interaction, hit testing, selection, and canvas rendering.
  *
- * Implements interactive drawing lifecycle, hit-testing, selection, drag-manipulation,
- * and high-DPI canvas rendering for:
- *  1. Horizontal Line (Alt+H): S/R level with right-axis price tag pill.
- *  2. Rectangle Zone Box (R): Supply/Demand & Order Block box with rubber-band preview.
- *  3. Trendline (T): Diagonal trendline with degree angle badge and pip delta.
- *  4. Transient Ruler (M / Shift+Click): Pip distance, bar count, and dollar value measurement.
- *  5. Selection & Manipulation: subscribeClick hit-testing, anchor handles, move/resize, Delete key.
- *
- * All drawings are stored in market coordinates (epoch seconds UTC, price float)
- * ensuring exact alignment across panning, zooming, and timeframe switching.
+ * Store anchors as UTC epoch seconds and prices so drawings follow the chart
+ * when the user pans, zooms, or switches timeframe.
  */
 (function (global) {
   'use strict';
 
   var idCounter = 0;
+  var annotationAnchors = { ray: 2, vline: 1, channel: 3, 'fib-extension': 3, text: 1, arrow: 2 };
+  var extensionLevels = [0, 0.618, 1, 1.272, 1.618, 2, 2.618];
 
   function nextId(prefix) {
     idCounter += 1;
@@ -45,6 +39,8 @@
     var onChange = options.onChange || function () {};
     var onSelectionChange = options.onSelectionChange || function () {};
     var getCandles = options.getCandles || function () { return []; };
+    var getSnapCandles = options.getSnapCandles;
+    var getText = options.getText;
 
     var drawings = [];
     var draft = null;
@@ -53,6 +49,49 @@
     var selectedId = null;
     var dragState = null;
     var isDestroyed = false;
+    var snapEnabled = false;
+
+    function lastRevealedIndex(candles) {
+      var wm = chartApi && chartApi.getWatermark ? chartApi.getWatermark() : null;
+      return wm == null ? candles.length - 1 : Math.min(wm, candles.length - 1);
+    }
+
+    function snapPoint(x, y, time) {
+      if (!snapEnabled) return null;
+      var candles = getSnapCandles ? getSnapCandles() : getCandles();
+      var lastIndex = getSnapCandles ? candles.length - 1 : lastRevealedIndex(candles);
+      if (lastIndex < 0) return null;
+      var last = candles[lastIndex];
+      var lastX = timeToCoord(last.time);
+      if (lastX == null || (time == null && x > lastX + 1) || time > last.time) return null;
+
+      var target = time != null ? time : snapToRevealedBar(x);
+      var index = lowerBoundTime(candles, target, lastIndex);
+      if (index > 0 && Math.abs(candles[index - 1].time - target) < Math.abs(candles[index].time - target)) {
+        index -= 1;
+      }
+      var candle = candles[index];
+      var levels = [candle.open, candle.high, candle.low, candle.close];
+      var best = null;
+      levels.forEach(function (level) {
+        if (!Number.isFinite(level)) return;
+        var coordinate = priceToCoord(level);
+        if (coordinate != null && (!best || Math.abs(coordinate - y) < Math.abs(best.y - y))) {
+          best = { time: candle.time, price: level, y: coordinate };
+        }
+      });
+      return best;
+    }
+
+    function lowerBoundTime(candles, time, hi) {
+      var lo = 0;
+      while (lo < hi) {
+        var mid = (lo + hi) >> 1;
+        if (candles[mid].time < time) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo;
+    }
 
     function resolveTime(time, x) {
       if (time != null && !isNaN(time) && time > 0) return time;
@@ -75,11 +114,7 @@
       var candles = getCandles();
       if (!Array.isArray(candles) || candles.length < 2 || x == null || isNaN(x)) return null;
 
-      var lastIdx = candles.length - 1;
-      if (chartApi && chartApi.getWatermark) {
-        var wm = chartApi.getWatermark();
-        if (wm != null && wm >= 0) lastIdx = Math.min(wm, lastIdx);
-      }
+      var lastIdx = lastRevealedIndex(candles);
       if (lastIdx < 1) return null;
 
       var lastX = logicalCoord(lastIdx);
@@ -119,11 +154,8 @@
       var candles = getCandles();
       if (!Array.isArray(candles) || candles.length === 0) return 1761868800;
 
-      var lastIdx = candles.length - 1;
-      if (chartApi && chartApi.getWatermark) {
-        var wm = chartApi.getWatermark();
-        if (wm != null && wm >= 0) lastIdx = Math.min(wm, lastIdx);
-      }
+      var lastIdx = lastRevealedIndex(candles);
+      if (lastIdx < 0) return null;
 
       var idx = lastIdx;
       var ts = (chartApi && chartApi.timeScale) ? chartApi.timeScale() : null;
@@ -152,7 +184,8 @@
         var exact = chartApi.timeToCoordinate(t);
         if (exact != null) return exact;
       } catch {}
-      return interpolateCoord(t) != null ? interpolateCoord(t) : extrapolateCoord(t);
+      var interpolated = interpolateCoord(t);
+      return interpolated != null ? interpolated : extrapolateCoord(t);
     }
 
     // timeToCoordinate() returns null for times past the newest revealed bar, so
@@ -162,11 +195,7 @@
       var candles = getCandles();
       if (!Array.isArray(candles) || candles.length < 2) return null;
 
-      var lastIdx = candles.length - 1;
-      if (chartApi && chartApi.getWatermark) {
-        var wm = chartApi.getWatermark();
-        if (wm != null && wm >= 0) lastIdx = Math.min(wm, lastIdx);
-      }
+      var lastIdx = lastRevealedIndex(candles);
       if (lastIdx < 1) return null;
 
       var lastBar = candles[lastIdx];
@@ -195,13 +224,9 @@
       var candles = getCandles();
       if (!Array.isArray(candles) || candles.length < 2) return null;
 
-      var lo = 0;
-      var hi = candles.length - 1;
-      while (lo < hi) {
-        var mid = (lo + hi) >> 1;
-        if (candles[mid].time < t) lo = mid + 1;
-        else hi = mid;
-      }
+      var lastIdx = lastRevealedIndex(candles);
+      if (lastIdx < 0) return null;
+      var lo = lowerBoundTime(candles, t, lastIdx);
       if (candles[lo] && candles[lo].time === t) {
         return logicalCoord(lo);
       }
@@ -262,11 +287,62 @@
       return null;
     }
 
+    function normalizeDrawing(item) {
+      var normalized = Object.assign({
+        color: item.type === 'fib' || item.type === 'fib-extension' ? '#a78bfa' : '#38bdf8',
+        lineWidth: item.type === 'fib' ? 1 : 1.5,
+        lineStyle: item.type === 'hline' ? 'dashed' : 'solid',
+        hidden: false,
+        locked: false,
+        version: 2
+      }, item);
+      if (!(item.version >= 2)) {
+        normalized.version = 2;
+        if (item.type === 'fib') {
+          normalized.color = '#a78bfa';
+          normalized.lineWidth = 1;
+        }
+      }
+      return normalized;
+    }
+
     function addDrawing(item) {
       if (!item || !item.type) return null;
       if (!item.id) item.id = nextId(item.type);
+      item = normalizeDrawing(item);
       drawings.push(item);
       if (canvasApi) canvasApi.requestRedraw();
+      return item;
+    }
+
+    function updateDrawing(id, patch) {
+      var item = getDrawingById(id);
+      if (!item || !patch) return null;
+      if (typeof patch.color === 'string' && /^#[0-9a-f]{6}$/i.test(patch.color)) item.color = patch.color;
+      if (Number.isFinite(patch.lineWidth) && patch.lineWidth > 0) item.lineWidth = patch.lineWidth;
+      if (['solid', 'dashed', 'dotted'].indexOf(patch.lineStyle) >= 0) item.lineStyle = patch.lineStyle;
+      if (typeof patch.hidden === 'boolean') item.hidden = patch.hidden;
+      if (typeof patch.locked === 'boolean') item.locked = patch.locked;
+      if (item.type === 'text' && typeof patch.text === 'string' && patch.text.trim()) {
+        item.text = patch.text.trim();
+      }
+      if ((item.hidden || item.locked) && dragState && dragState.item === item) dragState = null;
+      if (canvasApi) {
+        if (item.id === selectedId) updateCanvasSelection();
+        canvasApi.requestRedraw();
+      }
+      onChange(item);
+      return item;
+    }
+
+    function duplicateDrawing(id) {
+      var original = getDrawingById(id);
+      if (!original) return null;
+      var copy = clone(original);
+      delete copy.id;
+      var item = addDrawing(copy);
+      onCommit(item);
+      selectDrawing(item.id);
       return item;
     }
 
@@ -301,7 +377,11 @@
     }
 
     function setDrawings(list) {
-      drawings = Array.isArray(list) ? list.slice() : [];
+      drawings = Array.isArray(list) ? list.filter(function (item) {
+        return item && item.type;
+      }).map(normalizeDrawing) : [];
+      draft = null;
+      dragState = null;
       selectDrawing(null);
     }
 
@@ -314,10 +394,15 @@
       selectedId = id;
       if (changed) onSelectionChange(id);
       if (canvasApi) {
-        if (changed || id != null) canvasApi.setSelectionActive(id != null);
+        if (changed || id != null) updateCanvasSelection();
         if (changed && id == null) canvasApi.setCursor('default');
         canvasApi.requestRedraw();
       }
+    }
+
+    function updateCanvasSelection() {
+      var selected = getDrawingById(selectedId);
+      canvasApi.setSelectionActive(Boolean(selected && !selected.hidden && !selected.locked));
     }
 
     function deselect() {
@@ -363,10 +448,14 @@
       var y = payload.y;
       var time = payload.time;
       var price = payload.price;
+      var snapped = tool !== 'ruler' && !payload.shiftKey ? snapPoint(x, y, time) : null;
+      var anchorTime = snapped ? snapped.time : time;
+      var anchorPrice = snapped ? snapped.price : price;
+      var anchorY = snapped ? snapped.y : y;
 
       // In cursor mode with a selected item, handle selection manipulation
       if (tool === 'cursor' && selectedId != null) {
-        handleSelectionPointer(type, x, y, time, price, payload);
+        handleSelectionPointer(type, x, y, time, price, snapped);
         return;
       }
 
@@ -377,16 +466,73 @@
       }
 
       if (tool === 'hline') {
-        handleHLinePointer(type, x, y, time, price);
+        handleHLinePointer(type, x, anchorY, anchorTime, anchorPrice);
       } else if (tool === 'rect') {
-        handleRectPointer(type, x, y, time, price);
+        handleRectPointer(type, x, anchorY, anchorTime, anchorPrice);
       } else if (tool === 'trendline' || tool === 'fib') {
-        handleTwoAnchorPointer(tool, type, x, y, time, price);
+        handleTwoAnchorPointer(tool, type, x, anchorY, anchorTime, anchorPrice);
+      } else if (Object.hasOwn(annotationAnchors, tool)) {
+        handleAnnotationPointer(tool, type, x, y, anchorTime, anchorPrice);
       } else if (tool === 'ruler') {
         handleRulerPointer(type, x, y, time, price);
       } else {
         hoverPos = null;
         draft = null;
+      }
+    }
+
+    function setAnnotationAnchor(item, anchor, time, price) {
+      item['t' + anchor] = time;
+      if (item.type !== 'vline') item['p' + anchor] = Number(price.toFixed(3));
+    }
+
+    function handleAnnotationPointer(tool, type, x, y, time, price) {
+      if (type === 'pointercancel') {
+        draft = null;
+        canvasApi.requestRedraw();
+        return;
+      }
+      if (type !== 'pointermove' && type !== 'pointerdown' && type !== 'pointerup') return;
+      var t = resolveEdgeTime(time, x);
+      if (t == null || (tool !== 'vline' && !Number.isFinite(price))) return;
+      var count = annotationAnchors[tool];
+
+      if (!draft) {
+        if (type !== 'pointerdown') return;
+        var drawing = { type: tool };
+        setAnnotationAnchor(drawing, 1, t, price);
+        if (count === 1) {
+          if (tool === 'text') {
+            var value = getText ? getText() : 'Text';
+            if (typeof value !== 'string' || !value.trim()) return;
+            drawing.text = value.trim();
+          }
+          onCommit(addDrawing(drawing));
+        } else {
+          draft = Object.assign(drawing, { anchor: 2, firstX: x, firstY: y });
+          canvasApi.requestRedraw();
+        }
+        return;
+      }
+
+      var anchor = draft.anchor;
+      setAnnotationAnchor(draft, anchor, t, price);
+      var moved = Math.hypot(x - draft.firstX, y - draft.firstY) > 5;
+      var finishAnchor = type === 'pointerdown' || (type === 'pointerup' && anchor === 2 && moved);
+      if (finishAnchor && anchor === 2 &&
+          draft.t1 === draft.t2 && (tool === 'channel' || draft.p1 === draft.p2)) {
+        finishAnchor = false;
+      }
+      if (finishAnchor && anchor === count) {
+        var item = { type: tool };
+        for (var n = 1; n <= count; n += 1) {
+          setAnnotationAnchor(item, n, draft['t' + n], draft['p' + n]);
+        }
+        draft = null;
+        onCommit(addDrawing(item));
+      } else {
+        if (finishAnchor) draft.anchor += 1;
+        canvasApi.requestRedraw();
       }
     }
 
@@ -545,8 +691,6 @@
           p1: Number(d.p1.toFixed(3)),
           t2: resolveEdgeTime(t2, x2),
           p2: Number(p2.toFixed(3)),
-          color: '#38bdf8',
-          lineWidth: 1.5,
           showStats: true
         });
         draft = null;
@@ -611,6 +755,7 @@
       // Hit-test in reverse order (topmost first)
       for (var i = drawings.length - 1; i >= 0; i -= 1) {
         var d = drawings[i];
+        if (d.hidden) continue;
         if (d.type === 'hline') {
           var yCoord = priceToCoord(d.price);
           if (yCoord != null && Math.abs(y - yCoord) <= 12) {
@@ -650,6 +795,8 @@
               return d;
             }
           }
+        } else if (Object.hasOwn(annotationAnchors, d.type) && hitAnnotation(d, x, y)) {
+          return d;
         }
       }
       return null;
@@ -672,8 +819,97 @@
       return Math.sqrt(distX * distX + distY * distY);
     }
 
-    function getAnchorHandles(d, width, _height) {
-      if (!d || !chartApi) return [];
+    function canvasSize() {
+      var canvas = canvasApi && canvasApi.getCanvas ? canvasApi.getCanvas() : null;
+      var rect = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+      return {
+        width: (rect && rect.width) || (canvas && (canvas.clientWidth || canvas.width)) || 1000,
+        height: (rect && rect.height) || (canvas && (canvas.clientHeight || canvas.height)) || 600
+      };
+    }
+
+    function annotationGeometry(d, width, height) {
+      var x1 = timeToCoord(d.t1);
+      if (x1 == null) return null;
+      var result = { segments: [] };
+      if (d.type === 'vline') {
+        result.segments.push([x1, 0, x1, height]);
+        return result;
+      }
+      var y1 = priceToCoord(d.p1);
+      if (y1 == null) return null;
+      if (d.type === 'text') {
+        result.label = { x: x1 + 6, y: y1, text: d.text || 'Text' };
+        return result;
+      }
+
+      var x2 = timeToCoord(d.t2);
+      var y2 = priceToCoord(d.p2);
+      if (x2 == null || y2 == null) return result;
+      var dx = x2 - x1;
+      var dy = y2 - y1;
+      if (d.type === 'ray') {
+        var endX = dx > 0 ? width : 0;
+        var endY = dy > 0 ? height : 0;
+        var factor = dx === 0 ? (dy === 0 ? 1 : (endY - y1) / dy) : (endX - x1) / dx;
+        factor = Math.max(1, factor);
+        result.segments.push([x1, y1, x1 + dx * factor, y1 + dy * factor]);
+        return result;
+      }
+
+      result.segments.push([x1, y1, x2, y2]);
+      if (d.type === 'arrow') {
+        var angle = Math.atan2(dy, dx);
+        var head = Math.min(13, Math.hypot(dx, dy) / 2);
+        [angle - Math.PI / 6, angle + Math.PI / 6].forEach(function (direction) {
+          result.segments.push([x2, y2, x2 - head * Math.cos(direction), y2 - head * Math.sin(direction)]);
+        });
+        return result;
+      }
+
+      var x3 = timeToCoord(d.t3);
+      var y3 = priceToCoord(d.p3);
+      if (x3 == null || y3 == null) return result;
+      if (d.type === 'channel' && dx !== 0) {
+        var offset = y3 - (y1 + dy * (x3 - x1) / dx);
+        result.segments.push([x1, y1 + offset, x2, y2 + offset]);
+        result.channel = [x1, y1, x2, y2, offset];
+      } else if (d.type === 'fib-extension') {
+        result.segments.push([x2, y2, x3, y3]);
+        var right = Math.max(width - 4, x3);
+        extensionLevels.forEach(function (ratio) {
+          var price = d.p3 + (d.p2 - d.p1) * ratio;
+          var y = priceToCoord(price);
+          if (y == null) return;
+          var label = Number((ratio * 100).toFixed(1)) + '%  ' + price.toFixed(3);
+          result.segments.push([x3, y, right, y, label]);
+        });
+      }
+      return result;
+    }
+
+    function hitAnnotation(d, x, y) {
+      var size = canvasSize();
+      var geometry = annotationGeometry(d, size.width, size.height);
+      if (!geometry) return false;
+      if (geometry.label) {
+        var label = geometry.label;
+        return Math.abs(y - label.y) <= 10 && x >= label.x - 12 && x <= label.x + 8 * label.text.length + 5;
+      }
+      if (geometry.channel) {
+        var c = geometry.channel;
+        if (x >= Math.min(c[0], c[2]) && x <= Math.max(c[0], c[2])) {
+          var y1 = c[1] + (c[3] - c[1]) * (x - c[0]) / (c[2] - c[0]);
+          if (y >= Math.min(y1, y1 + c[4]) && y <= Math.max(y1, y1 + c[4])) return true;
+        }
+      }
+      return geometry.segments.some(function (segment) {
+        return pointToSegmentDistance(x, y, segment[0], segment[1], segment[2], segment[3]) <= 12;
+      });
+    }
+
+    function getAnchorHandles(d, width, height) {
+      if (!d || !chartApi || d.hidden || d.locked) return [];
       var handles = [];
 
       if (d.type === 'hline') {
@@ -714,6 +950,14 @@
           handles.push({ id: 'p1', x: tx1, y: ty1, cursor: 'crosshair' });
           handles.push({ id: 'p2', x: tx2, y: ty2, cursor: 'crosshair' });
         }
+      } else if (Object.hasOwn(annotationAnchors, d.type)) {
+        for (var anchor = 1; anchor <= annotationAnchors[d.type]; anchor += 1) {
+          var ax = timeToCoord(d['t' + anchor]);
+          var ay = d.type === 'vline' ? height / 2 : priceToCoord(d['p' + anchor]);
+          if (ax != null && ay != null) {
+            handles.push({ id: 'p' + anchor, x: ax, y: ay, cursor: 'crosshair' });
+          }
+        }
       }
 
       return handles;
@@ -735,22 +979,19 @@
       return best;
     }
 
-    function handleSelectionPointer(type, x, y, time, price, _payload) {
+    function handleSelectionPointer(type, x, y, time, price, snapped) {
       var item = getDrawingById(selectedId);
       if (!item) {
         deselect();
         return;
       }
 
-      var canvasEl = canvasApi.getCanvas ? canvasApi.getCanvas() : null;
-      var rect = (canvasEl && canvasEl.getBoundingClientRect) ? canvasEl.getBoundingClientRect() : null;
-      var width = (rect && rect.width) ? rect.width : (canvasEl ? (canvasEl.clientWidth || canvasEl.width) : 1000);
-      var height = (rect && rect.height) ? rect.height : (canvasEl ? (canvasEl.clientHeight || canvasEl.height) : 600);
-      var handles = getAnchorHandles(item, width, height);
+      var size = canvasSize();
+      var handles = getAnchorHandles(item, size.width, size.height);
 
       if (type === 'pointermove') {
         if (dragState) {
-          handleDragMove(dragState, x, y, time, price);
+          handleDragMove(dragState, x, y, snapped ? snapped.time : time, snapped ? snapped.price : price);
           canvasApi.requestRedraw();
         } else {
           var hoveredHandle = findHandleAt(handles, x, y);
@@ -759,7 +1000,7 @@
           } else {
             var hit = findDrawingAt(x, y);
             if (hit && hit.id === selectedId) {
-              canvasApi.setCursor('move');
+              canvasApi.setCursor(item.locked ? 'default' : 'move');
             } else {
               canvasApi.setCursor('default');
             }
@@ -784,14 +1025,15 @@
 
         var clickedDrawing = findDrawingAt(x, y);
         if (clickedDrawing && clickedDrawing.id === selectedId) {
+          if (item.locked) return;
           dragState = {
             mode: 'move',
             item: item,
             startX: x,
             startY: y,
             startTime: time,
-            startEdge: resolveEdgeTime(time, x),
-            startPrice: price != null ? price : coordinateToPrice(y),
+            startEdge: snapped ? snapped.time : resolveEdgeTime(time, x),
+            startPrice: snapped ? snapped.price : (price != null ? price : coordinateToPrice(y)),
             orig: clone(item)
           };
           return;
@@ -806,9 +1048,11 @@
         deselect();
       } else if (type === 'pointerup' || type === 'pointercancel') {
         if (dragState) {
+          var original = dragState.orig;
           dragState = null;
+          if (type === 'pointercancel') Object.assign(item, original);
           canvasApi.requestRedraw();
-          onChange(item);
+          if (JSON.stringify(item) !== JSON.stringify(original)) onChange(item);
         }
       }
     }
@@ -840,16 +1084,12 @@
           if (effPrice != null && !isNaN(effPrice)) {
             item.price = Number((orig.price + dp).toFixed(3));
           }
-        } else if (item.type === 'rect') {
-          item.t1 = orig.t1 + dt;
-          item.t2 = orig.t2 + dt;
-          item.p1 = Number((orig.p1 + dp).toFixed(3));
-          item.p2 = Number((orig.p2 + dp).toFixed(3));
-        } else if (item.type === 'trendline' || item.type === 'fib') {
-          item.t1 = orig.t1 + dt;
-          item.t2 = orig.t2 + dt;
-          item.p1 = Number((orig.p1 + dp).toFixed(3));
-          item.p2 = Number((orig.p2 + dp).toFixed(3));
+        } else {
+          var count = annotationAnchors[item.type] || 2;
+          for (var anchor = 1; anchor <= count; anchor += 1) {
+            if (Number.isFinite(orig['t' + anchor])) item['t' + anchor] = orig['t' + anchor] + dt;
+            if (Number.isFinite(orig['p' + anchor])) item['p' + anchor] = Number((orig['p' + anchor] + dp).toFixed(3));
+          }
         }
       } else if (state.mode === 'handle') {
         var hId = state.handleId;
@@ -857,14 +1097,12 @@
           if (effPrice != null && !isNaN(effPrice)) {
             item.price = Number(effPrice.toFixed(3));
           }
-        } else if (item.type === 'trendline' || item.type === 'fib') {
-          if (hId === 'p1') {
-            if (effTime != null) item.t1 = effTime;
-            if (effPrice != null && !isNaN(effPrice)) item.p1 = Number(effPrice.toFixed(3));
-          } else if (hId === 'p2') {
-            if (effTime != null) item.t2 = effTime;
-            if (effPrice != null && !isNaN(effPrice)) item.p2 = Number(effPrice.toFixed(3));
+        } else if (item.type === 'trendline' || item.type === 'fib' || Object.hasOwn(annotationAnchors, item.type)) {
+          if (effTime != null && !(item.type === 'channel' &&
+              ((hId === 'p1' && effTime === item.t2) || (hId === 'p2' && effTime === item.t1)))) {
+            item['t' + hId.slice(1)] = effTime;
           }
+          if (item.type !== 'vline' && Number.isFinite(effPrice)) item[hId] = Number(effPrice.toFixed(3));
         } else if (item.type === 'rect') {
           if (hId === 'tl') {
             if (effTime != null) item.t1 = effTime;
@@ -926,6 +1164,7 @@
       // 1. Render all committed drawings
       for (var i = 0; i < drawings.length; i += 1) {
         var d = drawings[i];
+        if (d.hidden) continue;
         var isSelected = (d.id === selectedId);
         if (d.type === 'fib') {
           renderFibonacci(ctx, d, width, height, isSelected);
@@ -935,6 +1174,8 @@
           renderRect(ctx, d, width, height, isSelected);
         } else if (d.type === 'trendline') {
           renderTrendline(ctx, d, width, height, isSelected);
+        } else if (Object.hasOwn(annotationAnchors, d.type)) {
+          renderAnnotation(ctx, d, width, height, isSelected);
         }
       }
 
@@ -946,6 +1187,8 @@
           renderRectDraft(ctx, draft, width, height);
         } else if (draft.type === 'trendline') {
           renderTrendlineDraft(ctx, draft, width, height);
+        } else if (Object.hasOwn(annotationAnchors, draft.type)) {
+          renderAnnotation(ctx, draft, width, height, false);
         }
       } else if (currentTool === 'hline' && hoverPos) {
         renderHLinePreview(ctx, hoverPos, width, height);
@@ -954,6 +1197,56 @@
       // 3. Render transient ruler if active
       if (rulerState) {
         renderRuler(ctx, rulerState, width, height);
+      }
+    }
+
+    function applyLineStyle(ctx, d, color, width) {
+      ctx.strokeStyle = d.color || color;
+      ctx.lineWidth = d.lineWidth || width;
+      ctx.setLineDash(d.lineStyle === 'dashed' ? [5, 4] : (d.lineStyle === 'dotted' ? [1, 3] : []));
+    }
+
+    function renderAnnotation(ctx, d, width, height, isSelected) {
+      var geometry = annotationGeometry(d, width, height);
+      if (!geometry) return;
+      var color = d.type === 'fib-extension' ? '#a78bfa' : '#38bdf8';
+      ctx.save();
+      applyLineStyle(ctx, d, color, 1.5);
+      if (d === draft) ctx.setLineDash([4, 3]);
+      ctx.fillStyle = ctx.strokeStyle;
+      if (geometry.channel) {
+        var c = geometry.channel;
+        var alpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha * 0.12;
+        ctx.beginPath();
+        ctx.moveTo(c[0], c[1]);
+        ctx.lineTo(c[2], c[3]);
+        ctx.lineTo(c[2], c[3] + c[4]);
+        ctx.lineTo(c[0], c[1] + c[4]);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = alpha;
+      }
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'right';
+      geometry.segments.forEach(function (segment) {
+        ctx.beginPath();
+        ctx.moveTo(segment[0], segment[1]);
+        ctx.lineTo(segment[2], segment[3]);
+        ctx.stroke();
+        if (segment[4]) ctx.fillText(segment[4], segment[2] - 4, segment[3] - 4);
+      });
+      if (geometry.label) {
+        ctx.font = '13px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(geometry.label.text, geometry.label.x, geometry.label.y);
+      }
+      ctx.restore();
+      if (isSelected || d === draft) {
+        getAnchorHandles(d, width, height).forEach(function (handle) {
+          drawAnchorHandle(ctx, handle.x, handle.y);
+        });
       }
     }
 
@@ -979,9 +1272,7 @@
       var yPixel = Math.round(y) + 0.5;
 
       ctx.save();
-      ctx.strokeStyle = d.color || '#38bdf8';
-      ctx.lineWidth = isSelected ? 2.5 : (d.lineWidth || 1.5);
-      ctx.setLineDash([5, 4]);
+      applyLineStyle(ctx, d, '#38bdf8', 1.5);
 
       ctx.beginPath();
       ctx.moveTo(0, yPixel);
@@ -1078,9 +1369,7 @@
       ctx.save();
       ctx.fillStyle = d.fillColor || 'rgba(56, 189, 248, 0.15)';
       ctx.fillRect(left, top, boxW, boxH);
-      ctx.strokeStyle = d.color || '#38bdf8';
-      ctx.lineWidth = isSelected ? 2.5 : (d.lineWidth || 1.5);
-      ctx.setLineDash([]);
+      applyLineStyle(ctx, d, '#38bdf8', 1.5);
       ctx.strokeRect(left, top, boxW, boxH);
 
       if (d.label && boxW > 35 && boxH > 14) {
@@ -1143,9 +1432,8 @@
       var bounds = fibonacciBounds(d);
       if (!bounds || (d === draft && d.p1 === d.p2)) return;
       ctx.save();
-      ctx.strokeStyle = '#a78bfa';
-      ctx.fillStyle = '#c4b5fd';
-      ctx.lineWidth = 1;
+      applyLineStyle(ctx, d, '#a78bfa', 1);
+      ctx.fillStyle = d.color === '#a78bfa' || !d.color ? '#c4b5fd' : d.color;
       ctx.font = '11px monospace';
       ctx.textAlign = 'right';
       if (d === draft) ctx.setLineDash([4, 3]);
@@ -1180,9 +1468,7 @@
       if (x1 == null || x2 == null || y1 == null || y2 == null) return;
 
       ctx.save();
-      ctx.strokeStyle = d.color || '#38bdf8';
-      ctx.lineWidth = isSelected ? 2.5 : (d.lineWidth || 1.5);
-      ctx.setLineDash([]);
+      applyLineStyle(ctx, d, '#38bdf8', 1.5);
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -1266,9 +1552,10 @@
         var startT = Math.min(t1, t2);
         var endT = Math.max(t1, t2);
         var count = 0;
-        for (var i = 0; i < candles.length; i += 1) {
+        var endIndex = lastRevealedIndex(candles);
+        for (var i = 0; i <= endIndex && candles[i].time <= endT; i += 1) {
           var ct = candles[i].time;
-          if (ct >= startT && ct <= endT) count += 1;
+          if (ct >= startT) count += 1;
         }
         return Math.max(1, count);
       }
@@ -1372,6 +1659,9 @@
       getDrawings: getDrawings,
       getDrawingById: getDrawingById,
       addDrawing: addDrawing,
+      updateDrawing: updateDrawing,
+      duplicateDrawing: duplicateDrawing,
+      setSnapEnabled: function (enabled) { snapEnabled = Boolean(enabled); },
       removeDrawing: removeDrawing,
       clearDrawings: clearDrawings,
       setDrawings: setDrawings,

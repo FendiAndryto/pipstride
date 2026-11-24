@@ -1,7 +1,7 @@
 /**
  * Replay chart renderer for TradingView Lightweight Charts.
  *
- * Renders XAUUSD candlesticks with 3-decimal precision and optional indicators.
+ * Renders revealed XAUUSD prices with 3-decimal precision and optional indicators.
  * Viewport interaction:
  *  - When PLAYING: pins right edge to active bar (follow mode).
  *  - Zooming (barSpacing) does not break follow mode.
@@ -35,9 +35,9 @@
       // v4 line series join across whitespace, so mark only the active trend points.
       style: { lineVisible: false, pointMarkersVisible: true }
     },
-    rsi: { pane: true, series: [{ name: 'RSI', color: '#c084fc' }] },
+    rsi: { independentScale: true, series: [{ name: 'RSI', color: '#c084fc' }] },
     macd: {
-      pane: true,
+      independentScale: true,
       series: [
         { name: 'MACD', color: '#38bdf8' },
         { name: 'MACD Signal', color: '#fbbf24' },
@@ -52,7 +52,33 @@
       ]
     },
     vwap: { series: [{ name: 'VWAP', color: '#f472b6' }] },
-    atr: { pane: true, series: [{ name: 'ATR', color: '#fb923c' }] }
+    atr: { independentScale: true, series: [{ name: 'ATR', color: '#fb923c' }] },
+    volume: { independentScale: true, volume: true, series: [{ name: 'Volume', color: THEME.up, histogram: true }] },
+    stochastic: {
+      independentScale: true,
+      series: [{ name: 'Stochastic %K', color: '#38bdf8' }, { name: '%D', color: '#fbbf24' }]
+    },
+    adx: {
+      independentScale: true,
+      series: [{ name: 'ADX', color: '#c084fc' }, { name: '+DI', color: THEME.up }, { name: '−DI', color: THEME.down }]
+    },
+    donchian: {
+      series: [
+        { name: 'Donchian Middle', color: '#fbbf24' },
+        { name: 'Donchian Upper', color: '#38bdf8' },
+        { name: 'Donchian Lower', color: '#38bdf8' }
+      ]
+    },
+    ichimoku: {
+      series: [
+        { name: 'Tenkan', color: '#38bdf8' },
+        { name: 'Kijun', color: '#fb923c' },
+        { name: 'Senkou A', color: THEME.up },
+        { name: 'Senkou B', color: THEME.down },
+        { name: 'Chikou', color: '#c084fc' }
+      ]
+    },
+    obv: { independentScale: true, volume: true, series: [{ name: 'OBV', color: '#38bdf8' }] }
   };
 
   function toBar(candle) {
@@ -63,6 +89,31 @@
       low: candle.low,
       close: candle.close
     };
+  }
+
+  var SERIES_METHODS = {
+    candles: 'addCandlestickSeries',
+    heikin: 'addCandlestickSeries',
+    bars: 'addBarSeries',
+    line: 'addLineSeries',
+    area: 'addAreaSeries'
+  };
+
+  function addPriceSeries(chart, type) {
+    var options = {
+      priceFormat: { type: 'price', precision: 3, minMove: 0.001 },
+      priceLineVisible: false,
+      lastValueVisible: true
+    };
+    if (type === 'line') Object.assign(options, { color: THEME.up, lineWidth: 2 });
+    else if (type === 'area') Object.assign(options, {
+      lineColor: THEME.up, topColor: 'rgba(69, 224, 173, 0.30)', bottomColor: 'rgba(69, 224, 173, 0.02)', lineWidth: 2
+    });
+    else Object.assign(options, {
+      upColor: THEME.up, downColor: THEME.down, borderUpColor: THEME.up,
+      borderDownColor: THEME.down, wickUpColor: THEME.up, wickDownColor: THEME.down
+    });
+    return chart[SERIES_METHODS[type]](options);
   }
 
   function formatPrice(value) {
@@ -118,7 +169,8 @@
     var row = doc.createElement('div');
     row.className = 'replay-indicator-values';
     row.dataset.size = size;
-    var values = specs.map(function (spec) {
+    var detail = doc.createElement('span');
+    var values = specs.map(function (spec, index) {
       var reading = doc.createElement('span');
       var name = doc.createElement('span');
       var value = doc.createElement('span');
@@ -126,6 +178,7 @@
       reading.style.color = spec.color;
       name.className = 'replay-indicator-name';
       name.textContent = spec.name;
+      if (index === 0) name.appendChild(detail);
       value.className = 'replay-indicator-value';
       value.textContent = formatPrice();
       reading.appendChild(name);
@@ -134,7 +187,7 @@
       return value;
     });
     host.appendChild(row);
-    return { row: row, values: values };
+    return { row: row, values: values, detail: detail };
   }
 
   function createIndicatorPane(host, size, lib, sync) {
@@ -175,6 +228,90 @@
     };
   }
 
+  function createIchimokuCloud(chart, series) {
+    var spanA;
+    var spanB;
+    var target = -1;
+    var shift = 0;
+    var timeScale = chart.timeScale();
+
+    function cloudPoint(index) {
+      var a = spanA[index - shift].value;
+      var b = spanB[index - shift].value;
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      var x = timeScale.logicalToCoordinate(index);
+      var upper = series.priceToCoordinate(a);
+      var lower = series.priceToCoordinate(b);
+      return !Number.isFinite(x) || !Number.isFinite(upper) || !Number.isFinite(lower)
+        ? null : { x: x, a: upper, b: lower, bullish: a >= b };
+    }
+
+    function draw(targetCanvas) {
+      if (target <= shift) return;
+      var range = timeScale.getVisibleLogicalRange();
+      if (!range) return;
+      var start = Math.max(shift, Math.floor(range.from));
+      var end = Math.min(target, Math.ceil(range.to));
+      var bullish = [];
+      var bearish = [];
+      var previous = null;
+      for (var index = start; index <= end; index += 1) {
+        var current = cloudPoint(index);
+        if (previous && current) {
+          var segments = previous.bullish ? bullish : bearish;
+          if (previous.bullish === current.bullish) {
+            segments.push([previous, current]);
+          } else {
+            var firstGap = previous.b - previous.a;
+            var lastGap = current.b - current.a;
+            if (firstGap !== lastGap) {
+              var fraction = firstGap / (firstGap - lastGap);
+              var x = previous.x + fraction * (current.x - previous.x);
+              var y = previous.a + fraction * (current.a - previous.a);
+              var crossing = { x: x, a: y, b: y };
+              segments.push([previous, crossing]);
+              (current.bullish ? bullish : bearish).push([crossing, current]);
+            }
+          }
+        }
+        previous = current;
+      }
+      targetCanvas.useMediaCoordinateSpace(function (scope) {
+        var context = scope.context;
+        [bullish, bearish].forEach(function (segments, index) {
+          if (!segments.length) return;
+          context.fillStyle = index ? 'rgba(255, 113, 128, .18)' : 'rgba(69, 224, 173, .18)';
+          context.beginPath();
+          segments.forEach(function (segment) {
+            var from = segment[0];
+            var to = segment[1];
+            context.moveTo(from.x, from.a);
+            context.lineTo(to.x, to.a);
+            context.lineTo(to.x, to.b);
+            context.lineTo(from.x, from.b);
+            context.closePath();
+          });
+          context.fill();
+        });
+      });
+    }
+
+    var view = {
+      zOrder: function () { return 'bottom'; },
+      renderer: function () { return renderer; }
+    };
+    var renderer = { draw: draw };
+    return {
+      paneViews: function () { return [view]; },
+      setData: function (data, lastRevealed, displacement) {
+        spanA = data && data[2];
+        spanB = data && data[3];
+        target = lastRevealed;
+        shift = displacement;
+      }
+    };
+  }
+
   function init(options) {
     options = options || {};
     var container = options.container;
@@ -182,17 +319,9 @@
 
     var lib = options.chartLib || global.LightweightCharts;
     var chart = createChart(container, lib, false);
-    var series = chart.addCandlestickSeries({
-      upColor: THEME.up,
-      downColor: THEME.down,
-      borderUpColor: THEME.up,
-      borderDownColor: THEME.down,
-      wickUpColor: THEME.up,
-      wickDownColor: THEME.down,
-      priceFormat: { type: 'price', precision: 3, minMove: 0.001 },
-      priceLineVisible: false,
-      lastValueVisible: true
-    });
+    var chartType = 'candles';
+    var series = addPriceSeries(chart, chartType);
+    var heikinBars = [];
 
     var candles = [];
     var watermark = -1;
@@ -221,21 +350,47 @@
       });
     }
 
-    function getIndicatorData(key) {
+    function getIndicatorData(key, target) {
       if (!indicatorCache.has(key)) {
-        indicatorCache.set(key, global.ReplayIndicators.calculate(key, candles, indicatorSettings.get(key).parameters));
+        var appearance = indicatorSettings.get(key);
+        indicatorCache.set(key, global.ReplayIndicators.createCalculator(appearance.type, appearance.parameters));
       }
-      return indicatorCache.get(key);
+      var calculator = indicatorCache.get(key);
+      for (var i = calculator.data[0].length; i <= target; i += 1) calculator.append(candles[i]);
+      return calculator.data;
+    }
+
+    function positionIndicatorPoint(points, position, offset) {
+      if (!offset) return points[position];
+      var source = points[position - offset];
+      var time = candles[position].time;
+      return source && source.value !== undefined ? { time: time, value: source.value } : { time: time };
+    }
+
+    function indicatorOffset(indicator, index) {
+      if (index === 4) return -indicator.displacement;
+      return index >= 2 ? indicator.displacement : 0;
     }
 
     function paintIndicator(key, indicator, target, incremental) {
-      var data = getIndicatorData(key);
+      var data = getIndicatorData(key, target);
       indicator.series.forEach(function (line, index) {
-        if (incremental) {
-          for (var i = watermark + 1; i <= target; i += 1) line.update(data[index][i]);
-        } else {
-          line.setData(data[index].slice(0, target + 1));
+        // Chikou plots each revealed close at an earlier candle's timestamp.
+        var offset = indicatorOffset(indicator, index);
+        var clipping = Math.min(0, offset);
+        var last = target + clipping;
+        if (!incremental && !offset) {
+          line.setData(data[index].slice(0, last + 1));
+          return;
         }
+        var start = incremental ? Math.max(0, watermark + 1 + clipping) : 0;
+        var history = [];
+        for (var i = start; i <= last; i += 1) {
+          var point = positionIndicatorPoint(data[index], i, offset);
+          if (incremental) line.update(point);
+          else history.push(point);
+        }
+        if (!incremental) line.setData(history);
       });
       if (indicator.pane) {
         var anchor = indicator.pane.anchor;
@@ -245,14 +400,18 @@
           anchor.setData(candles.slice(0, target + 1).map(toAnchor));
         }
       }
+      if (indicator.cloud) indicator.cloud.setData(data, target, indicator.displacement);
       paintIndicatorLegend(indicator, data, target);
     }
 
     function paintIndicatorLegend(indicator, data, target) {
       if (!indicator.legend) return;
       indicator.legend.values.forEach(function (label, index) {
-        var point = data && data[index][target];
-        var value = formatPrice(point && point.value);
+        var offset = indicatorOffset(indicator, index);
+        var position = target + Math.min(0, offset);
+        var point = data && position >= 0 && positionIndicatorPoint(data[index], position, offset);
+        var value = indicator.volume && point && Number.isFinite(point.value)
+          ? point.value.toLocaleString() : formatPrice(point && point.value);
         if (label.textContent !== value) label.textContent = value;
       });
     }
@@ -267,7 +426,12 @@
 
     function getIndicatorSettings(key) {
       if (!indicatorSettings.has(key)) {
-        indicatorSettings.set(key, { parameters: global.ReplayIndicators.normalize(key), size: 'default' });
+        indicatorSettings.set(key, {
+          type: key,
+          parameters: global.ReplayIndicators.normalize(key),
+          size: 'default',
+          placement: global.ReplayIndicators.placement(key)
+        });
       }
       return indicatorSettings.get(key);
     }
@@ -278,22 +442,29 @@
     }
 
     function configureIndicator(key, settings) {
-      if (!isKnownIndicator(key)) return;
       settings = settings || {};
+      var type = settings.type || key;
+      if (!isKnownIndicator(type)) return;
       var previous = getIndicatorSettings(key);
-      var parameters = global.ReplayIndicators.normalize(key, settings.parameters);
+      var parameters = global.ReplayIndicators.normalize(type, settings.parameters);
+      var placement = global.ReplayIndicators.placement(type, settings.placement);
       var size = Object.prototype.hasOwnProperty.call(INDICATOR_SIZES, settings.size) ? settings.size : 'default';
-      var parametersChanged = Object.keys(parameters).some(function (name) {
+      var parametersChanged = previous.type !== type || Object.keys(parameters).some(function (name) {
         return parameters[name] !== previous.parameters[name];
       });
       if (parametersChanged) indicatorCache.delete(key);
-      indicatorSettings.set(key, { parameters: parameters, size: size });
+      indicatorSettings.set(key, { type: type, parameters: parameters, size: size, placement: placement });
 
       var current = indicators.get(key);
       if (!current) return;
+      if (previous.type !== type || previous.placement !== placement) {
+        setIndicator(key, false);
+        setIndicator(key, true);
+        return;
+      }
       if (previous.size !== size) {
         current.series.forEach(function (line, index) {
-          if (!INDICATORS[key].series[index].histogram) line.applyOptions(indicatorLineSize(key, size));
+          if (!INDICATORS[type].series[index].histogram) line.applyOptions(indicatorLineSize(type, size));
         });
         if (current.legend) current.legend.row.dataset.size = size;
         if (current.pane) {
@@ -302,6 +473,8 @@
         }
       }
       if (parametersChanged) {
+        current.displacement = parameters.displacement || 0;
+        updateIndicatorLegendTitle(current.legend, parameters);
         if (current.guides) {
           current.guides.forEach(function (guide, index) {
             guide.applyOptions({ price: parameters[index === 0 ? 'lower' : 'upper'] });
@@ -314,15 +487,24 @@
       }
     }
 
+    function updateIndicatorLegendTitle(legend, parameters) {
+      if (!legend) return;
+      var values = Object.values(parameters);
+      legend.detail.textContent = values.length ? ' (' + values.join(', ') + ')' : '';
+    }
+
     function setIndicator(key, enabled) {
       var current = indicators.get(key);
       if (enabled) {
-        if (current || !isKnownIndicator(key)) return;
-        var config = INDICATORS[key];
-        if (config.pane && !options.indicatorPanes) return;
+        if (current || (!indicatorSettings.has(key) && !isKnownIndicator(key))) return;
         var appearance = getIndicatorSettings(key);
-        var pane = config.pane ? createIndicatorPane(options.indicatorPanes, appearance.size, lib, syncIndicatorPanes) : null;
+        var type = appearance.type;
+        var config = INDICATORS[type];
+        var wantsPane = appearance.placement === 'pane';
+        if (wantsPane && !options.indicatorPanes) return;
+        var pane = wantsPane ? createIndicatorPane(options.indicatorPanes, appearance.size, lib, syncIndicatorPanes) : null;
         var legend = createIndicatorLegend(pane ? pane.heading : options.indicatorLegend, config.series, appearance.size);
+        updateIndicatorLegendTitle(legend, appearance.parameters);
         var targetChart = pane ? pane.chart : chart;
         var lines = config.series.map(function (spec) {
           var settings = Object.assign({
@@ -330,12 +512,17 @@
             priceLineVisible: false,
             lastValueVisible: false,
             crosshairMarkerVisible: false
-          }, spec.histogram ? null : indicatorLineSize(key, appearance.size), config.style);
+          }, spec.histogram ? null : indicatorLineSize(type, appearance.size), config.style);
           if (!spec.histogram) settings.lineStyle = spec.lineStyle || 0;
+          if (!pane && config.independentScale) settings.priceScaleId = 'indicator-' + key;
+          if (config.volume) settings.priceFormat = { type: 'volume' };
           return spec.histogram ? targetChart.addHistogramSeries(settings) : targetChart.addLineSeries(settings);
         });
+        if (!pane && config.independentScale) {
+          lines[0].priceScale().applyOptions({ scaleMargins: { top: 0.7, bottom: 0.04 } });
+        }
         var guides;
-        if (key === 'rsi') {
+        if (type === 'rsi') {
           lines[0].applyOptions({
             autoscaleInfoProvider: function () { return { priceRange: { minValue: 0, maxValue: 100 } }; }
           });
@@ -345,7 +532,14 @@
             });
           });
         }
-        current = { pane: pane, series: lines, legend: legend, guides: guides };
+        current = {
+          pane: pane, series: lines, legend: legend, guides: guides,
+          displacement: appearance.parameters.displacement || 0, volume: config.volume
+        };
+        if (type === 'ichimoku' && typeof lines[2].attachPrimitive === 'function') {
+          current.cloud = createIchimokuCloud(targetChart, lines[2]);
+          lines[2].attachPrimitive(current.cloud);
+        }
         indicators.set(key, current);
         if (pane) {
           paneCount += 1;
@@ -365,6 +559,18 @@
         }
       }
       syncIndicatorPanes();
+    }
+
+    function removeIndicator(key) {
+      setIndicator(key, false);
+      indicatorSettings.delete(key);
+      indicatorCache.delete(key);
+    }
+
+    function getIndicatorScreenshots() {
+      return Array.from(indicators.values()).flatMap(function (indicator) {
+        return indicator.pane ? [indicator.pane.chart.takeScreenshot()] : [];
+      });
     }
 
     if (container && container.addEventListener) {
@@ -514,14 +720,51 @@
       }
     }
 
+    function displayBar(index) {
+      var candle = candles[index];
+      if (chartType === 'line' || chartType === 'area') return { time: candle.time, value: candle.close };
+      if (chartType !== 'heikin') return toBar(candle);
+      if (heikinBars[index]) return heikinBars[index];
+      var previous = heikinBars[index - 1];
+      var close = (candle.open + candle.high + candle.low + candle.close) / 4;
+      var open = previous ? (previous.open + previous.close) / 2 : (candle.open + candle.close) / 2;
+      var bar = {
+        time: candle.time, open: open, close: close,
+        high: Math.max(candle.high, open, close), low: Math.min(candle.low, open, close)
+      };
+      heikinBars[index] = bar;
+      return bar;
+    }
+
+    function displayHistory(target) {
+      var history = [];
+      for (var index = 0; index <= target; index += 1) history.push(displayBar(index));
+      return history;
+    }
+
+    function setChartType(type) {
+      if (type === chartType || !Object.prototype.hasOwnProperty.call(SERIES_METHODS, type)) return;
+      var timeScale = chart.timeScale();
+      var range = timeScale.getVisibleLogicalRange();
+      var previous = series;
+      chartType = type;
+      series = addPriceSeries(chart, chartType);
+      series.setData(displayHistory(watermark));
+      chart.removeSeries(previous);
+      if (range) timeScale.setVisibleLogicalRange(range);
+      syncIndicatorPanes();
+    }
+
     function setData(candlesList) {
       candles = (candlesList || []).slice();
+      heikinBars = [];
       watermark = -1;
       isFollowing = true;
       indicatorCache.clear();
       indicators.forEach(function (indicator) {
         indicator.series.forEach(function (line) { line.setData([]); });
         if (indicator.pane) indicator.pane.anchor.setData([]);
+        if (indicator.cloud) indicator.cloud.setData(null, -1, 0);
         paintIndicatorLegend(indicator);
       });
       series.setData([]);
@@ -538,10 +781,10 @@
       var incremental = watermark >= 0 && target > watermark && target - watermark <= MAX_INCREMENTAL_STEPS;
       if (incremental) {
         for (var i = watermark + 1; i <= target; i += 1) {
-          series.update(toBar(candles[i]));
+          series.update(displayBar(i));
         }
       } else {
-        series.setData(candles.slice(0, target + 1).map(toBar));
+        series.setData(displayHistory(target));
       }
       indicators.forEach(function (indicator, key) {
         paintIndicator(key, indicator, target, incremental);
@@ -576,10 +819,32 @@
 
     return {
       chart: chart,
-      series: series,
+      get series() { return series; },
       setData: setData,
+      setChartType: setChartType,
+      setGridVisible: function (visible) {
+        chart.applyOptions({ grid: { vertLines: { visible: visible }, horzLines: { visible: visible } } });
+      },
+      setScaleMode: function (mode) {
+        chart.priceScale('right').applyOptions({ mode: lib.PriceScaleMode[mode] });
+      },
+      resetView: function () {
+        chart.priceScale('right').applyOptions({ autoScale: true });
+        chart.timeScale().applyOptions({ barSpacing: 7 });
+        lastVisibleSpan = DEFAULT_VISIBLE_BARS;
+        snapToActive();
+      },
+      onCandleHover: function (onHover) {
+        chart.subscribeCrosshairMove(function (event) {
+          var index = event.logical;
+          var candle = Number.isInteger(index) && index >= 0 && index <= watermark ? candles[index] : null;
+          onHover(candle && candle.time === event.time ? candle : null);
+        });
+      },
       setIndicator: setIndicator,
       configureIndicator: configureIndicator,
+      removeIndicator: removeIndicator,
+      getIndicatorScreenshots: getIndicatorScreenshots,
       seekTo: seekTo,
       appendBar: appendBar,
       resize: resize,
@@ -643,9 +908,7 @@
       },
       subscribeClick: function (fn) {
         if (typeof fn === 'function') {
-          chart.subscribeClick(function (param) {
-            if (!playing) fn(param);
-          });
+          chart.subscribeClick(fn);
         }
       }
     };

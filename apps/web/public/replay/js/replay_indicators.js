@@ -25,8 +25,55 @@
     ],
     bollinger: [periodParameter(20), multiplierParameter(2)],
     vwap: [{ key: 'resetHour', label: 'Jam reset (UTC)', defaultValue: 0, min: 0, max: 23, step: 1 }],
-    atr: [periodParameter(14)]
+    atr: [periodParameter(14)],
+    volume: [],
+    stochastic: [
+      periodParameter(14, 'period', 'Periode %K'),
+      periodParameter(3, 'smooth', 'Penghalusan %K'),
+      periodParameter(3, 'signal', 'Periode %D')
+    ],
+    adx: [periodParameter(14)],
+    donchian: [periodParameter(20)],
+    ichimoku: [
+      periodParameter(9, 'conversion', 'Periode konversi'),
+      periodParameter(26, 'base', 'Periode dasar'),
+      periodParameter(52, 'span', 'Periode Span B'),
+      periodParameter(26, 'displacement', 'Pergeseran')
+    ],
+    obv: []
   };
+
+  var paneTypes = new Set(['rsi', 'macd', 'atr', 'volume', 'stochastic', 'adx', 'obv']);
+
+  function placement(key, value) {
+    if (value === 'overlay' || value === 'pane') return value;
+    return paneTypes.has(key) ? 'pane' : 'overlay';
+  }
+
+  function preferences(saved, legacy) {
+    if (!Array.isArray(saved)) {
+      saved = Object.keys(legacy || {}).map(function (type) {
+        var stored = legacy[type];
+        if (!stored || !(stored.applied === true || stored.enabled === true)) return null;
+        return Object.assign({}, stored, { id: 'legacy-' + type, type: type });
+      });
+    }
+    var ids = new Set();
+    return saved.reduce(function (instances, stored) {
+      if (!stored || typeof stored.id !== 'string' || !stored.id || ids.has(stored.id)
+        || !Object.prototype.hasOwnProperty.call(parameters, stored.type)) return instances;
+      ids.add(stored.id);
+      instances.push({
+        id: stored.id,
+        type: stored.type,
+        enabled: stored.enabled === true,
+        parameters: normalize(stored.type, stored.parameters),
+        size: stored.size === 'small' || stored.size === 'large' ? stored.size : 'default',
+        placement: placement(stored.type, stored.placement)
+      });
+      return instances;
+    }, []);
+  }
 
   function normalize(key, settings) {
     if (!Object.prototype.hasOwnProperty.call(parameters, key)) return {};
@@ -204,9 +251,93 @@
     };
   }
 
-  // Returns chart data in series order. Times are sorted Unix seconds.
-  // Supertrend uses [up, down], Bollinger [middle, upper, lower], MACD [line, signal, histogram].
-  function calculate(key, candles, settings) {
+  function rangeWindow(period) {
+    var summarize = rollingWindow(period, function (candles) {
+      var high = -Infinity;
+      var low = Infinity;
+      candles.forEach(function (candle) {
+        high = Math.max(high, candle.high);
+        low = Math.min(low, candle.low);
+      });
+      return [high, low];
+    });
+    return function (candle) { return summarize(hasRange(candle) ? candle : null); };
+  }
+
+  function midpoint(bounds) {
+    return bounds ? (bounds[0] + bounds[1]) / 2 : null;
+  }
+
+  function stochastic(period, smoothPeriod, signalPeriod) {
+    var bounds = rangeWindow(period);
+    var smooth = rollingWindow(smoothPeriod, mean);
+    var signal = rollingWindow(signalPeriod, mean);
+    return function (candle) {
+      var range = bounds(candle);
+      var close = closeOf(candle);
+      var raw = null;
+      if (range && close !== null) {
+        raw = range[0] === range[1] ? 0 : 100 * (close - range[1]) / (range[0] - range[1]);
+      }
+      var k = smooth(raw);
+      return [k, signal(k)];
+    };
+  }
+
+  function directionalMovement(period) {
+    var previous = null;
+    var range = trueRange();
+    var atr = smoother(period, 1 / period);
+    var positive = smoother(period, 1 / period);
+    var negative = smoother(period, 1 / period);
+    var strength = smoother(period, 1 / period);
+    return function (candle) {
+      var tr = range(candle);
+      var up = previous && tr !== null ? candle.high - previous.high : null;
+      var down = up !== null ? previous.low - candle.low : null;
+      previous = tr === null ? null : candle;
+      var average = atr(up === null ? null : tr);
+      var p = positive(up === null ? null : up > down && up > 0 ? up : 0);
+      var n = negative(down === null ? null : down > up && down > 0 ? down : 0);
+      var plus = average === null ? null : average === 0 ? 0 : 100 * p / average;
+      var minus = average === null ? null : average === 0 ? 0 : 100 * n / average;
+      var dx = average === null ? null : p + n === 0 ? 0 : 100 * Math.abs(p - n) / (p + n);
+      return [strength(dx), plus, minus];
+    };
+  }
+
+  function ichimoku(conversionPeriod, basePeriod, spanPeriod) {
+    var conversionRange = rangeWindow(conversionPeriod);
+    var baseRange = rangeWindow(basePeriod);
+    var spanRange = rangeWindow(spanPeriod);
+    return function (candle) {
+      var conversion = midpoint(conversionRange(candle));
+      var base = midpoint(baseRange(candle));
+      var leadingA = conversion === null || base === null ? null : (conversion + base) / 2;
+      return [conversion, base, leadingA, midpoint(spanRange(candle)), closeOf(candle)];
+    };
+  }
+
+  function volumeOf(candle) {
+    return Number.isFinite(candle.volume) && candle.volume >= 0 ? candle.volume : null;
+  }
+
+  function obv() {
+    var previousClose = null;
+    var total = 0;
+    return function (candle) {
+      var close = closeOf(candle);
+      var volume = volumeOf(candle);
+      if (close !== null && previousClose !== null && volume !== null) {
+        total += Math.sign(close - previousClose) * volume;
+      }
+      previousClose = close;
+      return [volume === null || close === null ? null : total];
+    };
+  }
+
+  // Produces points in series order, one candle at a time.
+  function createCalculator(key, settings) {
     var config = normalize(key, settings);
     var next;
     var count = 1;
@@ -243,19 +374,65 @@
         next = function (candle) { return [average(range(candle))]; };
         break;
       }
+      case 'volume':
+        next = function (candle) { return [volumeOf(candle)]; };
+        break;
+      case 'stochastic':
+        next = stochastic(config.period, config.smooth, config.signal);
+        count = 2;
+        break;
+      case 'adx':
+        next = directionalMovement(config.period);
+        count = 3;
+        break;
+      case 'donchian': {
+        var bounds = rangeWindow(config.period);
+        next = function (candle) {
+          var range = bounds(candle);
+          return range ? [midpoint(range), range[0], range[1]] : [null, null, null];
+        };
+        count = 3;
+        break;
+      }
+      case 'ichimoku':
+        // Keep the values at their source timestamps. The chart clips and shifts
+        // them together so a lagging point appears only when its source opens.
+        next = ichimoku(config.conversion, config.base, config.span);
+        count = 5;
+        break;
+      case 'obv':
+        next = obv();
+        break;
       default:
-        return [];
+        return { data: [], append: function () {} };
     }
     var series = Array.from({ length: count }, function () { return []; });
-    candles.forEach(function (candle) {
+    function append(candle) {
       next(candle).forEach(function (value, index) {
-        series[index].push(Number.isFinite(value) ? { time: candle.time, value: value } : { time: candle.time });
+        var point = Number.isFinite(value) ? { time: candle.time, value: value } : { time: candle.time };
+        if (key === 'volume' && Number.isFinite(value)) {
+          point.color = candle.close < candle.open ? 'rgba(255, 113, 128, .65)' : 'rgba(69, 224, 173, .65)';
+        }
+        series[index].push(point);
       });
-    });
-    return series;
+    }
+    return { data: series, append: append };
   }
 
-  var api = { parameters: parameters, normalize: normalize, calculate: calculate };
+  function calculate(key, candles, settings) {
+    var calculator = createCalculator(key, settings);
+    candles.forEach(calculator.append);
+    return calculator.data;
+  }
+
+  var api = {
+    parameters: parameters,
+    normalize: normalize,
+    calculate: calculate,
+    createCalculator: createCalculator,
+    placement: placement,
+    preferences: preferences
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.ReplayIndicators = api;
 })(typeof window !== 'undefined' ? window : globalThis);

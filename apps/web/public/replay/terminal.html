@@ -141,13 +141,86 @@
                   <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
                 </button>
                 <div class="replay-dock-divider" aria-hidden="true"></div>
-                <button type="button" class="replay-dock-btn replay-dock-btn-danger" id="tool-clear" data-action="clear" data-tooltip="Hapus Semua Gambar (Del)" aria-label="Hapus Semua Gambar (Del)">
+                <button type="button" class="replay-dock-btn replay-dock-btn-danger" id="tool-clear" data-action="clear" data-tooltip="Hapus Semua Gambar" aria-label="Hapus Semua Gambar">
                   <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
                 </button>
               </div>
             </nav>
 
             <div id="replay-chart-stack" class="replay-chart-stack">
+              <div id="replay-analysis-toolbar" class="replay-analysis-toolbar" aria-label="Analisis chart">
+                <label>Timeframe <select id="replay-chart-timeframe" disabled></select></label>
+                <label>
+                  Tipe chart
+                  <select id="replay-chart-type">
+                    <option value="candles">Candlestick</option>
+                    <option value="bars">OHLC Bar</option>
+                    <option value="line">Line</option>
+                    <option value="area">Area</option>
+                    <option value="heikin">Heikin Ashi</option>
+                  </select>
+                </label>
+                <label>
+                  Drawing
+                  <select id="replay-drawing-tool">
+                    <option value="cursor">Kursor</option>
+                    <option value="hline">Horizontal Line</option>
+                    <option value="vline">Vertical Line</option>
+                    <option value="trendline">Trendline</option>
+                    <option value="ray">Ray</option>
+                    <option value="channel">Parallel Channel</option>
+                    <option value="rect">Rectangle</option>
+                    <option value="fib">Fibonacci Retracement</option>
+                    <option value="fib-extension">Fibonacci Extension</option>
+                    <option value="ruler">Penggaris</option>
+                    <option value="text">Teks</option>
+                    <option value="arrow">Panah</option>
+                  </select>
+                </label>
+                <label class="replay-inline-check"><input id="replay-drawing-snap" type="checkbox"> Snap OHLC</label>
+                <details id="replay-drawing-objects" class="replay-chart-menu">
+                  <summary>Objek</summary>
+                  <section class="replay-chart-menu-panel" aria-label="Kelola drawing">
+                    <div class="replay-object-actions">
+                      <button type="button" id="replay-drawing-undo" disabled>Urungkan</button>
+                      <button type="button" id="replay-drawing-redo" disabled>Ulangi</button>
+                    </div>
+                    <label>Drawing tersimpan <select id="replay-drawing-list" size="4" aria-label="Drawing tersimpan"></select></label>
+                    <fieldset id="replay-drawing-properties" disabled>
+                      <legend>Properti drawing</legend>
+                      <label>Warna <input id="replay-drawing-color" type="color"></label>
+                      <label>Ketebalan <input id="replay-drawing-width" type="number" min="1" max="8" step="0.5"></label>
+                      <label>Garis <select id="replay-drawing-style"><option value="solid">Utuh</option><option value="dashed">Putus-putus</option><option value="dotted">Titik</option></select></label>
+                      <label id="replay-drawing-text-field" hidden>Teks <input id="replay-drawing-text" maxlength="120"></label>
+                      <label class="replay-inline-check"><input id="replay-drawing-hidden" type="checkbox"> Sembunyikan</label>
+                      <label class="replay-inline-check"><input id="replay-drawing-locked" type="checkbox"> Kunci</label>
+                      <div class="replay-object-actions">
+                        <button type="button" id="replay-drawing-duplicate">Duplikasi</button>
+                        <button type="button" id="replay-drawing-remove">Hapus</button>
+                      </div>
+                    </fieldset>
+                  </section>
+                </details>
+                <details id="replay-chart-options" class="replay-chart-menu">
+                  <summary>Pengaturan</summary>
+                  <section class="replay-chart-menu-panel" aria-label="Pengaturan tampilan">
+                    <label class="replay-inline-check"><input id="replay-chart-grid" type="checkbox" checked> Grid</label>
+                    <label>Skala harga
+                      <select id="replay-chart-scale">
+                        <option value="Normal">Linear</option>
+                        <option value="Logarithmic">Logaritmik</option>
+                        <option value="Percentage">Persentase</option>
+                        <option value="IndexedTo100">Indeks 100</option>
+                      </select>
+                    </label>
+                    <button type="button" id="replay-chart-reset">Reset tampilan</button>
+                    <button type="button" id="replay-chart-export">Ekspor PNG</button>
+                    <p id="replay-chart-export-status" role="status" hidden></p>
+                  </section>
+                </details>
+              </div>
+              <p id="replay-chart-notice" class="replay-chart-notice" role="status" hidden></p>
+              <div id="replay-crosshair-values" class="replay-crosshair-values" aria-label="OHLC candle" hidden></div>
               <p class="replay-rotate-hint" role="status">Putar perangkat untuk tampilan landscape.</p>
               <div class="replay-price-view">
                 <div id="replay-chart" class="replay-chart">
@@ -217,6 +290,7 @@
                   <summary>Indikator</summary>
                   <div class="replay-indicators-options">
                     <form id="replay-indicator-settings" class="replay-indicator-settings">
+                      <label>Cari indikator <input id="replay-indicator-search" type="search" autocomplete="off"></label>
                       <label>Pilih indikator
                         <select id="replay-indicator-selected" aria-describedby="replay-indicator-description">
                           <option value="sma" data-description="Simple Moving Average menghitung rata-rata harga penutupan dengan bobot yang sama.">SMA</option>
@@ -227,6 +301,12 @@
                           <option value="rsi" data-description="Relative Strength Index mengukur momentum perubahan harga pada skala 0–100.">RSI</option>
                           <option value="macd" data-description="Moving Average Convergence Divergence membandingkan dua EMA untuk menunjukkan arah dan momentum tren.">MACD</option>
                           <option value="atr" data-description="Average True Range mengukur volatilitas berdasarkan rentang harga dan selisih dari penutupan sebelumnya.">ATR</option>
+                          <option value="volume" data-description="Volume dari arsip candle replay.">Volume</option>
+                          <option value="stochastic" data-description="Posisi harga penutupan relatif terhadap rentang tertinggi dan terendah selama periode tertentu.">Stochastic</option>
+                          <option value="adx" data-description="ADX mengukur kekuatan tren. +DI dan −DI menunjukkan arah pergerakan.">ADX / DMI</option>
+                          <option value="donchian" data-description="Kanal yang dibentuk dari harga tertinggi dan terendah selama periode tertentu.">Donchian Channel</option>
+                          <option value="ichimoku" data-description="Garis tren, momentum, dan area support atau resistance menurut metode Ichimoku.">Ichimoku Cloud</option>
+                          <option value="obv" data-description="Menjumlahkan atau mengurangi volume sesuai arah perubahan harga penutupan.">On-Balance Volume (OBV)</option>
                         </select>
                       </label>
                       <p id="replay-indicator-description" class="replay-indicator-description"></p>
@@ -238,9 +318,15 @@
                           <option value="large">Besar</option>
                         </select>
                       </label>
+                      <label>Penempatan
+                        <select id="replay-indicator-placement">
+                          <option value="overlay">Chart harga</option>
+                          <option value="pane">Panel terpisah</option>
+                        </select>
+                      </label>
                       <p id="replay-indicator-error" role="alert" hidden></p>
                       <div class="replay-indicator-actions">
-                        <button type="submit">Terapkan</button>
+                        <button type="submit" id="replay-indicator-apply">Terapkan</button>
                         <button type="button" id="replay-indicator-reset">Reset ke default</button>
                       </div>
                     </form>

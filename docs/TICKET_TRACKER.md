@@ -232,3 +232,12 @@ Merombak total tab Market menjadi antarmuka analisis teknikal bergaya workstatio
 - [x] **04-i18n-dictionary-and-translations.md** (`done`): Paritas bilingual EN/ID di `translations.js`, pembersihan key usang, & verifikasi `check-i18n.cjs`.
 
 > Sisa gate: cek render chart, drawing tools, fokus keyboard, ganti tab, dan pemuatan ulang setelah TradingView gagal. Di build production, cek chart Market dan iframe Replay dengan CSP aktif.
+
+#### Fase 018 · Analisis Teknikal Replay
+
+Fase ini mengikuti [SPEC-014](specs/014-replay-technical-analysis-chart.md).
+
+- [x] **[01-chart-workspace.md](../tickets/018-replay-technical-analysis/01-chart-workspace.md)** (`done`): Workspace chart Replay (tipe chart, skala, grid, reset tampilan, ekspor PNG, & pergantian timeframe).
+- [x] **[02-indicator-instances.md](../tickets/018-replay-technical-analysis/02-indicator-instances.md)** (`done`): Katalog & instance indikator (Volume, Stoch, ADX, Donchian, Ichimoku, OBV, multi-instance, & preferensi).
+- [x] **[03-drawing-tools.md](../tickets/018-replay-technical-analysis/03-drawing-tools.md)** (`done`): Drawing & pengelolaan objek (ray, vertikal, channel paralel, Fib ext, teks, panah, snap OHLC, & undo/redo).
+
