@@ -319,7 +319,9 @@
 
   function barEnd(candle, timeframe) {
     timeframe = timeframe || currentPayload.meta.timeframe;
-    return candle.time + Number(timeframe.slice(1)) * (timeframe[0] === 'H' ? 3600 : 60);
+    var unit = timeframe[0];
+    var scale = unit === 'D' ? 86400 : unit === 'H' ? 3600 : 60;
+    return candle.time + Number(timeframe.slice(1)) * scale;
   }
 
   function syncSimulation() {

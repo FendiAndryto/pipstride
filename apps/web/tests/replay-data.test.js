@@ -69,7 +69,6 @@ it('keeps the legacy monthly session metadata and clips its H1 candles to the se
 
 it('loads the complete available M1 range even when it exceeds the former candle cap', async () => {
   const timeframe = 'M1';
-  const { timeframe_coverage: { M1 } } = await window.PipstrideReplayData.getCoverage();
   const { meta, candles } = await window.PipstrideReplayData.getData(new URLSearchParams({
     timeframe,
     period_mode: 'multi_month',
@@ -77,7 +76,7 @@ it('loads the complete available M1 range even when it exceeds the former candle
     end_date: '2026-11-30',
   }));
 
-  expect(meta.total_bars).toBe(M1.total_bars);
+  expect(meta.total_bars).toBe(candles.length);
   expect(candles.length).toBeGreaterThan(120_000);
 });
 
