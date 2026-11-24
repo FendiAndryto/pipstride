@@ -1,0 +1,13 @@
+import './vendor/lightweight-charts.standalone.production.js';
+import './js/replay_engine.js';
+import './js/replay_indicators.js';
+import './js/replay_volume_profile.js';
+import './js/replay_chart.js';
+import './js/replay_canvas.js';
+import './js/replay_drawings.js';
+import './js/replay_ledger.js';
+import './js/replay_simulator.js';
+import './js/replay_storage.js';
+import './js/replay.js';
+import './data-source.js';
+import './js/bootstrap.js';

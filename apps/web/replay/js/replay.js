@@ -13,6 +13,13 @@
   'use strict';
 
   var MAX_PERIOD_MONTHS = 12;
+  var INDICATOR_TIME_FIELDS = new Set(['anchorTime', 'startTime', 'endTime']);
+  var TOOL_INSTRUCTIONS = {
+    brush: 'Seret pada chart untuk menggambar.',
+    pitchfork: 'Pilih tiga titik pivot pada chart.',
+    elliott_wave: 'Pilih titik awal, lalu titik gelombang 1 sampai 5.',
+    risk_reward: 'Pilih harga entry, stop, lalu target.'
+  };
 
   var MONTH_NAMES = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -25,6 +32,7 @@
   var indicatorPreferences = [];
   var indicatorCatalog = new Map();
   var editingIndicator = null;
+  var indicatorTimePick = null;
   var canvasApi = null;
   var drawingsApi = null;
   var simulatorApi = null;
@@ -242,6 +250,7 @@
 
   function loadData(event) {
     if (loading || !updatePeriodNotice()) return;
+    finishIndicatorTimePick(null, false);
     var fromSettings = event?.currentTarget === el.btnLoad;
     loading = true;
     el.chartTimeframe.disabled = true;
@@ -472,6 +481,9 @@
     var parameters = preferences ? preferences.parameters : api.normalize(type);
     el.indicatorSize.value = preferences ? preferences.size : 'default';
     el.indicatorPlacement.value = preferences ? preferences.placement : api.placement(type);
+    var profile = type === 'fixed-volume-profile' || type === 'session-volume-profile';
+    el.indicatorPlacement.closest('label').hidden = profile;
+    el.indicatorSize.closest('label').hidden = profile;
     el.indicatorApply.disabled = !option;
     el.indicatorReset.disabled = !option;
     el.indicatorCancel.hidden = !editingIndicator;
@@ -480,6 +492,10 @@
     el.indicatorError.hidden = true;
     el.indicatorParameters.replaceChildren();
     (api.parameters[type] || []).forEach(function (parameter) {
+      if (INDICATOR_TIME_FIELDS.has(parameter.key)) {
+        renderIndicatorTimeField(parameter, parameters[parameter.key]);
+        return;
+      }
       var label = document.createElement('label');
       var input = document.createElement('input');
       label.textContent = parameter.label;
@@ -493,6 +509,59 @@
       label.appendChild(input);
       el.indicatorParameters.appendChild(label);
     });
+  }
+
+  function renderIndicatorTimeField(parameter, value) {
+    var field = document.createElement('div');
+    field.className = 'replay-indicator-time-field';
+    var label = document.createElement('span');
+    label.textContent = parameter.label;
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = parameter.key;
+    input.value = value;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = value > 0 ? formatUtc(value) : 'Pilih candle';
+    button.addEventListener('click', function () {
+      if (!chartApi || !controller.isLoaded()) {
+        setText(el.indicatorError, 'Muat data Replay sebelum memilih candle.');
+        el.indicatorError.hidden = false;
+        return;
+      }
+      controller.pause();
+      selectTool('cursor');
+      if (drawingsApi) drawingsApi.deselect();
+      if (simulatorApi) simulatorApi.deselect();
+      indicatorTimePick = { input: input, button: button };
+      setText(el.indicatorPickLabel, 'Pilih candle di chart · ' + parameter.label);
+      el.indicatorPick.hidden = false;
+      el.chartContainer.classList.add('is-picking-candle');
+      el.indicatorsMenu.open = false;
+      el.indicatorPickCurrent.focus();
+    });
+    field.append(label, button, input);
+    el.indicatorParameters.appendChild(field);
+  }
+
+  function finishIndicatorTimePick(candle, reopenMenu) {
+    if (!indicatorTimePick) return;
+    var pick = indicatorTimePick;
+    indicatorTimePick = null;
+    el.indicatorPick.hidden = true;
+    el.chartContainer.classList.remove('is-picking-candle');
+    if (candle) {
+      pick.input.value = candle.time;
+      pick.button.textContent = formatUtc(candle.time);
+      el.indicatorError.hidden = true;
+    }
+    if (reopenMenu) {
+      global.requestAnimationFrame(function () {
+        if (!active || !pick.button.isConnected) return;
+        openChartMenu(el.indicatorsMenu);
+        pick.button.focus();
+      });
+    }
   }
 
   function filterIndicatorCatalog() {
@@ -515,7 +584,9 @@
     el.indicatorAppliedList.replaceChildren();
     indicatorPreferences.forEach(function (preferences) {
       var option = indicatorCatalog.get(preferences.type);
-      var values = Object.values(preferences.parameters);
+      var values = Object.entries(preferences.parameters).filter(function (entry) {
+        return !INDICATOR_TIME_FIELDS.has(entry[0]);
+      }).map(function (entry) { return entry[1]; });
       var title = option.textContent + (values.length ? ' (' + values.join(', ') + ')' : '');
 
       var row = document.createElement('li');
@@ -590,6 +661,10 @@
     el.indicatorReset.after(el.indicatorCancel);
     renderIndicatorSettings();
     renderAppliedIndicators();
+    el.indicatorPickCurrent.addEventListener('click', function () {
+      finishIndicatorTimePick(controller.snapshot().candle, true);
+    });
+    $('replay-indicator-pick-cancel').addEventListener('click', function () { finishIndicatorTimePick(null, true); });
     el.indicatorCancel.addEventListener('click', function () {
       editingIndicator = null;
       renderIndicatorSettings();
@@ -614,10 +689,17 @@
       if (!indicatorCatalog.has(key)) return;
       var parameters = {};
       el.indicatorParameters.querySelectorAll('input').forEach(function (input) {
-        parameters[input.name] = input.valueAsNumber;
+        parameters[input.name] = Number(input.value);
       });
       var message = '';
-      if (key === 'macd' && parameters.fast >= parameters.slow) {
+      var missingTime = Object.keys(parameters).some(function (name) {
+        return INDICATOR_TIME_FIELDS.has(name) && !(parameters[name] > 0);
+      });
+      if (missingTime) {
+        message = 'Pilih candle untuk setiap titik waktu indikator.';
+      } else if (key === 'fixed-volume-profile' && parameters.startTime > parameters.endTime) {
+        message = 'Candle akhir harus sama dengan atau setelah candle mulai.';
+      } else if (key === 'macd' && parameters.fast >= parameters.slow) {
         message = 'Periode cepat harus lebih kecil dari periode lambat.';
       } else if (key === 'rsi' && parameters.lower >= parameters.upper) {
         message = 'Batas bawah harus lebih kecil dari batas atas.';
@@ -666,6 +748,9 @@
     chartApi.onCandleHover(function (candle) {
       hoveredCandle = candle;
       renderCrosshairValues(controller.snapshot().candle);
+    });
+    chartApi.onCandleClick(function (candle) {
+      if (active && candle) finishIndicatorTimePick(candle, true);
     });
 
     indicatorPreferences.forEach(function (preferences) {
@@ -1023,6 +1108,7 @@
 
   function selectTool(toolName) {
     currentTool = toolName || 'cursor';
+    if (currentTool !== 'cursor') finishIndicatorTimePick(null, false);
     el.toolButtons.forEach(function (button, tool) {
       button.setAttribute('aria-pressed', String(tool === currentTool));
     });
@@ -1030,6 +1116,9 @@
     el.toolsToggle.toggleAttribute('data-tool-active', currentTool !== 'cursor');
     el.toolsToggle.title = label;
     el.toolsToggle.setAttribute('aria-label', label);
+    var instruction = TOOL_INSTRUCTIONS[currentTool] || '';
+    setText(el.toolInstruction, instruction);
+    el.toolInstruction.hidden = !instruction;
     if (canvasApi) {
       canvasApi.setTool(currentTool);
     }
@@ -1188,6 +1277,9 @@
       });
     });
     el.chartMenus.forEach(function (menu) {
+      menu.addEventListener('toggle', function () {
+        if (menu.open) finishIndicatorTimePick(null, false);
+      });
       menu.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape' || !menu.open) return;
         event.preventDefault();
@@ -1209,6 +1301,11 @@
 
   function onKeyDown(event) {
     if (!active || event.defaultPrevented) return;
+    if (indicatorTimePick && event.key === 'Escape') {
+      event.preventDefault();
+      finishIndicatorTimePick(null, true);
+      return;
+    }
     if (el.indicatorsMenu && el.indicatorsMenu.contains(event.target)) return;
     if (isTypingTarget(event.target)) return;
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'z') {
@@ -1369,6 +1466,7 @@
     el.chartNotice = $('replay-chart-notice');
     el.toolsMenu = $('replay-tools-menu');
     el.toolsToggle = $('replay-tools-toggle');
+    el.toolInstruction = $('replay-tool-instruction');
     el.chartOptions = $('replay-chart-options');
     el.candleDetails = $('replay-candle-details');
     el.indicatorsMenu = $('replay-indicators-menu');
@@ -1400,6 +1498,9 @@
     el.indicatorSelected = $('replay-indicator-selected');
     el.indicatorDescription = $('replay-indicator-description');
     el.indicatorParameters = $('replay-indicator-parameters');
+    el.indicatorPick = $('replay-indicator-pick');
+    el.indicatorPickLabel = $('replay-indicator-pick-label');
+    el.indicatorPickCurrent = $('replay-indicator-pick-current');
     el.indicatorSize = $('replay-indicator-size');
     el.indicatorPlacement = $('replay-indicator-placement');
     el.indicatorApply = $('replay-indicator-apply');
@@ -1487,6 +1588,7 @@
     if (active) {
       global.requestAnimationFrame(onResize);
     } else {
+      finishIndicatorTimePick(null, false);
       controller.pause();
       if (el.chartWrap.classList.contains('is-fullscreen')) exitFullscreen();
       syncStorage();

@@ -6,7 +6,7 @@ const window = {};
 
 beforeAll(async () => {
   for (const script of ['replay_ledger.js', 'replay_simulator.js']) {
-    const source = await readFile(new URL(`../public/replay/js/${script}`, import.meta.url), 'utf8');
+    const source = await readFile(new URL(`../replay/js/${script}`, import.meta.url), 'utf8');
     runInNewContext(source, { window });
   }
 });

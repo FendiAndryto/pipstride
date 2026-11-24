@@ -408,6 +408,31 @@ summary {
   color: var(--color-amber);
 }
 
+.replay-indicator-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.replay-indicator-pick > span {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.replay-indicator-time-field {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.replay-chart.is-picking-candle {
+  cursor: crosshair;
+}
+
 .replay-price-view,
 .replay-chart {
   position: relative;

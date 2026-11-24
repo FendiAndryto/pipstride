@@ -26,7 +26,7 @@ export default function ReplayTab({ accountId, active, onActivity }) {
     <iframe
       ref={frame}
       className="replay-terminal-frame"
-      src="/replay/terminal.html"
+      src="/replay/terminal.html?v=2"
       title="XAUUSD Replay"
       allowFullScreen
       onLoad={initialize}

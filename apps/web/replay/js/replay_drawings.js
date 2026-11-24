@@ -8,8 +8,15 @@
   'use strict';
 
   var idCounter = 0;
-  var annotationAnchors = { ray: 2, vline: 1, channel: 3, 'fib-extension': 3, text: 1, arrow: 2 };
+  var annotationAnchors = {
+    ray: 2, vline: 1, channel: 3, 'fib-extension': 3, text: 1, arrow: 2,
+    horizontal_ray: 1, price_label: 1, price_range: 2, date_range: 2, date_price_range: 2,
+    pitchfork: 3, regression_channel: 2, fib_fan: 2, fib_time_zones: 2,
+    elliott_wave: 6, risk_reward: 3
+  };
   var extensionLevels = [0, 0.618, 1, 1.272, 1.618, 2, 2.618];
+  var fibonacciTimeZones = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+  var timeIntervalTools = ['channel', 'date_range', 'regression_channel', 'fib_fan', 'fib_time_zones'];
 
   function nextId(prefix) {
     idCounter += 1;
@@ -226,11 +233,11 @@
 
       var lastIdx = lastRevealedIndex(candles);
       if (lastIdx < 0) return null;
-      var lo = lowerBoundTime(candles, t, lastIdx);
-      if (candles[lo] && candles[lo].time === t) {
+      var lo = lowerBoundTime(candles, t, lastIdx + 1);
+      if (lo <= lastIdx && candles[lo].time === t) {
         return logicalCoord(lo);
       }
-      if (lo <= 0 || lo >= candles.length) return null;
+      if (lo <= 0 || lo > lastIdx) return null;
 
       var a = candles[lo - 1];
       var b = candles[lo];
@@ -448,7 +455,7 @@
       var y = payload.y;
       var time = payload.time;
       var price = payload.price;
-      var snapped = tool !== 'ruler' && !payload.shiftKey ? snapPoint(x, y, time) : null;
+      var snapped = tool !== 'ruler' && tool !== 'brush' && !payload.shiftKey ? snapPoint(x, y, time) : null;
       var anchorTime = snapped ? snapped.time : time;
       var anchorPrice = snapped ? snapped.price : price;
       var anchorY = snapped ? snapped.y : y;
@@ -471,6 +478,8 @@
         handleRectPointer(type, x, anchorY, anchorTime, anchorPrice);
       } else if (tool === 'trendline' || tool === 'fib') {
         handleTwoAnchorPointer(tool, type, x, anchorY, anchorTime, anchorPrice);
+      } else if (tool === 'brush') {
+        handleBrushPointer(type, x, y, time, price);
       } else if (Object.hasOwn(annotationAnchors, tool)) {
         handleAnnotationPointer(tool, type, x, y, anchorTime, anchorPrice);
       } else if (tool === 'ruler') {
@@ -482,8 +491,20 @@
     }
 
     function setAnnotationAnchor(item, anchor, time, price) {
-      item['t' + anchor] = time;
-      if (item.type !== 'vline') item['p' + anchor] = Number(price.toFixed(3));
+      if (Number.isFinite(time)) item['t' + anchor] = time;
+      if (item.type !== 'vline' && Number.isFinite(price)) item['p' + anchor] = Number(price.toFixed(3));
+    }
+
+    function validAnnotationAnchor(d, anchor, time, price) {
+      if (anchor <= 2 && timeIntervalTools.indexOf(d.type) >= 0 && time === d['t' + (3 - anchor)]) return false;
+      if ((d.type === 'price_range' || d.type === 'fib_fan') && price === d['p' + (3 - anchor)]) return false;
+      if (d.type === 'risk_reward') {
+        var entry = anchor === 1 ? price : d.p1;
+        var stopOffset = (anchor === 2 ? price : d.p2) - entry;
+        var targetOffset = (anchor === 3 ? price : d.p3) - entry;
+        return stopOffset !== 0 && targetOffset !== 0 && !(stopOffset * targetOffset > 0);
+      }
+      return true;
     }
 
     function handleAnnotationPointer(tool, type, x, y, time, price) {
@@ -516,11 +537,12 @@
       }
 
       var anchor = draft.anchor;
-      setAnnotationAnchor(draft, anchor, t, price);
+      var nextPrice = Number.isFinite(price) ? Number(price.toFixed(3)) : price;
+      setAnnotationAnchor(draft, anchor, t, nextPrice);
       var moved = Math.hypot(x - draft.firstX, y - draft.firstY) > 5;
       var finishAnchor = type === 'pointerdown' || (type === 'pointerup' && anchor === 2 && moved);
-      if (finishAnchor && anchor === 2 &&
-          draft.t1 === draft.t2 && (tool === 'channel' || draft.p1 === draft.p2)) {
+      if (finishAnchor && (!validAnnotationAnchor(draft, anchor, t, nextPrice) ||
+          (anchor === 2 && draft.t1 === draft.t2 && draft.p1 === draft.p2))) {
         finishAnchor = false;
       }
       if (finishAnchor && anchor === count) {
@@ -534,6 +556,42 @@
         if (finishAnchor) draft.anchor += 1;
         canvasApi.requestRedraw();
       }
+    }
+
+    function brushTime(x, time) {
+      var candles = getCandles();
+      var last = lastRevealedIndex(candles);
+      var startX = logicalCoord(0);
+      var nextX = logicalCoord(1);
+      var step = nextX - startX;
+      if (last < 1 || startX == null || nextX == null || !(step > 0)) return resolveEdgeTime(time, x);
+      var position = Math.max(0, (x - startX) / step);
+      var left = Math.min(Math.floor(position), last - 1);
+      return candles[left].time + (position - left) * (candles[left + 1].time - candles[left].time);
+    }
+
+    function handleBrushPointer(type, x, y, time, price) {
+      if (type === 'pointercancel') {
+        draft = null;
+      } else if (type === 'pointerdown') {
+        draft = { type: 'brush', points: [] };
+      } else if (!draft) {
+        return;
+      }
+      if (draft && Number.isFinite(price) && (draft.lastX == null || Math.hypot(x - draft.lastX, y - draft.lastY) >= 2)) {
+        var t = brushTime(x, time);
+        if (t != null) {
+          draft.points.push([t, Number(price.toFixed(3))]);
+          draft.lastX = x;
+          draft.lastY = y;
+        }
+      }
+      if (type === 'pointerup') {
+        var points = draft.points;
+        draft = null;
+        if (points.length > 1) onCommit(addDrawing({ type: 'brush', points: points }));
+      }
+      canvasApi.requestRedraw();
     }
 
     // ------------------------------------------------------------- HLine pointer
@@ -795,7 +853,7 @@
               return d;
             }
           }
-        } else if (Object.hasOwn(annotationAnchors, d.type) && hitAnnotation(d, x, y)) {
+        } else if ((d.type === 'brush' || Object.hasOwn(annotationAnchors, d.type)) && hitAnnotation(d, x, y)) {
           return d;
         }
       }
@@ -828,7 +886,114 @@
       };
     }
 
+    function rangeGeometry(d, x1, y1, x2, y2) {
+      var left = Math.min(x1, x2);
+      var right = Math.max(x1, x2);
+      var top = Math.min(y1, y2);
+      var bottom = Math.max(y1, y2);
+      var labels = [];
+      if (d.type !== 'date_range') {
+        var change = d.p2 - d.p1;
+        var pct = d.p1 !== 0 ? ' (' + (100 * change / d.p1).toFixed(2) + '%)' : '';
+        labels.push((change > 0 ? '+' : '') + change.toFixed(3) + pct);
+      }
+      if (d.type !== 'price_range') {
+        labels.push(formatDuration(Math.abs(d.t2 - d.t1)) + ' · ' + countBarsBetween(d.t1, d.t2) + ' bars');
+      }
+      return {
+        segments: [],
+        boxes: [{ left: left, top: top, right: right, bottom: bottom }],
+        labels: labels.map(function (label, index) {
+          return { x: left + 4, y: top - 8 - 15 * (labels.length - 1 - index), text: label };
+        })
+      };
+    }
+
+    function regressionGeometry(d, result) {
+      var candles = getCandles();
+      var firstTime = Math.min(d.t1, d.t2);
+      var lastTime = Math.max(d.t1, d.t2);
+      var watermark = lastRevealedIndex(candles);
+      var first = lowerBoundTime(candles, firstTime, watermark + 1);
+      var count = 0;
+      var sumY = 0;
+      var sumXY = 0;
+      var sumYY = 0;
+      var last = first;
+      for (var i = first; i <= watermark && candles[i].time <= lastTime; i += 1) {
+        var close = candles[i].close;
+        sumY += close;
+        sumXY += count * close;
+        sumYY += close * close;
+        count += 1;
+        last = i;
+      }
+      if (count < 2) return result;
+      var meanX = (count - 1) / 2;
+      var meanY = sumY / count;
+      var varianceX = (count * count - 1) / 12;
+      var covariance = sumXY / count - meanX * meanY;
+      var slope = covariance / varianceX;
+      var deviation = Math.sqrt(Math.max(0, sumYY / count - meanY * meanY - slope * covariance));
+      var firstPrice = meanY - slope * meanX;
+      var lastPrice = meanY + slope * meanX;
+      var left = logicalCoord(first);
+      var right = logicalCoord(last);
+      if (left == null || right == null) return result;
+      [-2, 0, 2].forEach(function (multiple) {
+        var y1 = priceToCoord(firstPrice + multiple * deviation);
+        var y2 = priceToCoord(lastPrice + multiple * deviation);
+        if (y1 != null && y2 != null) result.segments.push([left, y1, right, y2]);
+      });
+      return result;
+    }
+
+    function projectRay(segments, x, y, dx, dy, width, height) {
+      if (dx === 0 && dy === 0) return;
+      var scaleX = dx ? ((dx > 0 ? width : 0) - x) / dx : Infinity;
+      var scaleY = dy ? ((dy > 0 ? height : 0) - y) / dy : Infinity;
+      var scale = Math.max(0, Math.min(scaleX, scaleY));
+      segments.push([x, y, x + scale * dx, y + scale * dy]);
+    }
+
+    function riskRewardGeometry(d, x1, y1, x2, y2, x3, y3, width, result) {
+      if (!validAnnotationAnchor(d, 3, d.t3, d.p3)) return result;
+      var left = Math.min(x1, x2, x3);
+      var right = Math.max(x1, x2, x3);
+      if (right === left) right = Math.max(left + 40, Math.min(width, left + 80));
+      result.boxes = [
+        { left: left, top: Math.min(y1, y2), right: right, bottom: Math.max(y1, y2), color: '#f87171' },
+        { left: left, top: Math.min(y1, y3), right: right, bottom: Math.max(y1, y3), color: '#34d399' }
+      ];
+      var ratio = Math.abs((d.p3 - d.p1) / (d.p2 - d.p1));
+      result.labels = [{ x: left + 5, y: y1 - 8, text: ratio.toFixed(2) + ' R' }];
+      return result;
+    }
+
+    function pointPathGeometry(points, numbered) {
+      var result = { segments: [], labels: [] };
+      var previous = null;
+      points.forEach(function (point, index) {
+        var x = timeToCoord(point[0]);
+        var y = priceToCoord(point[1]);
+        if (x == null || y == null) {
+          previous = null;
+          return;
+        }
+        if (previous) result.segments.push([previous[0], previous[1], x, y]);
+        if (numbered && index > 0) result.labels.push({ x: x + 5, y: y - 8, text: '(' + index + ')' });
+        previous = [x, y];
+      });
+      return result;
+    }
+
     function annotationGeometry(d, width, height) {
+      if (d.type === 'brush') return pointPathGeometry(d.points || [], false);
+      if (d.type === 'elliott_wave') {
+        var points = [];
+        for (var i = 1; i <= annotationAnchors[d.type]; i += 1) points.push([d['t' + i], d['p' + i]]);
+        return pointPathGeometry(points, true);
+      }
       var x1 = timeToCoord(d.t1);
       if (x1 == null) return null;
       var result = { segments: [] };
@@ -838,8 +1003,13 @@
       }
       var y1 = priceToCoord(d.p1);
       if (y1 == null) return null;
-      if (d.type === 'text') {
-        result.label = { x: x1 + 6, y: y1, text: d.text || 'Text' };
+      if (d.type === 'text' || d.type === 'price_label') {
+        var label = d.type === 'price_label' ? d.p1.toFixed(3) : d.text || 'Text';
+        result.labels = [{ x: x1 + 6, y: y1, text: label }];
+        return result;
+      }
+      if (d.type === 'horizontal_ray') {
+        result.segments.push([x1, y1, Math.max(x1, width), y1]);
         return result;
       }
 
@@ -848,6 +1018,24 @@
       if (x2 == null || y2 == null) return result;
       var dx = x2 - x1;
       var dy = y2 - y1;
+      if (d.type === 'price_range' || d.type === 'date_range' || d.type === 'date_price_range') {
+        return rangeGeometry(d, x1, y1, x2, y2);
+      }
+      if (d.type === 'regression_channel') return regressionGeometry(d, result);
+      if (d.type === 'fib_time_zones') {
+        fibonacciTimeZones.forEach(function (zone) {
+          var x = x1 + dx * zone;
+          if (x >= 0 && x <= width) result.segments.push([x, height, x, 16, String(zone)]);
+        });
+        return result;
+      }
+      if (d.type === 'fib_fan') {
+        [0.382, 0.5, 0.618, 0.786].forEach(function (ratio) {
+          var y = priceToCoord(d.p1 + (d.p2 - d.p1) * ratio);
+          if (y != null) projectRay(result.segments, x1, y1, dx, y - y1, width, height);
+        });
+        return result;
+      }
       if (d.type === 'ray') {
         var endX = dx > 0 ? width : 0;
         var endY = dy > 0 ? height : 0;
@@ -870,7 +1058,20 @@
       var x3 = timeToCoord(d.t3);
       var y3 = priceToCoord(d.p3);
       if (x3 == null || y3 == null) return result;
-      if (d.type === 'channel' && dx !== 0) {
+      if (d.type === 'risk_reward') {
+        result.segments.length = 0;
+        return riskRewardGeometry(d, x1, y1, x2, y2, x3, y3, width, result);
+      }
+      if (d.type === 'pitchfork') {
+        var midX = (x2 + x3) / 2;
+        var midY = (y2 + y3) / 2;
+        var forkDx = midX - x1;
+        var forkDy = midY - y1;
+        result.segments = [[x2, y2, x3, y3], [x1, y1, midX, midY]];
+        projectRay(result.segments, midX, midY, forkDx, forkDy, width, height);
+        projectRay(result.segments, x2, y2, forkDx, forkDy, width, height);
+        projectRay(result.segments, x3, y3, forkDx, forkDy, width, height);
+      } else if (d.type === 'channel' && dx !== 0) {
         var offset = y3 - (y1 + dy * (x3 - x1) / dx);
         result.segments.push([x1, y1 + offset, x2, y2 + offset]);
         result.channel = [x1, y1, x2, y2, offset];
@@ -892,10 +1093,12 @@
       var size = canvasSize();
       var geometry = annotationGeometry(d, size.width, size.height);
       if (!geometry) return false;
-      if (geometry.label) {
-        var label = geometry.label;
+      if ((geometry.labels || []).some(function (label) {
         return Math.abs(y - label.y) <= 10 && x >= label.x - 12 && x <= label.x + 8 * label.text.length + 5;
-      }
+      })) return true;
+      if ((geometry.boxes || []).some(function (box) {
+        return x >= box.left - 8 && x <= box.right + 8 && y >= box.top - 8 && y <= box.bottom + 8;
+      })) return true;
       if (geometry.channel) {
         var c = geometry.channel;
         if (x >= Math.min(c[0], c[2]) && x <= Math.max(c[0], c[2])) {
@@ -1032,7 +1235,7 @@
             startX: x,
             startY: y,
             startTime: time,
-            startEdge: snapped ? snapped.time : resolveEdgeTime(time, x),
+            startEdge: item.type === 'brush' ? brushTime(x, time) : (snapped ? snapped.time : resolveEdgeTime(time, x)),
             startPrice: snapped ? snapped.price : (price != null ? price : coordinateToPrice(y)),
             orig: clone(item)
           };
@@ -1066,7 +1269,7 @@
       // resolve the pointer column ourselves (extrapolating forward when it is
       // beyond the last revealed bar). Without this a right-edge handle could
       // never be dragged further right than the current candle.
-      var effTime = resolveEdgeTime(time, x);
+      var effTime = item.type === 'brush' ? brushTime(x, time) : resolveEdgeTime(time, x);
       var effPrice = price;
       if (effPrice == null && chartApi && chartApi.coordinateToPrice && y != null) {
         try {
@@ -1084,6 +1287,10 @@
           if (effPrice != null && !isNaN(effPrice)) {
             item.price = Number((orig.price + dp).toFixed(3));
           }
+        } else if (item.type === 'brush') {
+          item.points = orig.points.map(function (point) {
+            return [point[0] + dt, Number((point[1] + dp).toFixed(3))];
+          });
         } else {
           var count = annotationAnchors[item.type] || 2;
           for (var anchor = 1; anchor <= count; anchor += 1) {
@@ -1098,11 +1305,15 @@
             item.price = Number(effPrice.toFixed(3));
           }
         } else if (item.type === 'trendline' || item.type === 'fib' || Object.hasOwn(annotationAnchors, item.type)) {
-          if (effTime != null && !(item.type === 'channel' &&
-              ((hId === 'p1' && effTime === item.t2) || (hId === 'p2' && effTime === item.t1)))) {
-            item['t' + hId.slice(1)] = effTime;
+          var handleAnchor = Number(hId.slice(1));
+          var handleTime = effTime == null ? item['t' + handleAnchor] : effTime;
+          var handlePrice = Number.isFinite(effPrice) ? Number(effPrice.toFixed(3)) : item[hId];
+          if (item.type === 'channel' && !validAnnotationAnchor(item, handleAnchor, handleTime, handlePrice)) {
+            handleTime = item['t' + handleAnchor];
           }
-          if (item.type !== 'vline' && Number.isFinite(effPrice)) item[hId] = Number(effPrice.toFixed(3));
+          if (validAnnotationAnchor(item, handleAnchor, handleTime, handlePrice)) {
+            setAnnotationAnchor(item, handleAnchor, handleTime, handlePrice);
+          }
         } else if (item.type === 'rect') {
           if (hId === 'tl') {
             if (effTime != null) item.t1 = effTime;
@@ -1174,7 +1385,7 @@
           renderRect(ctx, d, width, height, isSelected);
         } else if (d.type === 'trendline') {
           renderTrendline(ctx, d, width, height, isSelected);
-        } else if (Object.hasOwn(annotationAnchors, d.type)) {
+        } else if (d.type === 'brush' || Object.hasOwn(annotationAnchors, d.type)) {
           renderAnnotation(ctx, d, width, height, isSelected);
         }
       }
@@ -1187,7 +1398,7 @@
           renderRectDraft(ctx, draft, width, height);
         } else if (draft.type === 'trendline') {
           renderTrendlineDraft(ctx, draft, width, height);
-        } else if (Object.hasOwn(annotationAnchors, draft.type)) {
+        } else if (draft.type === 'brush' || Object.hasOwn(annotationAnchors, draft.type)) {
           renderAnnotation(ctx, draft, width, height, false);
         }
       } else if (currentTool === 'hline' && hoverPos) {
@@ -1214,6 +1425,14 @@
       applyLineStyle(ctx, d, color, 1.5);
       if (d === draft) ctx.setLineDash([4, 3]);
       ctx.fillStyle = ctx.strokeStyle;
+      (geometry.boxes || []).forEach(function (box) {
+        ctx.save();
+        ctx.fillStyle = box.color || ctx.strokeStyle;
+        ctx.globalAlpha *= 0.16;
+        ctx.fillRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+        ctx.restore();
+        ctx.strokeRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+      });
       if (geometry.channel) {
         var c = geometry.channel;
         var alpha = ctx.globalAlpha;
@@ -1229,19 +1448,23 @@
       }
       ctx.font = '11px monospace';
       ctx.textAlign = 'right';
+      ctx.beginPath();
+      var previous = null;
       geometry.segments.forEach(function (segment) {
-        ctx.beginPath();
-        ctx.moveTo(segment[0], segment[1]);
+        if (!previous || previous[2] !== segment[0] || previous[3] !== segment[1]) {
+          ctx.moveTo(segment[0], segment[1]);
+        }
         ctx.lineTo(segment[2], segment[3]);
-        ctx.stroke();
         if (segment[4]) ctx.fillText(segment[4], segment[2] - 4, segment[3] - 4);
+        previous = segment;
       });
-      if (geometry.label) {
-        ctx.font = '13px monospace';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(geometry.label.text, geometry.label.x, geometry.label.y);
-      }
+      ctx.stroke();
+      ctx.font = '13px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      (geometry.labels || []).forEach(function (label) {
+        ctx.fillText(label.text, label.x, label.y);
+      });
       ctx.restore();
       if (isSelected || d === draft) {
         getAnchorHandles(d, width, height).forEach(function (handle) {

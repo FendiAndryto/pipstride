@@ -78,7 +78,35 @@
         { name: 'Chikou', color: '#c084fc' }
       ]
     },
-    obv: { independentScale: true, volume: true, series: [{ name: 'OBV', color: '#38bdf8' }] }
+    obv: { independentScale: true, volume: true, series: [{ name: 'OBV', color: '#38bdf8' }] },
+    'anchored-vwap': { series: [{ name: 'Anchored VWAP', color: '#f472b6' }] },
+    'stochastic-rsi': {
+      independentScale: true,
+      series: [{ name: 'Stoch RSI %K', color: '#38bdf8' }, { name: '%D', color: '#fbbf24' }]
+    },
+    keltner: {
+      series: [
+        { name: 'Keltner Middle', color: '#fbbf24' },
+        { name: 'Keltner Upper', color: '#2dd4bf', lineStyle: 2 },
+        { name: 'Keltner Lower', color: '#2dd4bf', lineStyle: 2 }
+      ]
+    },
+    pivots: {
+      series: [
+        { name: 'Pivot', color: '#fbbf24', lineType: 1 },
+        { name: 'R1', color: THEME.down, lineType: 1 }, { name: 'S1', color: THEME.up, lineType: 1 },
+        { name: 'R2', color: THEME.down, lineType: 1, lineStyle: 2 }, { name: 'S2', color: THEME.up, lineType: 1, lineStyle: 2 },
+        { name: 'R3', color: THEME.down, lineType: 1, lineStyle: 3 }, { name: 'S3', color: THEME.up, lineType: 1, lineStyle: 3 }
+      ]
+    },
+    wma: { series: [{ name: 'WMA', color: '#22d3ee' }] },
+    hma: { series: [{ name: 'HMA', color: '#fb923c' }] },
+    'relative-volume': { independentScale: true, series: [{ name: 'Relative Volume', color: '#2dd4bf', histogram: true }] },
+    cci: { independentScale: true, series: [{ name: 'CCI', color: '#c084fc' }] },
+    'williams-r': { independentScale: true, series: [{ name: 'Williams %R', color: '#fb923c' }] },
+    roc: { independentScale: true, series: [{ name: 'ROC', color: '#38bdf8' }] },
+    'fixed-volume-profile': { profile: 'fixed' },
+    'session-volume-profile': { profile: 'session' }
   };
 
   function toBar(candle) {
@@ -457,11 +485,12 @@
 
       var current = indicators.get(key);
       if (!current) return;
-      if (previous.type !== type || previous.placement !== placement) {
+      if (previous.type !== type || previous.placement !== placement || (current.profile && parametersChanged)) {
         setIndicator(key, false);
         setIndicator(key, true);
         return;
       }
+      if (current.profile) return;
       if (previous.size !== size) {
         current.series.forEach(function (line, index) {
           if (!INDICATORS[type].series[index].histogram) line.applyOptions(indicatorLineSize(type, size));
@@ -489,7 +518,11 @@
 
     function updateIndicatorLegendTitle(legend, parameters) {
       if (!legend) return;
-      var values = Object.values(parameters);
+      var values = Object.entries(parameters).map(function (entry) {
+        return entry[0] === 'anchorTime' && entry[1] > 0
+          ? new Date(entry[1] * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
+          : entry[1];
+      });
       legend.detail.textContent = values.length ? ' (' + values.join(', ') + ')' : '';
     }
 
@@ -500,6 +533,13 @@
         var appearance = getIndicatorSettings(key);
         var type = appearance.type;
         var config = INDICATORS[type];
+        if (config.profile) {
+          var profile = global.ReplayVolumeProfile.create(Object.assign({ type: config.profile }, appearance.parameters));
+          profile.attach(series);
+          profile.setData(candles, watermark);
+          indicators.set(key, { profile: profile });
+          return;
+        }
         var wantsPane = appearance.placement === 'pane';
         if (wantsPane && !options.indicatorPanes) return;
         var pane = wantsPane ? createIndicatorPane(options.indicatorPanes, appearance.size, lib, syncIndicatorPanes) : null;
@@ -514,6 +554,7 @@
             crosshairMarkerVisible: false
           }, spec.histogram ? null : indicatorLineSize(type, appearance.size), config.style);
           if (!spec.histogram) settings.lineStyle = spec.lineStyle || 0;
+          if (spec.lineType != null) settings.lineType = spec.lineType;
           if (!pane && config.independentScale) settings.priceScaleId = 'indicator-' + key;
           if (config.volume) settings.priceFormat = { type: 'volume' };
           return spec.histogram ? targetChart.addHistogramSeries(settings) : targetChart.addLineSeries(settings);
@@ -549,7 +590,9 @@
       } else {
         if (!current) return;
         indicators.delete(key);
-        if (current.pane) {
+        if (current.profile) {
+          current.profile.detach();
+        } else if (current.pane) {
           current.pane.remove();
           paneCount -= 1;
           if (!paneCount) chart.priceScale('right').applyOptions({ minimumWidth: 0 });
@@ -750,6 +793,12 @@
       chartType = type;
       series = addPriceSeries(chart, chartType);
       series.setData(displayHistory(watermark));
+      indicators.forEach(function (indicator) {
+        if (indicator.profile) {
+          indicator.profile.detach();
+          indicator.profile.attach(series);
+        }
+      });
       chart.removeSeries(previous);
       if (range) timeScale.setVisibleLogicalRange(range);
       syncIndicatorPanes();
@@ -762,6 +811,10 @@
       isFollowing = true;
       indicatorCache.clear();
       indicators.forEach(function (indicator) {
+        if (indicator.profile) {
+          indicator.profile.setData(candles, -1);
+          return;
+        }
         indicator.series.forEach(function (line) { line.setData([]); });
         if (indicator.pane) indicator.pane.anchor.setData([]);
         if (indicator.cloud) indicator.cloud.setData(null, -1, 0);
@@ -787,7 +840,8 @@
         series.setData(displayHistory(target));
       }
       indicators.forEach(function (indicator, key) {
-        paintIndicator(key, indicator, target, incremental);
+        if (indicator.profile) indicator.profile.setData(candles, target);
+        else paintIndicator(key, indicator, target, incremental);
       });
 
       watermark = target;
@@ -802,6 +856,12 @@
 
     function appendBar(index) {
       return seekTo(index == null ? watermark + 1 : index, { follow: isFollowing });
+    }
+
+    function revealedCandleAt(event) {
+      var index = event.logical;
+      var candle = Number.isInteger(index) && index >= 0 && index <= watermark ? candles[index] : null;
+      return candle && candle.time === event.time ? candle : null;
     }
 
     function resize() {
@@ -836,10 +896,11 @@
       },
       onCandleHover: function (onHover) {
         chart.subscribeCrosshairMove(function (event) {
-          var index = event.logical;
-          var candle = Number.isInteger(index) && index >= 0 && index <= watermark ? candles[index] : null;
-          onHover(candle && candle.time === event.time ? candle : null);
+          onHover(revealedCandleAt(event));
         });
+      },
+      onCandleClick: function (onClick) {
+        chart.subscribeClick(function (event) { onClick(revealedCandleAt(event)); });
       },
       setIndicator: setIndicator,
       configureIndicator: configureIndicator,

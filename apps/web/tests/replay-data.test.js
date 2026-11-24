@@ -8,7 +8,7 @@ const window = {};
 let source;
 
 beforeAll(async () => {
-  source = await readFile(new URL('replay/data-source.js', publicRoot), 'utf8');
+  source = await readFile(new URL('../replay/data-source.js', import.meta.url), 'utf8');
   runInNewContext(source, {
     window,
     AbortSignal,

@@ -2,6 +2,14 @@
 
 Status **Disetujui, jalur Replay native**
 
+## Perluasan alat Replay native
+
+Tambahkan horizontal ray, pengukuran harga dan tanggal, brush, label harga, pitchfork, regression channel, Fibonacci fan dan time zones, Elliott Wave impulse, serta alat perencanaan risk/reward ke menu Alat. Objek tetap memakai koordinat waktu dan harga. Risk/reward hanya menggambar rencana dan tidak mengubah posisi simulasi.
+
+Tambahkan Anchored VWAP, Stochastic RSI, Keltner Channels, Pivot Points, WMA, HMA, Relative Volume, CCI, Williams %R, ROC, dan dua Volume Profile. Pengguna menentukan titik Anchored VWAP serta kedua batas Fixed Range Volume Profile dari candle yang sudah terbuka. Session Volume Profile mengikuti hari UTC aktif. Kedua profil menunjukkan estimasi volume per level harga dari OHLCV arsip.
+
+Verifikasi bahwa drawing tersimpan dan dapat dipilih kembali, bahwa picker hanya menerima candle terbuka, dan bahwa rewind membangun ulang indikator dan profil tanpa membaca harga atau volume dari candle mendatang. Verifikasi menu pada viewport desktop dan mobile, kemudian jalankan lint, tes, dan build web.
+
 ## Tujuan
 
 Pengguna bisa menganalisis XAUUSD di Replay dengan alur kerja yang familiar dari tab Market. Pengguna memilih tipe chart dan timeframe, mencari indikator, menandai chart, lalu menjalankan simulasi pada candle historis milik Pipstride.

@@ -13,8 +13,8 @@ const candles = [
 
 beforeAll(async () => {
   for (const file of ['replay_indicators.js', 'replay_chart.js']) {
-    const source = await readFile(new URL('../public/replay/js/' + file, import.meta.url), 'utf8');
-    runInNewContext(source, { window, setTimeout });
+    const source = await readFile(new URL('../replay/js/' + file, import.meta.url), 'utf8');
+    runInNewContext(source, { window, setTimeout, module: { exports: {} } });
   }
 });
 
@@ -41,6 +41,58 @@ it('calculates volume, OBV, stochastic, DMI and Donchian with their expected sig
   ]);
 });
 
+it('calculates weighted averages, Keltner channels and the added oscillators', () => {
+  const read = (type, parameters, input = candles) => window.ReplayIndicators.calculate(type, input, parameters)
+    .map((series) => series.map((point) => point.value));
+
+  expect(read('wma', { period: 2 })[0].slice(0, 2)).toEqual([undefined, 16 / 3]);
+  expect(read('hma', { period: 4 })[0].slice(0, 4)).toEqual(Array(4).fill(undefined));
+  expect(read('hma', { period: 4 })[0][4]).toBeCloseTo(272 / 45);
+  expect(read('hma', { period: 1 })[0]).toEqual(candles.map(({ close }) => close));
+  const gap = { ...candles[1], high: 17, low: 13, close: 16 };
+  expect(read('keltner', { period: 2, atrPeriod: 2, multiplier: 2 }, [candles[0], gap])).toEqual([
+    [undefined, 10], [undefined, 27], [undefined, -7],
+  ]);
+  const closes = [4, 6, 5, 7, 8, 6].map((close, index) => ({ time: index + 1, close }));
+  const [k, d] = read('stochastic-rsi', { rsiPeriod: 2, period: 2, smooth: 2, signal: 2 }, closes);
+  expect(k).toEqual([undefined, undefined, undefined, undefined, 100, 50]);
+  expect(d).toEqual([undefined, undefined, undefined, undefined, undefined, 75]);
+  expect(read('relative-volume', { period: 2 })[0]).toEqual([undefined, undefined, 2, 1.6, 50 / 35]);
+  const [cci] = read('cci', { period: 2 });
+  expect(cci[0]).toBeUndefined();
+  expect(cci[1]).toBeCloseTo(1 / 0.015);
+  expect(cci[2]).toBeCloseTo(1 / 0.015);
+  expect(cci[3]).toBeCloseTo(-1 / 0.015);
+  expect(cci[4]).toBe(0);
+  expect(read('williams-r', { period: 2 })[0]).toEqual([undefined, -100 / 6, -100 / 6, -60, -50]);
+  expect(read('roc', { period: 2 })[0]).toEqual([undefined, undefined, 100, 0, -25]);
+});
+
+it('starts anchored VWAP at the selected time and uses only completed UTC days for pivots', () => {
+  const { calculate, createCalculator, normalize } = window.ReplayIndicators;
+  const weighted = calculate('anchored-vwap', candles, { anchorTime: 3 })[0];
+  expect(weighted.slice(0, 2)).toEqual([{ time: 1 }, { time: 2 }]);
+  expect(weighted[2].value).toBeCloseTo(22 / 3);
+  expect(weighted[3].value).toBeCloseTo(46 / 7);
+  expect(calculate('anchored-vwap', candles)[0]).toEqual(candles.map(({ time }) => ({ time })));
+  expect(calculate('anchored-vwap', candles.slice(2), { anchorTime: 2 })[0]).toEqual([{ time: 3 }, { time: 4 }, { time: 5 }]);
+  expect(calculate('anchored-vwap', [candles[0], ...candles.slice(2)], { anchorTime: 2 })[0][1].value).toBeCloseTo(22 / 3);
+  expect(normalize('anchored-vwap', { anchorTime: 3.5 })).toEqual({ anchorTime: 0 });
+  expect(normalize('anchored-vwap', { anchorTime: 8_640_000_000_001 })).toEqual({ anchorTime: 0 });
+
+  const pivots = createCalculator('pivots');
+  pivots.append({ time: 100, high: 12, low: 7, close: 8 });
+  pivots.append({ time: 86399, high: 10, low: 6, close: 9 });
+  expect(pivots.data.every((line) => line.every(({ value }) => value === undefined))).toBe(true);
+  pivots.append({ time: 86400, high: 16, low: 11, close: 12 });
+  pivots.append({ time: 86401, high: 15, low: 10, close: 13 });
+  expect(pivots.data.map((line) => line.slice(2).map(({ value }) => value))).toEqual(
+    [9, 12, 6, 15, 3, 18, 0].map((value) => [value, value]),
+  );
+  pivots.append({ time: 3 * 86400, high: 30, low: 20, close: 25 });
+  expect(pivots.data[0].at(-1).value).toBe(13);
+});
+
 it('migrates applied legacy settings and round-trips independent instances', () => {
   const { preferences } = window.ReplayIndicators;
   const migrated = preferences(null, {
@@ -56,9 +108,15 @@ it('migrates applied legacy settings and round-trips independent instances', () 
   const second = { ...migrated[0], id: 'ema-2', placement: 'pane', parameters: { period: 50 } };
   expect(preferences(JSON.parse(JSON.stringify([...migrated, second, second])))).toEqual([...migrated, second]);
   expect(preferences([], { ema: { enabled: true } })).toEqual([]);
+  expect(preferences([{ id: 'fixed', type: 'fixed-volume-profile', enabled: true, placement: 'pane',
+    parameters: { bins: 7, startTime: 2, endTime: 4 } }])).toEqual([{
+    id: 'fixed', type: 'fixed-volume-profile', enabled: true, placement: 'overlay', size: 'default',
+    parameters: { bins: 24, startTime: 2, endTime: 4 },
+  }]);
 });
 
 function createChartStub(withPrimitives = false) {
+  let clickHandler;
   const series = [];
   const timeScale = {
     getVisibleLogicalRange() { return withPrimitives ? { from: 0, to: 20 } : null; },
@@ -72,6 +130,8 @@ function createChartStub(withPrimitives = false) {
     addAreaSeries: addSeries,
     addLineSeries: addSeries,
     removeSeries() {},
+    subscribeClick(handler) { clickHandler = handler; },
+    click(event) { clickHandler(event); },
   };
 
   function addSeries() {
@@ -92,6 +152,22 @@ function createChartStub(withPrimitives = false) {
   }
   return { chart, series };
 }
+
+it('only picks timestamp anchors from candles still revealed after rewind', () => {
+  const { chart } = createChartStub();
+  const replay = window.SmcReplayChart.init({ container: {}, chartLib: { createChart: () => chart } });
+  const picked = [];
+  replay.onCandleClick((candle) => picked.push(candle?.time ?? null));
+  replay.setData(candles);
+  replay.seekTo(2, { follow: false });
+  chart.click({ logical: 2, time: 3 });
+  chart.click({ logical: 3, time: 4 });
+  replay.seekTo(0, { follow: false });
+  chart.click({ logical: 2, time: 3 });
+  chart.click({ logical: 0, time: 2 });
+  chart.click({ logical: 0, time: 1 });
+  expect(picked).toEqual([3, null, null, null, 1]);
+});
 
 it('keeps EMA instances separate and clips shifted Ichimoku series across step, seek and rewind', () => {
   const { chart, series } = createChartStub();

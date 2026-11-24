@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#080f14">
   <title>XAUUSD Replay Terminal</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/replay/css/replay.css">
+  <link rel="stylesheet" href="./css/replay.css">
 </head>
 <body>
   <main class="main-container">
@@ -30,6 +30,7 @@
                       <div class="replay-tool-grid" role="group" aria-label="Alat gambar">
                         <button type="button" data-tool="cursor" aria-pressed="true">Kursor</button>
                         <button type="button" data-tool="hline" aria-pressed="false">Garis horizontal</button>
+                        <button type="button" data-tool="horizontal_ray" aria-pressed="false">Horizontal ray</button>
                         <button type="button" data-tool="vline" aria-pressed="false">Garis vertikal</button>
                         <button type="button" data-tool="trendline" aria-pressed="false">Trendline</button>
                         <button type="button" data-tool="ray" aria-pressed="false">Ray</button>
@@ -40,7 +41,28 @@
                         <button type="button" data-tool="ruler" aria-pressed="false">Penggaris</button>
                         <button type="button" data-tool="text" aria-pressed="false">Teks</button>
                         <button type="button" data-tool="arrow" aria-pressed="false">Panah</button>
+                        <button type="button" data-tool="brush" aria-pressed="false">Brush</button>
+                        <button type="button" data-tool="price_label" aria-pressed="false">Label harga</button>
                       </div>
+                      <details class="replay-settings-group">
+                        <summary>Ukur harga dan waktu</summary>
+                        <div class="replay-tool-grid">
+                          <button type="button" data-tool="price_range" aria-pressed="false">Price Range</button>
+                          <button type="button" data-tool="date_range" aria-pressed="false">Date Range</button>
+                          <button type="button" data-tool="date_price_range" aria-pressed="false">Date &amp; Price Range</button>
+                        </div>
+                      </details>
+                      <details class="replay-settings-group">
+                        <summary>Drawing lanjutan</summary>
+                        <div class="replay-tool-grid">
+                          <button type="button" data-tool="pitchfork" aria-pressed="false">Pitchfork</button>
+                          <button type="button" data-tool="regression_channel" aria-pressed="false">Regression Channel</button>
+                          <button type="button" data-tool="fib_fan" aria-pressed="false">Fibonacci Fan</button>
+                          <button type="button" data-tool="fib_time_zones" aria-pressed="false">Fibonacci Time Zones</button>
+                          <button type="button" data-tool="elliott_wave" aria-pressed="false">Elliott Wave</button>
+                          <button type="button" data-tool="risk_reward" aria-pressed="false">Rencana Risk/Reward</button>
+                        </div>
+                      </details>
                       <label class="replay-inline-check"><input id="replay-drawing-snap" type="checkbox"> Snap OHLC</label>
                       <div class="replay-object-actions" role="group" aria-label="Simulasi posisi">
                         <button type="button" data-tool="long_pos" aria-pressed="false">Simulasi long</button>
@@ -72,6 +94,18 @@
                             <option value="donchian" data-description="Kanal yang dibentuk dari harga tertinggi dan terendah selama periode tertentu.">Donchian Channel</option>
                             <option value="ichimoku" data-description="Garis tren, momentum, dan area support atau resistance menurut metode Ichimoku.">Ichimoku Cloud</option>
                             <option value="obv" data-description="Menjumlahkan atau mengurangi volume sesuai arah perubahan harga penutupan.">On-Balance Volume (OBV)</option>
+                            <option value="anchored-vwap" data-description="Rata-rata harga berbobot volume sejak candle yang lo pilih di chart.">Anchored VWAP</option>
+                            <option value="stochastic-rsi" data-description="Posisi RSI dalam rentang nilai RSI periode terakhir.">Stochastic RSI</option>
+                            <option value="keltner" data-description="Pita volatilitas berbasis ATR di sekitar EMA.">Keltner Channels</option>
+                            <option value="pivots" data-description="Titik pivot dan level support serta resistance dari hari UTC terakhir yang selesai.">Pivot Points</option>
+                            <option value="wma" data-description="Rata-rata bergerak dengan bobot linear lebih besar pada harga terbaru.">Weighted Moving Average (WMA)</option>
+                            <option value="hma" data-description="Hull Moving Average menggabungkan WMA dengan periode berbeda.">Hull Moving Average (HMA)</option>
+                            <option value="relative-volume" data-description="Rasio volume candle terhadap rata-rata volume candle sebelumnya.">Relative Volume</option>
+                            <option value="cci" data-description="Deviasi harga tipikal dari rata-ratanya, relatif terhadap deviasi rata-rata.">Commodity Channel Index (CCI)</option>
+                            <option value="williams-r" data-description="Posisi harga penutupan relatif terhadap rentang harga pada skala −100 sampai 0.">Williams %R</option>
+                            <option value="roc" data-description="Persentase perubahan harga penutupan dibanding beberapa candle sebelumnya.">Rate of Change (ROC)</option>
+                            <option value="fixed-volume-profile" data-description="Estimasi volume per level harga dari OHLCV pada rentang candle yang lo pilih.">Fixed Range Volume Profile</option>
+                            <option value="session-volume-profile" data-description="Estimasi volume per level harga dari OHLCV di hari UTC aktif.">Session Volume Profile</option>
                           </select>
                         </label>
                         <p id="replay-indicator-description" class="replay-indicator-description"></p>
@@ -184,6 +218,12 @@
                 </div>
               </div>
               <p id="replay-chart-notice" class="replay-chart-notice" role="status" hidden></p>
+              <p id="replay-tool-instruction" class="replay-chart-notice" role="status" hidden></p>
+              <div id="replay-indicator-pick" class="replay-chart-notice replay-indicator-pick" hidden>
+                <span id="replay-indicator-pick-label" role="status"></span>
+                <button type="button" id="replay-indicator-pick-current">Pakai candle aktif</button>
+                <button type="button" id="replay-indicator-pick-cancel">Batal</button>
+              </div>
               <div id="replay-crosshair-values" class="replay-crosshair-values" aria-label="OHLC candle" hidden></div>
               <div class="replay-price-view">
                 <div id="replay-chart" class="replay-chart">
@@ -227,17 +267,6 @@
     </div>
   </main>
 
-  <script src="/replay/vendor/lightweight-charts.standalone.production.js"></script>
-  <script src="/replay/js/replay_engine.js"></script>
-  <script src="/replay/js/replay_indicators.js"></script>
-  <script src="/replay/js/replay_chart.js"></script>
-  <script src="/replay/js/replay_canvas.js"></script>
-  <script src="/replay/js/replay_drawings.js"></script>
-  <script src="/replay/js/replay_ledger.js"></script>
-  <script src="/replay/js/replay_simulator.js"></script>
-  <script src="/replay/js/replay_storage.js"></script>
-  <script src="/replay/js/replay.js"></script>
-  <script src="/replay/data-source.js"></script>
-  <script src="/replay/js/bootstrap.js"></script>
+  <script type="module" src="./terminal.js"></script>
 </body>
 </html>

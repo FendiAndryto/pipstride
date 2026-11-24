@@ -9,9 +9,18 @@
     return { key: 'multiplier', label: 'Pengali', defaultValue: defaultValue, min: 0.01, max: 100, step: 0.01 };
   }
 
+  function timeParameter(key, label) {
+    return { key: key, label: label, defaultValue: 0, min: 0, max: 8_640_000_000_000, step: 1 };
+  }
+
+  var profileBins = { key: 'bins', label: 'Baris harga', defaultValue: 24, min: 8, max: 64, step: 1 };
+  var profileTypes = new Set(['fixed-volume-profile', 'session-volume-profile']);
+
   var parameters = {
     sma: [periodParameter(20)],
     ema: [periodParameter(20)],
+    wma: [periodParameter(20)],
+    hma: [periodParameter(20)],
     supertrend: [periodParameter(10), multiplierParameter(3)],
     rsi: [
       periodParameter(14),
@@ -24,14 +33,29 @@
       periodParameter(9, 'signal', 'Periode sinyal')
     ],
     bollinger: [periodParameter(20), multiplierParameter(2)],
+    keltner: [periodParameter(20, 'period', 'Periode EMA'), periodParameter(10, 'atrPeriod', 'Periode ATR'), multiplierParameter(2)],
     vwap: [{ key: 'resetHour', label: 'Jam reset (UTC)', defaultValue: 0, min: 0, max: 23, step: 1 }],
+    'anchored-vwap': [timeParameter('anchorTime', 'Jangkar (UTC)')],
+    pivots: [],
     atr: [periodParameter(14)],
     volume: [],
+    'relative-volume': [periodParameter(20)],
+    'fixed-volume-profile': [profileBins, timeParameter('startTime', 'Mulai (UTC)'), timeParameter('endTime', 'Akhir (UTC)')],
+    'session-volume-profile': [profileBins],
     stochastic: [
       periodParameter(14, 'period', 'Periode %K'),
       periodParameter(3, 'smooth', 'Penghalusan %K'),
       periodParameter(3, 'signal', 'Periode %D')
     ],
+    'stochastic-rsi': [
+      periodParameter(14, 'rsiPeriod', 'Periode RSI'),
+      periodParameter(14, 'period', 'Periode Stochastic'),
+      periodParameter(3, 'smooth', 'Penghalusan %K'),
+      periodParameter(3, 'signal', 'Periode %D')
+    ],
+    cci: [periodParameter(20)],
+    'williams-r': [periodParameter(14)],
+    roc: [periodParameter(12)],
     adx: [periodParameter(14)],
     donchian: [periodParameter(20)],
     ichimoku: [
@@ -43,9 +67,13 @@
     obv: []
   };
 
-  var paneTypes = new Set(['rsi', 'macd', 'atr', 'volume', 'stochastic', 'adx', 'obv']);
+  var paneTypes = new Set([
+    'rsi', 'macd', 'atr', 'volume', 'relative-volume', 'stochastic', 'stochastic-rsi',
+    'cci', 'williams-r', 'roc', 'adx', 'obv'
+  ]);
 
   function placement(key, value) {
+    if (profileTypes.has(key)) return 'overlay';
     if (value === 'overlay' || value === 'pane') return value;
     return paneTypes.has(key) ? 'pane' : 'overlay';
   }
@@ -111,6 +139,24 @@
     return values.reduce(function (sum, value) { return sum + value; }, 0) / values.length;
   }
 
+  function weightedAverage(period) {
+    var weightSum = period * (period + 1) / 2;
+    return rollingWindow(period, function (values) {
+      return values.reduce(function (sum, value, index) { return sum + value * (index + 1); }, 0) / weightSum;
+    });
+  }
+
+  function hullAverage(period) {
+    var half = weightedAverage(Math.max(1, Math.floor(period / 2)));
+    var full = weightedAverage(period);
+    var hull = weightedAverage(Math.round(Math.sqrt(period)));
+    return function (value) {
+      var shortAverage = half(value);
+      var longAverage = full(value);
+      return hull(longAverage === null ? null : 2 * shortAverage - longAverage);
+    };
+  }
+
   function smoother(period, alpha) {
     var count = 0;
     var sum = 0;
@@ -137,6 +183,11 @@
 
   function hasRange(candle) {
     return Number.isFinite(candle.high) && Number.isFinite(candle.low);
+  }
+
+  function typicalPrice(candle) {
+    var close = closeOf(candle);
+    return close === null || !hasRange(candle) ? null : (candle.high + candle.low + close) / 3;
   }
 
   function trueRange() {
@@ -167,6 +218,18 @@
       var width = multiplier * Math.sqrt(variance);
       return [middle, middle + width, middle - width];
     });
+  }
+
+  function keltner(period, atrPeriod, multiplier) {
+    var average = smoother(period, 2 / (period + 1));
+    var range = trueRange();
+    var atr = smoother(atrPeriod, 1 / atrPeriod);
+    return function (candle) {
+      var middle = average(closeOf(candle));
+      var width = atr(range(candle));
+      if (middle === null || width === null) return [null, null, null];
+      return [middle, middle + multiplier * width, middle - multiplier * width];
+    };
   }
 
   function relativeStrength(period) {
@@ -229,25 +292,72 @@
     };
   }
 
-  function vwap(resetHour) {
-    var day = null;
+  function cumulativeVwap() {
     var weightedSum = 0;
     var volumeSum = 0;
+    return function (candle) {
+      var price = typicalPrice(candle);
+      if (price === null) return [null];
+      var volume = volumeOf(candle);
+      if (volume > 0) {
+        weightedSum += price * volume;
+        volumeSum += volume;
+      }
+      return [volumeSum > 0 ? weightedSum / volumeSum : null];
+    };
+  }
+
+  function vwap(resetHour) {
+    var day = null;
+    var average;
     var resetOffset = resetHour * 3600;
     return function (candle) {
       var nextDay = Math.floor((candle.time - resetOffset) / 86400);
       if (nextDay !== day) {
         day = nextDay;
-        weightedSum = 0;
-        volumeSum = 0;
+        average = cumulativeVwap();
       }
-      var close = closeOf(candle);
-      if (close === null || !hasRange(candle)) return [null];
-      if (Number.isFinite(candle.volume) && candle.volume > 0) {
-        weightedSum += ((candle.high + candle.low + close) / 3) * candle.volume;
-        volumeSum += candle.volume;
+      return average(candle);
+    };
+  }
+
+  function anchoredVwap(anchorTime) {
+    var average = cumulativeVwap();
+    var hasAnchorHistory = null;
+    return function (candle) {
+      if (hasAnchorHistory === null) hasAnchorHistory = anchorTime > 0 && candle.time <= anchorTime;
+      return hasAnchorHistory && candle.time >= anchorTime ? average(candle) : [null];
+    };
+  }
+
+  function periodPivots() {
+    var day = null;
+    var high = -Infinity;
+    var low = Infinity;
+    var close = null;
+    var emptyLevels = [null, null, null, null, null, null, null];
+    var levels = emptyLevels;
+    return function (candle) {
+      var nextDay = Math.floor(candle.time / 86400);
+      if (day !== nextDay) {
+        if (close !== null) {
+          var pivot = (high + low + close) / 3;
+          var width = high - low;
+          levels = [pivot, 2 * pivot - low, 2 * pivot - high, pivot + width, pivot - width,
+            high + 2 * (pivot - low), low - 2 * (high - pivot)];
+        } else levels = emptyLevels;
+        day = nextDay;
+        high = -Infinity;
+        low = Infinity;
+        close = null;
       }
-      return [volumeSum > 0 ? weightedSum / volumeSum : null];
+      var lastPrice = closeOf(candle);
+      if (lastPrice !== null && hasRange(candle)) {
+        high = Math.max(high, candle.high);
+        low = Math.min(low, candle.low);
+        close = lastPrice;
+      }
+      return levels;
     };
   }
 
@@ -282,6 +392,46 @@
       var k = smooth(raw);
       return [k, signal(k)];
     };
+  }
+
+  function stochasticRsi(rsiPeriod, period, smoothPeriod, signalPeriod) {
+    var rsi = relativeStrength(rsiPeriod);
+    var stochasticValue = rollingWindow(period, function (values) {
+      var high = Math.max.apply(null, values);
+      var low = Math.min.apply(null, values);
+      return high === low ? 0 : 100 * ((values[values.length - 1] - low) / (high - low));
+    });
+    var smooth = rollingWindow(smoothPeriod, mean);
+    var signal = rollingWindow(signalPeriod, mean);
+    return function (candle) {
+      var k = smooth(stochasticValue(rsi(candle)[0]));
+      return [k, signal(k)];
+    };
+  }
+
+  function commodityChannel(period) {
+    var index = rollingWindow(period, function (values) {
+      var average = mean(values);
+      var deviation = mean(values.map(function (price) { return Math.abs(price - average); }));
+      return deviation === 0 ? 0 : (values[values.length - 1] - average) / (0.015 * deviation);
+    });
+    return function (candle) { return [index(typicalPrice(candle))]; };
+  }
+
+  function williamsRange(period) {
+    var bounds = rangeWindow(period);
+    return function (candle) {
+      var range = bounds(candle);
+      var close = closeOf(candle);
+      if (range === null || close === null) return [null];
+      return [range[0] === range[1] ? 0 : 100 * (close - range[0]) / (range[0] - range[1])];
+    };
+  }
+
+  function rateOfChange(period) {
+    return rollingWindow(period + 1, function (values) {
+      return values[0] === 0 ? null : 100 * (values[period] - values[0]) / values[0];
+    });
   }
 
   function directionalMovement(period) {
@@ -322,6 +472,17 @@
     return Number.isFinite(candle.volume) && candle.volume >= 0 ? candle.volume : null;
   }
 
+  function relativeVolume(period) {
+    var average = rollingWindow(period, mean);
+    var baseline = null;
+    return function (candle) {
+      var volume = volumeOf(candle);
+      var ratio = volume !== null && baseline > 0 ? volume / baseline : null;
+      baseline = average(volume);
+      return [ratio];
+    };
+  }
+
   function obv() {
     var previousClose = null;
     var total = 0;
@@ -348,6 +509,12 @@
       case 'ema':
         next = closeSeries(smoother(config.period, 2 / (config.period + 1)));
         break;
+      case 'wma':
+        next = closeSeries(weightedAverage(config.period));
+        break;
+      case 'hma':
+        next = closeSeries(hullAverage(config.period));
+        break;
       case 'supertrend':
         next = supertrend(config.period, config.multiplier);
         count = 2;
@@ -365,8 +532,19 @@
         count = 3;
         break;
       }
+      case 'keltner':
+        next = keltner(config.period, config.atrPeriod, config.multiplier);
+        count = 3;
+        break;
       case 'vwap':
         next = vwap(config.resetHour);
+        break;
+      case 'anchored-vwap':
+        next = anchoredVwap(config.anchorTime);
+        break;
+      case 'pivots':
+        next = periodPivots();
+        count = 7;
         break;
       case 'atr': {
         var range = trueRange();
@@ -377,9 +555,25 @@
       case 'volume':
         next = function (candle) { return [volumeOf(candle)]; };
         break;
+      case 'relative-volume':
+        next = relativeVolume(config.period);
+        break;
       case 'stochastic':
         next = stochastic(config.period, config.smooth, config.signal);
         count = 2;
+        break;
+      case 'stochastic-rsi':
+        next = stochasticRsi(config.rsiPeriod, config.period, config.smooth, config.signal);
+        count = 2;
+        break;
+      case 'cci':
+        next = commodityChannel(config.period);
+        break;
+      case 'williams-r':
+        next = williamsRange(config.period);
+        break;
+      case 'roc':
+        next = closeSeries(rateOfChange(config.period));
         break;
       case 'adx':
         next = directionalMovement(config.period);
@@ -433,6 +627,6 @@
     placement: placement,
     preferences: preferences
   };
+  global.ReplayIndicators = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else global.ReplayIndicators = api;
 })(typeof window !== 'undefined' ? window : globalThis);

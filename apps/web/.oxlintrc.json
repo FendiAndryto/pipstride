@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["public/replay/vendor/**"],
+  "ignorePatterns": ["replay/vendor/**"],
   "plugins": ["react", "oxc"],
   "env": {
     "browser": true,
