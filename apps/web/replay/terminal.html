@@ -165,6 +165,13 @@
                             <label>Ketebalan <input id="replay-drawing-width" type="number" min="1" max="8" step="0.5"></label>
                             <label>Garis <select id="replay-drawing-style"><option value="solid">Utuh</option><option value="dashed">Putus-putus</option><option value="dotted">Titik</option></select></label>
                             <label id="replay-drawing-text-field" hidden>Teks <input id="replay-drawing-text" maxlength="120"></label>
+                            <div id="replay-drawing-levels-field" class="replay-settings-content" hidden>
+                              <label><span id="replay-drawing-levels-label">Level Fibonacci</span>
+                                <input id="replay-drawing-levels" aria-describedby="replay-drawing-levels-hint" spellcheck="false" required>
+                              </label>
+                              <small id="replay-drawing-levels-hint">Pisahkan angka dengan koma. Gunakan titik untuk desimal.</small>
+                              <button type="button" id="replay-drawing-levels-apply">Terapkan level</button>
+                            </div>
                             <label class="replay-inline-check"><input id="replay-drawing-hidden" type="checkbox"> Sembunyikan</label>
                             <label class="replay-inline-check"><input id="replay-drawing-locked" type="checkbox"> Kunci</label>
                             <div class="replay-object-actions">
@@ -231,9 +238,12 @@
                   <p class="chart-empty" id="replay-chart-empty">Memuat data replay…</p>
                 </div>
 
-                <button type="button" id="replay-delete-selected" class="replay-btn replay-delete-selected hidden" title="Hapus objek terpilih" aria-label="Hapus objek terpilih">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
-                </button>
+                <div class="replay-selected-actions">
+                  <button type="button" id="replay-edit-selected" class="replay-btn hidden" aria-controls="replay-drawing-properties" aria-label="Edit objek terpilih">Edit</button>
+                  <button type="button" id="replay-delete-selected" class="replay-btn replay-delete-selected hidden" title="Hapus objek terpilih" aria-label="Hapus objek terpilih">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+                  </button>
+                </div>
               </div>
               <div id="replay-indicator-panes" class="replay-indicator-panes"></div>
               <div class="replay-transport-bar">

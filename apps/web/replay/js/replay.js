@@ -781,16 +781,13 @@
           rememberDrawings();
           if (item && item.type === 'text') {
             drawingsApi.selectDrawing(item.id);
-            openChartMenu(el.chartOptions);
-            el.drawingObjects.open = true;
-            el.drawingText.focus();
-            el.drawingText.select();
+            editSelectedDrawing();
           }
         },
         onChange: rememberDrawings,
         onSelectionChange: function (id) {
           if (id != null && simulatorApi) simulatorApi.deselect();
-          updateDeleteSelectedButton();
+          updateSelectedObjectActions();
           updateDrawingObjects();
         }
       });
@@ -831,7 +828,7 @@
         onChange: persistSimulationChange,
         onSelectionChange: function (id) {
           if (id != null && drawingsApi) drawingsApi.deselect();
-          updateDeleteSelectedButton();
+          updateSelectedObjectActions();
         }
       });
     }
@@ -1124,7 +1121,7 @@
     if (canvasApi) {
       canvasApi.setTool(currentTool);
     }
-    updateDeleteSelectedButton();
+    updateSelectedObjectActions();
   }
 
   function getSelectedObjectApi() {
@@ -1133,8 +1130,25 @@
     return null;
   }
 
-  function updateDeleteSelectedButton() {
-    show(el.deleteSelected, currentTool === 'cursor' && Boolean(getSelectedObjectApi()));
+  function updateSelectedObjectActions() {
+    var selectedApi = currentTool === 'cursor' ? getSelectedObjectApi() : null;
+    show(el.editSelected, selectedApi != null && selectedApi === drawingsApi);
+    show(el.deleteSelected, Boolean(selectedApi));
+  }
+
+  function editSelectedDrawing() {
+    if (!drawingsApi || getSelectedObjectApi() !== drawingsApi) return;
+    openChartMenu(el.chartOptions);
+    el.drawingObjects.open = true;
+    if (!el.drawingTextField.hidden) {
+      el.drawingText.focus();
+      el.drawingText.select();
+    } else if (!el.drawingLevelsField.hidden) {
+      el.drawingLevels.focus();
+      el.drawingLevels.select();
+    } else {
+      el.drawingColor.focus();
+    }
   }
 
   function deleteSelectedObject() {
@@ -1162,7 +1176,7 @@
     });
     el.drawingList.replaceChildren.apply(el.drawingList, options);
     el.drawingList.value = selected || '';
-    var drawing = drawingsApi.getDrawings().find(function (item) { return item.id === selected; });
+    var drawing = drawingsApi.getDrawingById(selected);
     el.drawingProperties.disabled = !drawing;
     el.drawingUndo.disabled = !drawingUndo.length;
     el.drawingRedo.disabled = !drawingRedo.length;
@@ -1172,8 +1186,24 @@
     el.drawingStyle.value = drawing.lineStyle || 'solid';
     el.drawingTextField.hidden = drawing.type !== 'text';
     el.drawingText.value = drawing.text || '';
+    var levels = drawingsApi.getFibonacciLevels(drawing);
+    el.drawingLevelsField.hidden = !levels;
+    el.drawingLevels.value = levels ? levels.join(', ') : '';
+    el.drawingLevels.setCustomValidity('');
+    setText(el.drawingLevelsLabel, drawing.type === 'fib_time_zones' ? 'Kelipatan waktu Fibonacci' : 'Rasio level Fibonacci');
     el.drawingHidden.checked = Boolean(drawing.hidden);
     el.drawingLocked.checked = Boolean(drawing.locked);
+  }
+
+  function applyDrawingLevels() {
+    var input = el.drawingLevels;
+    var entries = input.value.split(',').map(function (entry) { return entry.trim(); });
+    var levels = entries.map(Number);
+    var valid = levels.length <= 30 && entries.every(function (entry, index) {
+      return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(entry) && Number.isFinite(levels[index]);
+    }) && new Set(levels).size === levels.length;
+    input.setCustomValidity(valid ? '' : 'Masukkan 1 sampai 30 angka yang berbeda, dipisahkan dengan koma.');
+    if (input.reportValidity()) drawingsApi.updateDrawing(drawingsApi.getSelectedId(), { levels: levels });
   }
 
   function exportChart() {
@@ -1259,6 +1289,18 @@
     el.drawingRedo.addEventListener('click', function () { restoreDrawings(drawingRedo, drawingUndo); });
     $('replay-drawing-duplicate').addEventListener('click', function () { drawingsApi.duplicateDrawing(drawingsApi.getSelectedId()); });
     $('replay-drawing-remove').addEventListener('click', deleteSelectedObject);
+    $('replay-drawing-levels-apply').addEventListener('click', applyDrawingLevels);
+    el.drawingLevels.addEventListener('input', function () { el.drawingLevels.setCustomValidity(''); });
+    el.drawingLevels.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      applyDrawingLevels();
+    });
+    el.drawingText.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      el.drawingText.blur();
+    });
     [
       [el.drawingColor, 'color'], [el.drawingWidth, 'lineWidth'], [el.drawingStyle, 'lineStyle'],
       [el.drawingText, 'text'], [el.drawingHidden, 'hidden'], [el.drawingLocked, 'locked']
@@ -1274,6 +1316,7 @@
     document.addEventListener('click', function (event) {
       el.chartMenus.forEach(function (menu) {
         if (menu.contains(event.target)) return;
+        if (menu === el.chartOptions && el.editSelected.contains(event.target)) return;
         if (menu === el.chartOptions && document.activeElement === el.drawingText && el.chartContainer.contains(event.target)) return;
         menu.open = false;
       });
@@ -1488,9 +1531,13 @@
     el.drawingStyle = $('replay-drawing-style');
     el.drawingTextField = $('replay-drawing-text-field');
     el.drawingText = $('replay-drawing-text');
+    el.drawingLevelsField = $('replay-drawing-levels-field');
+    el.drawingLevelsLabel = $('replay-drawing-levels-label');
+    el.drawingLevels = $('replay-drawing-levels');
     el.drawingHidden = $('replay-drawing-hidden');
     el.drawingLocked = $('replay-drawing-locked');
     el.deleteSelected = $('replay-delete-selected');
+    el.editSelected = $('replay-edit-selected');
     el.canvas = $('replay-drawing-canvas');
     el.chartContainer = $('replay-chart');
     el.indicatorPanes = $('replay-indicator-panes');
@@ -1552,6 +1599,7 @@
     if (el.btnFullscreen) el.btnFullscreen.addEventListener('click', toggleFullscreen);
 
     if (el.deleteSelected) el.deleteSelected.addEventListener('click', deleteSelectedObject);
+    el.editSelected.addEventListener('click', editSelectedDrawing);
     if (el.play) el.play.addEventListener('click', onPlayToggle);
     if (el.stepBack) el.stepBack.addEventListener('click', function () { onStep(-1); });
     if (el.stepForward) el.stepForward.addEventListener('click', function () { onStep(1); });

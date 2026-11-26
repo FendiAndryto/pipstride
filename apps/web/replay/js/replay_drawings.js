@@ -14,8 +14,12 @@
     pitchfork: 3, regression_channel: 2, fib_fan: 2, fib_time_zones: 2,
     elliott_wave: 6, risk_reward: 3
   };
-  var extensionLevels = [0, 0.618, 1, 1.272, 1.618, 2, 2.618];
-  var fibonacciTimeZones = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+  var defaultFibonacciLevels = {
+    fib: [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1],
+    'fib-extension': [0, 0.618, 1, 1.272, 1.618, 2, 2.618],
+    fib_fan: [0.382, 0.5, 0.618, 0.786],
+    fib_time_zones: [0, 1, 2, 3, 5, 8, 13, 21, 34, 55]
+  };
   var timeIntervalTools = ['channel', 'date_range', 'regression_channel', 'fib_fan', 'fib_time_zones'];
 
   function nextId(prefix) {
@@ -26,6 +30,17 @@
   function clone(obj) {
     if (!obj) return null;
     return JSON.parse(JSON.stringify(obj));
+  }
+
+  function validFibonacciLevels(levels) {
+    if (!Array.isArray(levels) || levels.length < 1 || levels.length > 30) return false;
+    return Array.from(levels).every(Number.isFinite) && new Set(levels).size === levels.length;
+  }
+
+  function getFibonacciLevels(drawing) {
+    if (!drawing || !Object.hasOwn(defaultFibonacciLevels, drawing.type)) return null;
+    var levels = validFibonacciLevels(drawing.levels) ? drawing.levels : defaultFibonacciLevels[drawing.type];
+    return levels.slice();
   }
 
   function formatDuration(seconds) {
@@ -310,6 +325,13 @@
           normalized.lineWidth = 1;
         }
       }
+      if (Object.hasOwn(defaultFibonacciLevels, item.type) && Object.hasOwn(normalized, 'levels')) {
+        if (validFibonacciLevels(normalized.levels)) {
+          normalized.levels = normalized.levels.slice();
+        } else {
+          delete normalized.levels;
+        }
+      }
       return normalized;
     }
 
@@ -330,6 +352,9 @@
       if (['solid', 'dashed', 'dotted'].indexOf(patch.lineStyle) >= 0) item.lineStyle = patch.lineStyle;
       if (typeof patch.hidden === 'boolean') item.hidden = patch.hidden;
       if (typeof patch.locked === 'boolean') item.locked = patch.locked;
+      if (Object.hasOwn(defaultFibonacciLevels, item.type) && validFibonacciLevels(patch.levels)) {
+        item.levels = patch.levels.slice();
+      }
       if (item.type === 'text' && typeof patch.text === 'string' && patch.text.trim()) {
         item.text = patch.text.trim();
       }
@@ -692,8 +717,6 @@
 
     // ------------------------------------------------------------- Two-anchor drawing pointer
 
-    var fibonacciLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-
     function handleTwoAnchorPointer(tool, type, x, y, time, price) {
       var t = resolveTime(time, x);
 
@@ -836,8 +859,8 @@
         } else if (d.type === 'fib') {
           var bounds = fibonacciBounds(d);
           if (bounds && x >= bounds.left - 8 && x <= bounds.right + 8 &&
-              fibonacciLevels.some(function (ratio) {
-                var levelY = priceToCoord(fibonacciPrice(d, ratio));
+              getFibonacciLevels(d).some(function (ratio) {
+                var levelY = priceToCoord(fibonacciPrice(d.p2, d.p1 - d.p2, ratio));
                 return levelY != null && Math.abs(y - levelY) <= 8;
               })) {
             return d;
@@ -1023,15 +1046,15 @@
       }
       if (d.type === 'regression_channel') return regressionGeometry(d, result);
       if (d.type === 'fib_time_zones') {
-        fibonacciTimeZones.forEach(function (zone) {
+        getFibonacciLevels(d).forEach(function (zone) {
           var x = x1 + dx * zone;
           if (x >= 0 && x <= width) result.segments.push([x, height, x, 16, String(zone)]);
         });
         return result;
       }
       if (d.type === 'fib_fan') {
-        [0.382, 0.5, 0.618, 0.786].forEach(function (ratio) {
-          var y = priceToCoord(d.p1 + (d.p2 - d.p1) * ratio);
+        getFibonacciLevels(d).forEach(function (ratio) {
+          var y = priceToCoord(fibonacciPrice(d.p1, d.p2 - d.p1, ratio));
           if (y != null) projectRay(result.segments, x1, y1, dx, y - y1, width, height);
         });
         return result;
@@ -1078,8 +1101,8 @@
       } else if (d.type === 'fib-extension') {
         result.segments.push([x2, y2, x3, y3]);
         var right = Math.max(width - 4, x3);
-        extensionLevels.forEach(function (ratio) {
-          var price = d.p3 + (d.p2 - d.p1) * ratio;
+        getFibonacciLevels(d).forEach(function (ratio) {
+          var price = fibonacciPrice(d.p3, d.p2 - d.p1, ratio);
           var y = priceToCoord(price);
           if (y == null) return;
           var label = Number((ratio * 100).toFixed(1)) + '%  ' + price.toFixed(3);
@@ -1639,8 +1662,9 @@
 
     // ------------------------------------------------------------- Trendline render
 
-    function fibonacciPrice(d, ratio) {
-      return d.p2 + (d.p1 - d.p2) * ratio;
+    function fibonacciPrice(base, difference, ratio) {
+      var price = base + difference * ratio;
+      return Number.isFinite(price) ? price : null;
     }
 
     function fibonacciBounds(d) {
@@ -1661,9 +1685,10 @@
       ctx.textAlign = 'right';
       if (d === draft) ctx.setLineDash([4, 3]);
 
-      var levels = d.p1 === d.p2 ? [0] : fibonacciLevels;
+      var levels = getFibonacciLevels(d);
+      if (d.p1 === d.p2) levels = levels.slice(0, 1);
       levels.forEach(function (ratio) {
-        var price = fibonacciPrice(d, ratio);
+        var price = fibonacciPrice(d.p2, d.p1 - d.p2, ratio);
         var y = priceToCoord(price);
         if (y == null) return;
         ctx.beginPath();
@@ -1881,6 +1906,7 @@
     return {
       getDrawings: getDrawings,
       getDrawingById: getDrawingById,
+      getFibonacciLevels: getFibonacciLevels,
       addDrawing: addDrawing,
       updateDrawing: updateDrawing,
       duplicateDrawing: duplicateDrawing,

@@ -534,15 +534,24 @@ summary {
   cursor: crosshair;
 }
 
-.replay-price-view .replay-delete-selected {
+.replay-selected-actions {
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 10;
+  display: flex;
+  gap: 4px;
+}
+
+.replay-selected-actions .replay-btn {
   display: grid;
   place-items: center;
-  width: 44px;
+  min-width: 44px;
   height: 44px;
+}
+
+.replay-selected-actions .replay-delete-selected {
+  width: 44px;
   padding: 0;
   color: var(--badge-red-text);
 }

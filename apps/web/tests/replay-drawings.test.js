@@ -88,6 +88,58 @@ it.each([
   expect(drawings.findDrawingAt(...hit)).toBe(item);
 });
 
+it.each([
+  ['fib', [[100, 60], [220, 140]], [40, 140], -0.5, [40, 20], [80, 20]],
+  ['fib-extension', [[100, 50], [160, 90], [220, 80]], [175, 80], 2.5, [175, 20], [296, 20]],
+  ['fib_fan', [[100, 80], [160, 120]], [200, 20], 0.2, [200, 80], [300, 60]],
+  ['fib_time_zones', [[100, 80], [160, 100]], [120, 40], 4, [160, 40], [160, 16]],
+])('updates the rendered and selectable levels for %s across a save and reload', (type, anchors, defaultHit, level, customHit, endpoint) => {
+  const { drawings, onChange } = initDrawings('cursor');
+  const item = { id: 'saved', type };
+  for (const [index, [time, price]] of anchors.entries()) {
+    item['t' + (index + 1)] = time;
+    item['p' + (index + 1)] = price;
+  }
+  drawings.setDrawings([item]);
+  expect(drawings.findDrawingAt(...defaultHit)?.id).toBe(item.id);
+  const levels = [level];
+  drawings.updateDrawing(item.id, { levels });
+  levels.push(500);
+  expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ levels: [level] }));
+
+  drawings.setDrawings(JSON.parse(JSON.stringify(drawings.getDrawings())));
+  const restored = drawings.getDrawingById(item.id);
+  expect(drawings.getFibonacciLevels(restored)).toEqual([level]);
+  expect(drawings.findDrawingAt(...defaultHit)).toBeNull();
+  expect(drawings.findDrawingAt(...customHit)).toBe(restored);
+
+  const ctx = {
+    save() {}, restore() {}, setLineDash() {}, beginPath() {}, moveTo() {}, stroke() {}, fillText() {},
+    lineTo: vi.fn(),
+  };
+  drawings.render(ctx, { width: 300, height: 200, tool: 'cursor' });
+  expect(ctx.lineTo).toHaveBeenCalledWith(...endpoint);
+});
+
+it('validates Fibonacci levels and gives each drawing its own ordered settings', () => {
+  const { drawings } = initDrawings('cursor');
+  const first = drawings.addDrawing({ type: 'fib', levels: [Infinity] });
+  const second = drawings.addDrawing({ type: 'fib' });
+  const line = drawings.addDrawing({ type: 'hline' });
+  const defaults = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+  expect(drawings.getFibonacciLevels(first)).toEqual(defaults);
+  drawings.updateDrawing(first.id, { levels: [0.75, -0.25, 0] });
+  for (const levels of [[], [Infinity], ['1'], [1, 1], Array(1), Array.from({ length: 31 }, (_, i) => i)]) {
+    drawings.updateDrawing(first.id, { levels });
+  }
+  drawings.getFibonacciLevels(first).push(500);
+  expect(drawings.getFibonacciLevels(first)).toEqual([0.75, -0.25, 0]);
+  expect(drawings.getFibonacciLevels(second)).toEqual(defaults);
+  drawings.updateDrawing(line.id, { levels: [1] });
+  expect(line).not.toHaveProperty('levels');
+  expect(drawings.getFibonacciLevels(line)).toBeNull();
+});
+
 it('keeps locked drawing anchors fixed and restores styles and visibility from saved data', () => {
   const { drawings, click, pointer, onChange } = initDrawings('channel');
   drawings.setDrawings([{ id: 'old', type: 'hline', price: 115 }]);
